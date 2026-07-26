@@ -40,6 +40,43 @@
 
 ---
 
+## [0.6.0] - 2026-07-27
+
+### 🔬 EXP-002: Predictor Accuracy Sweep
+
+- **Key Findings (เปลี่ยน Architecture Design อย่างมีนัยสำคัญ):**
+  - LFU hit rate = 76.2% flat ทุกระดับ accuracy → LFU ไม่ใช้ prediction
+  - LRU+priority hit rate แย่ลงเมื่อ accuracy สูงขึ้น → "priority clogging" (29.9% → 15.5%)
+  - Throughput flat = 2.73 t/s → compute (350ms/token) ครอบงำ I/O
+  - Overlap ดีขึ้น 7.6x (30.9ms → 233.8ms) แต่ไม่ช่วย throughput
+- **Design Updates:**
+  - predictor accuracy ไม่ critical — heuristic ก็พอ
+  - priority boost → OFF for LFU
+  - LFU → default eviction policy
+  - Weight streaming ≈ RAM reduction tool ไม่ใช่ throughput accelerator
+- **New Simulator Capabilities:**
+  - shared_experts_per_token mode (K3 realistic, 72/80 layers identical)
+  - simulated_accuracy mode (inject controlled prediction errors)
+  - timing predictor_confidence affects overlap efficiency
+  - sweep-accuracy mode (9 accuracies x 2 policies)
+
+#### ไฟล์ที่สร้าง/แก้ไข
+- `simulator/config.py` — shared_experts_per_token, accuracy_level, n_predict=64
+- `simulator/access_pattern.py` — shared mode + inter_layer_similarity
+- `simulator/predictor.py` — simulated_accuracy predictor
+- `simulator/timing.py` — overlap_efficiency = confidence
+- `simulator/run.py` — sweep-accuracy
+- `research/experiments/EXP-002-predictor-sim/results.md`
+- `research/experiments/EXP-002-predictor-sim/analysis.md`
+- `research/experiments/index.md` — อัปเดต
+- `TASKS.md` — อัปเดต
+- `SESSION_LOG.md` — เพิ่ม S005
+- `CHANGELOG.md` — อัปเดต
+
+---
+
+## [0.4.0] - 2026-07-27
+
 ### 🏗️ Phase 2: Architecture Design Complete
 
 - ออกแบบระบบ Speculative Weight Streaming ทั้ง 6 components + interface contracts

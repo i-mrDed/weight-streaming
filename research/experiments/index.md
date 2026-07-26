@@ -11,7 +11,7 @@
 | # | วันที่ | หัวข้อ | สถานะ | สรุป |
 |---|-------|--------|-------|------|
 | 001 | 2026-07-27 | Buffer Size & Eviction Policy | ✅ Complete | LFU 512 MB → 78.2% hit rate |
-| 002 | 2026-07-27 | Predictor Accuracy Impact | 🔄 Setup | รอ run |
+| 002 | 2026-07-27 | Predictor Accuracy Impact | ✅ Complete | LFU flat (76.2%), LRU+P decays with accuracy (priority clogging), throughput compute-bound (2.73 t/s flat) |
 | 003 | 2026-07-27 | Timing & Overlap Efficiency | ✅ Complete | 76.6% overlap efficiency, 2.74 tok/s |
 
 ---

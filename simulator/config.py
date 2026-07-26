@@ -29,6 +29,16 @@ class WorkloadConfig:
     # Probability that next token uses same experts
     temporal_locality: float = 0.3
     
+    # Per-layer expert sharing
+    # True: token uses same experts across all layers (K3 realistic)
+    # False: each layer independently selects experts (worst case)
+    shared_experts_per_token: bool = True
+    
+    # Inter-layer similarity
+    # 1.0 = same experts every layer, 0.0 = independent
+    # Realistic K3: ~0.8-0.9 (Quantile Balancing)
+    inter_layer_similarity: float = 0.9
+    
     # Random seed for reproducibility
     seed: int = 42
 
@@ -48,12 +58,16 @@ class BufferConfig:
 @dataclass
 class PredictorConfig:
     """Predictor model parameters"""
-    model: str = "heuristic"    # perfect | heuristic | mlp
+    model: str = "heuristic"    # perfect | heuristic | simulated_accuracy | mlp
     
     # Heuristic params
     freq_window: int = 100      # lookback for frequency counts
     temporal_weight: float = 0.4  # weight for temporal vs frequency
-    n_predict: int = 32         # how many experts to predict (safety margin > 16)
+    n_predict: int = 64         # how many experts to predict (covers ~30-50 actual unique per token)
+    
+    # Simulated accuracy params (model="simulated_accuracy")
+    # Target prediction accuracy (0.0 = random, 1.0 = perfect)
+    accuracy_level: float = 0.7
 
 
 @dataclass

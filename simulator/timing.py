@@ -48,6 +48,12 @@ class TimingSimulator:
         [Draft | Predict | Scheduler overhead | NVMe read]
         [Compute                              ]
         [Overlap region                        ]
+        
+        Predictor confidence affects I/O overlap efficiency:
+        - High confidence (>0.7): scheduler pre-fetches in large batches
+          overlapping with compute → minimal stall
+        - Low confidence (<0.3): scheduler waits for confirmation
+          → more on-demand reads → more stall
         """
         t = self.cfg
         
@@ -65,16 +71,19 @@ class TimingSimulator:
         # Phase 3: Compute time (target: 350ms per token)
         compute_time = t.compute_time_per_token_us
         
-        # Overlap: how much I/O overlaps with compute?
-        #   Prep phase overlaps with previous token's compute
-        #   Sequential I/O overlaps with current compute
-        #   Random I/O (miss) causes stall
+        # Predictor confidence scales how much I/O can be overlapped
+        # High confidence → speculative pre-fetch overlaps with compute
+        # Low confidence → mostly on-demand reads, less overlap
+        overlap_efficiency = predictor_confidence  # 0.0 to 1.0
         
-        # Model: prep_time + io_time overlap with compute
-        overlap_time = min(prep_time + io_time, compute_time)
+        # Overlap: sequential I/O (pre-fetched) can overlap
+        # Random I/O (miss) causes stall (on-demand fetch)
+        overlap_time = min(
+            int(sequential_time * overlap_efficiency + prep_time),
+            compute_time
+        )
         
-        # Stall: when random I/O happens during compute
-        #   Random I/O is NON-overlapable (urgent)
+        # Stall: random (miss) reads are urgent, they block compute
         stall_time = random_time  # emergency miss fetch stalls compute
         
         # Effective I/O time (after overlap)

@@ -43,11 +43,13 @@
 |-------|------|---------|-------|
 | ✅ | Create simulator framework | 🔴 | access_pattern, buffer, predictor, timing, run |
 | ✅ | EXP-001: Buffer size + eviction policy | 🔴 | LFU 512 MB → 78.2% hit rate (confirmed) |
-| ✅ | EXP-002: Predictor accuracy impact | 🟡 | Partial — ต้องปรับ access model |
+| ✅ | EXP-002: Predictor accuracy impact | 🟡 | LFU flat (76.2%), LRU+P clogging, compute-bound |
 | ✅ | EXP-003: Timing + overlap efficiency | 🔴 | 76.7% overlap, 2.74 tok/s |
+| ⬜ | Update ARCHITECTURE.md with EXP-002 findings | 🟡 | LFU default, remove priority boost, reduce prediction emphasis |
 | ⬜ | Select small MoE model for PoC | 🟡 | Mixtral? Qwen MoE? |
-| ⬜ | Implement pre-fetch scheduler (real I/O) | 🔴 | |
-| ⬜ | Integrate with existing inference engine | 🔴 | |
+| ⬜ | Estimate real compute time for K3 on consumer HW | 🔴 | Needed to validate compute-bound assumption |
+| ⬜ | Phase 3b: Fork llama.cpp + implement streaming buffer | 🟡 | |
+| ⬜ | Phase 3b: Test with real MoE model on consumer HW | 🔴 | Measure actual compute vs I/O ratio |
 
 ---
 

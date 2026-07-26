@@ -61,6 +61,8 @@ class Predictor:
         
         if model == "perfect":
             return self._predict_perfect()
+        elif model == "simulated_accuracy":
+            return self._predict_simulated_accuracy()
         elif model == "heuristic":
             return self._predict_heuristic()
         else:
@@ -92,6 +94,68 @@ class Predictor:
             n_correct=len(future),
             n_total=len(future),
             hit_rate=1.0
+        )
+    
+    def _predict_simulated_accuracy(self) -> PredictionResult:
+        """
+        Controlled accuracy mode: knows future but injects errors.
+        
+        Given target accuracy T (e.g. 0.7):
+        - actual = union of experts across ALL layers for this token
+          ~30-50 unique experts for 80 layers with inter-layer drift
+        - Predict N experts (n_predict, default 64 to cover all actual)
+        - Keep T * n_actual experts correct (so target = recall metric)
+        - Fill remaining N - n_correct with random wrong experts
+        - Return predictions with confidence scores
+        
+        This lets us directly measure: if we build a predictor with
+        recall T, what buffer hit rate and throughput do we get?
+        """
+        if self._token_idx >= len(self._perfect_future):
+            return PredictionResult([], [])
+        
+        accuracy = self.cfg.predictor.accuracy_level    # target recall
+        n_predict = self.cfg.predictor.n_predict        # prediction window
+        actual = self._perfect_future[self._token_idx]
+        self._token_idx += 1
+        
+        actual_set = set(actual)
+        n_actual = len(actual_set)
+        
+        # Target number of correct experts = recall * n_actual
+        n_correct = max(1, min(n_actual, round(accuracy * n_actual)))
+        
+        # Pick n_correct experts from actual set (these will be correctly predicted)
+        correct_set = set(self.rng.sample(list(actual_set), n_correct))
+        
+        # Fill up to n_predict with wrong experts (not in actual)
+        n_wrong = n_predict - len(correct_set)
+        wrong_set = set()
+        if n_wrong > 0:
+            # Bias toward hot experts (realistic MLP behavior)
+            hot_pool = set(range(max(1, self.cfg.model.n_experts // 10)))
+            pool = [e for e in hot_pool if e not in actual_set]
+            if len(pool) < n_wrong:
+                pool = [e for e in range(self.cfg.model.n_experts) if e not in actual_set]
+            wrong_set = set(self.rng.sample(pool, min(n_wrong, len(pool))))
+        
+        predicted = sorted(correct_set | wrong_set)
+        
+        # Confidence: correct get high, wrong get low
+        predictions = [
+            (e, 0.95 if e in correct_set else 0.25)
+            for e in predicted
+        ]
+        
+        # Actual recall = overlap / n_actual
+        overlap = len(correct_set)  # all correct_set are in actual
+        
+        return PredictionResult(
+            predicted_experts=predictions,
+            actual_experts=list(actual_set),
+            n_correct=overlap,
+            n_total=n_actual,
+            hit_rate=overlap / max(1, n_actual)  # = accuracy (recall)
         )
     
     def _predict_heuristic(self) -> PredictionResult:
@@ -137,11 +201,22 @@ class Predictor:
     
     def evaluate_prediction(self, pred: PredictionResult, 
                           actual_experts: List[int]) -> PredictionResult:
-        """Evaluate how many predicted experts were actually used"""
-        pred_set = set(e for e, _ in pred.predicted_experts[:self.cfg.model.n_active])
+        """
+        Evaluate how many predicted experts were actually used.
+        
+        Two metrics:
+        1. hit_rate (recall/coverage): % of actual unique experts 
+           covered by ANY prediction (up to n_predict)
+        2. top16_precision: % of top-n_active predictions that are 
+           correct (useful for priority boost analysis)
+        
+        hit_rate is the main metric (used for predictor_stats).
+        """
+        # Full recall: all predictions vs all actual unique experts
+        pred_full = set(e for e, _ in pred.predicted_experts[:self.cfg.predictor.n_predict])
         actual_set = set(actual_experts)
         
-        correct = pred_set & actual_set
+        correct = pred_full & actual_set
         pred.n_correct = len(correct)
         pred.n_total = len(actual_set)
         pred.hit_rate = pred.n_correct / max(1, pred.n_total) if pred.n_total > 0 else 0.0

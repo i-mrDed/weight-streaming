@@ -38,6 +38,47 @@
 
 ---
 
+## [S005] — 2026-07-27 — EXP-002: Predictor Accuracy Sweep
+
+**🎯 เป้าหมาย:** วัดผลกระทบของ predictor accuracy ต่อ buffer hit rate และ throughput
+
+### ✅ สิ่งที่ทำ
+- ปรับ `access_pattern.py` เพิ่ม shared_experts_per_token mode (realistic K3: 72/80 layers identical per token)
+- เพิ่ม simulated_accuracy predictor mode สำหรับ injection error ควบคุม
+- เพิ่ม `sweep-accuracy` CLI — ทดสอบ 9 ระดับความแม่นยำ x 2 policies (LFU, LRU+priority)
+- บันทึก results + analysis มายัง experiment tracking
+
+### 🔬 Key Findings (เปลี่ยนแปลง Design อย่างมีนัยสำคัญ)
+
+1. **LFU = 76.2% hit rate flat** — ทุกระดับ accuracy ได้ค่าเท่ากัน (LFU ไม่ใช้ prediction)
+2. **LRU+P hit rate แย่ลงเมื่อ accuracy สูงขึ้น** — 29.9% (10%) → 15.5% (perfect) — "priority clogging"
+3. **Throughput flat = 2.73 t/s** — compute (350ms) ครอบงำ I/O อย่างสมบูรณ์
+4. **Overlap ดีขึ้น 7.6x** (30.9ms → 233.8ms) แต่ไม่ช่วย throughput
+
+### ⚡ การตัดสินใจ
+- **ยุติ priority boost** — LFU ไม่ใช้ priority, LRU+P มีปัญหา clogging
+- **ลดบทบาท predictor** — accuracy ไม่ critical, heuristic ก็พอ
+- **คง LFU เป็น default eviction policy** — simple, effective, no prediction needed
+- **Weight streaming ≈ RAM reduction tool ไม่ใช่ throughput accelerator**
+
+### 🐛 ปัญหา / อุปสรรค
+- `evaluate_prediction` truncate top-16 → accuracy รายงานต่ำกว่าความเป็นจริง (fixed)
+- `predictor_confidence` dead parameter ใน timing model (fixed)
+- `_predict_simulated_accuracy` คำนวณ accuracy เทียบ n_predict แทน n_actual (fixed)
+
+### ⏭️ ถัดไป
+- อัปเดต ARCHITECTURE.md ตาม findings
+- Phase 3b: fork llama.cpp + real HW test เพื่อวัด compute/I/O ratio จริง
+- EXP-004: Cold start + turbulence resilience (ถ้า predictor มีประโยชน์ตรงไหน)
+
+### 📎 อ้างอิง
+- `EXP-002-predictor-sim/results.md` — full data table
+- `EXP-002-predictor-sim/analysis.md` — interpretation + design changes
+- `simulator/predictor.py` — simulated_accuracy predictor
+- `simulator/access_pattern.py` — shared_experts_per_token mode
+
+---
+
 ## [S001] — 2026-07-27 — Initial Concept + Phase 1 Research
 
 **🎯 เป้าหมาย:** กำหนดแนวคิดโปรเจค + ค้นคว้างานวิจัยที่เกี่ยวข้อง

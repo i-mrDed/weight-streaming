@@ -86,8 +86,8 @@ def run_simulation(config: SimConfig, verbose: bool = False) -> SimulationResult
     buffer = StreamingBuffer(config)
     predictor = Predictor(config, access_generator=gen)
     
-    # Set up perfect predictor if needed
-    if config.predictor.model == "perfect":
+    # Set up future-aware predictor if needed
+    if config.predictor.model in ("perfect", "simulated_accuracy"):
         predictor.set_perfect_future(sequence)
     
     # 3. Timing simulator
@@ -101,7 +101,7 @@ def run_simulation(config: SimConfig, verbose: bool = False) -> SimulationResult
         # a) Predict weights
         pred_result = predictor.predict(token_idx)
         
-        # For heuristic: evaluate prediction
+        # Evaluate prediction accuracy (skip perfect = always 100%)
         if config.predictor.model != "perfect":
             # Get all experts used across all layers for this token
             token_experts = []
@@ -111,8 +111,9 @@ def run_simulation(config: SimConfig, verbose: bool = False) -> SimulationResult
             pred_result = predictor.evaluate_prediction(pred_result, token_experts)
             predictor_hit_rates.append(pred_result.hit_rate)
             
-            # Update predictor (online learning)
-            predictor.observe(token_experts)
+            # Update predictor for online-learning models
+            if config.predictor.model == "heuristic":
+                predictor.observe(token_experts)
         
         # b) Access buffer for each layer
         pre_fetched = 0
@@ -252,16 +253,108 @@ def sweep_predictor():
     print(f"    Tokens/sec:    {result2.timing_stats['tokens_per_sec']:.2f}")
 
 
+def sweep_accuracy():
+    """
+    Sweep: predictor accuracy vs buffer hit rate vs throughput.
+    
+    Tests both LFU (best static) and LRU+priority (prediction-aware)
+    to find the accuracy threshold where LRU+priority becomes competitive.
+    
+    Uses simulated_accuracy mode to inject controlled prediction errors.
+    With shared_experts_per_token=True for realistic K3 workload.
+    """
+    print("\nSWEEP: Predictor Accuracy vs Performance")
+    print("=" * 60)
+    
+    accuracies = [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+    policies = ["lfu", "lru_priority"]
+    
+    results = {p: [] for p in policies}
+    
+    for policy in policies:
+        print(f"\n--- Policy: {policy.upper()} ---")
+        
+        for target_acc in accuracies:
+            cfg = SimConfig()
+            cfg.predictor.model = "simulated_accuracy"
+            cfg.predictor.accuracy_level = target_acc
+            cfg.buffer.eviction_policy = policy
+            cfg.buffer.size_mb = 512
+            cfg.buffer.predict_boost = True
+            
+            res = run_simulation(cfg)
+            actual_acc = res.predictor_stats['avg_hit_rate']
+            results[policy].append((target_acc, res))
+            
+            print(f"  Acc {target_acc:.0%} -> actual={actual_acc*100:5.1f}%  "
+                  f"buf={res.buffer_stats['hit_rate']*100:5.1f}%  "
+                  f"stall={res.timing_stats['avg_stall_ms']:5.1f}ms  "
+                  f"t/s={res.timing_stats['tokens_per_sec']:5.2f}")
+    
+    # Comparison table
+    print(f"\n{'=' * 100}")
+    print(f"{'ACCURACY SWEEP — LFU vs LRU+PRIORITY':^100}")
+    print(f"{'=' * 100}")
+    header = f"{'Accuracy':>10} | {'Actual':>7} | "
+    header += f"{'B.Hit(LFU)':>10} | {'t/s(LFU)':>9} | "
+    header += f"{'B.Hit(LRU+P)':>11} | {'t/s(LRU+P)':>10}"
+    print(header)
+    print(f"{'-'*10}-+-{'-'*7}-+-{'-'*10}-+-{'-'*9}-+-{'-'*11}-+-{'-'*10}")
+    
+    for i, target_acc in enumerate(accuracies):
+        actual = results["lfu"][i][1].predictor_stats['avg_hit_rate'] * 100
+        lfu_hit = results["lfu"][i][1].buffer_stats['hit_rate'] * 100
+        lfu_tps = results["lfu"][i][1].timing_stats['tokens_per_sec']
+        lru_hit = results["lru_priority"][i][1].buffer_stats['hit_rate'] * 100
+        lru_tps = results["lru_priority"][i][1].timing_stats['tokens_per_sec']
+        
+        print(f"{target_acc:>9.0%} | {actual:>6.1f}% | "
+              f"{lfu_hit:>9.1f}% | {lfu_tps:>8.2f} | "
+              f"{lru_hit:>10.1f}% | {lru_tps:>9.2f}")
+    
+    # Perfect reference (LRU+priority, 100% accuracy)
+    cfg_perf = SimConfig()
+    cfg_perf.predictor.model = "perfect"
+    cfg_perf.buffer.eviction_policy = "lru_priority"
+    cfg_perf.buffer.size_mb = 512
+    res_perf = run_simulation(cfg_perf)
+    
+    print(f"{'100%(perfect)':>10} | {'100.0%':>7} | "
+          f"{'n/a':>9} | {'n/a':>8} | "
+          f"{res_perf.buffer_stats['hit_rate']*100:>10.1f}% | {res_perf.timing_stats['tokens_per_sec']:>9.2f}")
+    print(f"{'=' * 100}")
+    
+    # Compute crossover point
+    print(f"\nCROSSOVER ANALYSIS:")
+    print(f"  LFU baseline:      {results['lfu'][5][1].buffer_stats['hit_rate']*100:.1f}% "
+          f"(@ {results['lfu'][5][0]:.0%} accuracy)")
+    print(f"  LRU+P best:        {res_perf.buffer_stats['hit_rate']*100:.1f}% "
+          f"(@ perfect predictor)")
+    
+    for i, target_acc in enumerate(accuracies):
+        lfu_hit = results["lfu"][i][1].buffer_stats['hit_rate'] * 100
+        lru_hit = results["lru_priority"][i][1].buffer_stats['hit_rate'] * 100
+        if lru_hit >= lfu_hit:
+            print(f"  ==> CROSSOVER at ~{target_acc:.0%} accuracy "
+                  f"(LRU+P {lru_hit:.1f}% >= LFU {lfu_hit:.1f}%)")
+            break
+    else:
+        print(f"  ==> No crossover: LRU+P never exceeds LFU in tested range")
+    
+    return results
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Speculative Weight Streaming Simulator")
-    parser.add_argument("--mode", choices=["single", "sweep-buffer", "sweep-predictor"],
+    parser.add_argument("--mode", choices=["single", "sweep-buffer", "sweep-predictor", "sweep-accuracy"],
                        default="single", help="Simulation mode")
     parser.add_argument("--buffer-size", type=int, default=256, help="Buffer size in MB")
     parser.add_argument("--policy", choices=["lru", "lfu", "lru_priority"],
                        default="lru_priority", help="Eviction policy")
-    parser.add_argument("--predictor", choices=["perfect", "heuristic"],
+    parser.add_argument("--predictor", choices=["perfect", "heuristic", "simulated_accuracy"],
                        default="heuristic", help="Predictor model")
+    parser.add_argument("--accuracy", type=float, default=0.7, help="Target accuracy (simulated_accuracy)")
     parser.add_argument("--tokens", type=int, default=1000, help="Number of tokens")
     parser.add_argument("--verbose", "-v", action="store_true")
     
@@ -271,11 +364,14 @@ if __name__ == "__main__":
         sweep_buffer_size()
     elif args.mode == "sweep-predictor":
         sweep_predictor()
+    elif args.mode == "sweep-accuracy":
+        sweep_accuracy()
     else:
         cfg = SimConfig()
         cfg.buffer.size_mb = args.buffer_size
         cfg.buffer.eviction_policy = args.policy
         cfg.predictor.model = args.predictor
+        cfg.predictor.accuracy_level = args.accuracy
         cfg.workload.n_tokens = args.tokens
         
         result = run_simulation(cfg, verbose=args.verbose)
