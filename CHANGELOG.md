@@ -5,30 +5,60 @@
 
 ---
 
-## [0.3.0] - 2026-07-27
+## [0.4.0] - 2026-07-27
 
-### 📚 Documentation System + Workflow
+### 🏗️ Phase 2: Architecture Design Complete
 
-- **ติดตั้งระบบบันทึกที่เป็น workflow ถาวร** — ทุก session ต้องปฏิบัติตาม
-- สร้าง `docs/WORKFLOW.md` — กำหนดกฎ mandatory สำหรับทุก session (start, during, end)
-- สร้างระบบบันทึกและติดตามงานครบชุด
+- ออกแบบระบบ Speculative Weight Streaming ทั้ง 6 components + interface contracts
+- สร้าง `docs/ARCHITECTURE.md` — blueprint หลักของระบบ (286 บรรทัด)
 
-#### ระบบที่เพิ่ม
+#### Components ที่ออกแบบ
 
-| ไฟล์ | Purpose |
-|------|---------|
-| `SESSION_LOG.md` | บันทึกทุก session — อ่านก่อนเริ่ม, เขียนเมื่อจบ |
-| `docs/DECISIONS.md` | ADR — ตัดสินใจทางเทคนิคพร้อมเหตุผล |
-| `docs/GLOSSARY.md` | รวมคำศัพท์ — ใช้คำเดียวกันทั้งโปรเจค |
-| `TASKS.md` | Task board — backlog, in progress, done |
-| `research/experiments/index.md` | Experiment log template + protocol |
-| `docs/WORKFLOW.md` | **Workflow บังคับ** — ครอบคลุมทุก session |
+| Component | Design Decision | Key Spec |
+|-----------|----------------|----------|
+| **NVMe Data Layout** | Shard-based, popularity sorted, O(1) index | 4 MB shard, 3 regions (shared/routed/KV) |
+| **Weight Predictor** | MLP (PreScope-style, 2-layer, 2M params) | Input 128-256 → Output 896, ~8 MB |
+| **Pre-fetch Scheduler** | Priority queue + I/O batching + io_uring/IOCP | MAX_BATCH 64 MB, 3 priority levels |
+| **Streaming Buffer** | LRU + priority eviction, 256 MB default | ~64 shards (K3), cold start strategy |
+| **Execution Engine** | BufferReader + MmapFallback + ComputeOrch | Framework-agnostic interface |
+| **Abstraction Layer** | Plugin architecture | MoE / Dense / Hybrid polymorphism |
 
-#### Key workflows ที่กำหนด
-- **Every Session Checklist:** Start (5 steps) + End (5 steps)
-- **Decision Protocol:** ต้องบันทึก ADR เมื่อไหร่ + template
-- **Experiment Protocol:** hypothesis → setup → result → conclusion
-- **Problem Resolution Protocol:** symptom → root cause → solution → prevention
+#### ไฟล์ที่สร้าง/แก้ไข
+- `docs/ARCHITECTURE.md` — เอกสารออกแบบระบบ (ใหม่)
+- `TASKS.md` — อัปเดต Phase 2 → ✅ Complete
+- `SESSION_LOG.md` — เพิ่ม S003
+- `CHANGELOG.md` — ไฟล์นี้
+
+---
+
+## [0.2.0] - 2026-07-27
+
+### 🔭 Phase 1: Research Review Complete
+
+- **ขยายเป้าหมาย** — จาก K3 สู่โมเดลใหญ่ทุกรูปแบบ (MoE, Dense, Hybrid) แต่เริ่มที่ K3
+- อัปเดต PROJECT.md และ CONCEPT.md ให้สะท้อนเป้าหมายที่กว้างขึ้น
+- ค้นคว้างานวิจัย 4 หมวด + K3 architecture
+
+#### หมวดวิจัยที่ค้นคว้า
+
+| หมวด | # Papers | SOTA | Key Finding |
+|------|---------|------|-------------|
+| **Speculative Decoding** | 8 | EAGLE-3 (NeurIPS'25) | Draft head <5% params, 2-4x speedup, scaling law |
+| **MoE Routing Prediction** | 10 | PreScope (2025) | Expert prediction >90% accuracy ด้วย MLP เล็ก |
+| **Out-of-Core Execution** | 8 | flash-moe, llama.cpp | SSD streaming ใช้ได้จริง 1.9-4.4 tok/s แต่ยัง reactive |
+| **Near-Storage Compute** | 5 | HILOS (ASPLOS'26) | ยังไม่成熟พอสำหรับ LLM — ควรรอ hardware |
+| **Kimi K3 Architecture** | — | เปิด weights 27 ก.ค. 2026 | MXFP4, KDA, Quantile Balancing, 896 experts |
+
+#### ไฟล์ที่สร้าง/แก้ไข
+- `PROJECT.md` — ขยายเป้าหมาย + เพิ่ม Dense model case
+- `docs/CONCEPT.md` — อัปเดตเป็น architecture-agnostic + เพิ่ม Dense case
+- `research/index.md` — สรุปผลวิจัยรวม
+- `research/speculative-decoding/README.md` — 8 papers
+- `research/moe-routing/README.md` — 10 papers
+- `research/out-of-core-execution/README.md` — 8 โครงการ
+- `research/near-storage-compute/README.md` — 5 papers
+- `research/kimi-k3/README.md` — K3 architecture deep dive
+- `research/README.md` — อัปเดต
 
 ---
 

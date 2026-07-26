@@ -27,12 +27,13 @@
 
 | สถานะ | Task | Priority | Notes |
 |-------|------|---------|-------|
-| ⬜ | Design data layout (NVMe sharding) | 🔴 | |
-| ⬜ | Design Weight Predictor architecture | 🔴 | |
-| ⬜ | Design Pre-fetch Scheduler | 🔴 | |
-| ⬜ | Design Streaming Buffer management | 🔴 | |
-| ⬜ | Design Execution Engine interface | 🔴 | |
-| ⬜ | Design abstraction layer (MoE vs Dense) | 🟡 | |
+| ✅ | Design data layout (NVMe sharding) | 🔴 | Shard-based, popularity layout, O(1) index |
+| ✅ | Design Weight Predictor architecture | 🔴 | MLP (PreScope-style), 3 options, fallback |
+| ✅ | Design Pre-fetch Scheduler | 🔴 | Priority queue, I/O batching, timing model |
+| ✅ | Design Streaming Buffer management | 🔴 | LRU+priority, 256 MB default, cold start |
+| ✅ | Design Execution Engine interface | 🔴 | BufferReader, MmapFallback, ComputeOrch |
+| ✅ | Design abstraction layer (MoE vs Dense) | 🟡 | Plugin architecture, common interface |
+| ✅ | **สรุปเป็น docs/ARCHITECTURE.md** | 🔴 | 6 components + interfaces + roadmap |
 
 ---
 
