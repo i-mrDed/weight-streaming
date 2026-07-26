@@ -10,7 +10,9 @@
 
 | # | วันที่ | หัวข้อ | สถานะ | สรุป |
 |---|-------|--------|-------|------|
-| — | — | — | — | ยังไม่มีการทดลอง |
+| 001 | 2026-07-27 | Buffer Size & Eviction Policy | ✅ Complete | LFU 512 MB → 78.2% hit rate |
+| 002 | 2026-07-27 | Predictor Accuracy Impact | 🔄 Setup | รอ run |
+| 003 | 2026-07-27 | Timing & Overlap Efficiency | ✅ Complete | 76.6% overlap efficiency, 2.74 tok/s |
 
 ---
 

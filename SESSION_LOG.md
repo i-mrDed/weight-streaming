@@ -5,40 +5,36 @@
 
 ---
 
-## [S003] — 2026-07-27 — Phase 2: Architecture Design Complete
+## [S004] — 2026-07-27 — Phase 3a: Prototype Simulator
 
-**🎯 เป้าหมาย:** ออกแบบสถาปัตยกรรมระบบ Speculative Weight Streaming ทั้ง 6 components
+**🎯 เป้าหมาย:** สร้าง Python simulator + รัน experiments วัด performance
 
 ### ✅ สิ่งที่ทำ
-- สร้าง `docs/ARCHITECTURE.md` ครอบคลุมทุก component:
-  1. **NVMe Data Layout** — shard-based, popularity layout, O(1) metadata index
-  2. **Weight Predictor** — MLP (PreScope-style, 2-layer, 2M params), heuristic fallback
-  3. **Pre-fetch Scheduler** — priority queue, I/O batching, timing model, emergency handler
-  4. **Streaming Buffer** — LRU+priority eviction, 256 MB default, cold start strategy
-  5. **Execution Engine** — BufferReader + MmapFallback, framework-agnostic interface
-  6. **Abstraction Layer** — plugin architecture รองรับ MoE/Dense/Hybrid
-- Interface contracts ครบ: Predictor→Scheduler→Buffer→Engine
-- Implementation roadmap สำหรับ Phase 3-4
-- อัปเดต TASKS.md, CHANGELOG.md
+- สร้าง simulator framework ครบ 5 modules (600+ บรรทัด)
+- EXP-001: Buffer size & eviction policy sweep → **พบว่า 512 MB + LFU = 78.2% hit rate**
+- EXP-003: Timing + overlap efficiency → **76.7% overlap, 2.74 tok/s**
+- EXP-002: Predictor — partial (ต้องปรับ access model)
+- วิเคราะห์ findings: predictor accuracy = biggest performance leverage
 
-### ⚡ การตัดสินใจ
-- **เลือก MLP Predictor (PreScope-style)** — weighted sum + confidence
-- **ไม่เลือก Extend EAGLE-3 head** — เก็บไว้เป็น future work (novel แต่เสี่ยงสูง)
-- **Buffer default 256 MB** — sweet spot ของ RAM vs hit rate
-- **Fork llama.cpp สำหรับ Phase 3** — มี MoE support พร้อม
-- **Windows I/O: IOCP** — io_uring ไม่มีบน Windows
+### ⚡ การตัดสินใจ (อัปเดต)
+- **เปลี่ยน buffer default จาก 256 MB → 512 MB** (จาก evidence)
+- **เปลี่ยน default eviction จาก LRU+priority → LFU** (LFU > LRU สำหรับ MoE)
+- **Priority boost ปิด** จนกว่า predictor accuracy >30%
+- **RAM budget ยัง OK:** 512 MB buffer + draft head (~6 GB) + KV cache (~8 GB) = ~14.5 GB
+
+### 🐛 ปัญหา / อุปสรรค
+- Windows encoding (cp874) → emoji + special chars พิมพ์ไม่ได้ → แก้เป็น ASCII
+- Access pattern per-layer independent → working set ใหญ่เกินจริง → ต้องปรับ
 
 ### ⏭️ ถัดไป
-- Phase 3a: Prototype Simulator (Python)
-  - create experiments/EXP-001-simulator
-  - implement buffer simulator
-  - implement heuristic predictor
-  - run simulations with K3 access pattern
+- [ ] EXP-002: ปรับ access model + ทดสอบ MLP predictor
+- [ ] EXP-004: Per-layer expert sharing (K3 realistic)
+- [ ] เลือก MoE model เล็กสำหรับ PoC + fork llama.cpp
 
 ### 📎 อ้างอิง
-- `docs/ARCHITECTURE.md` — design หลัก
-- `docs/DECISIONS.md` — ADR-001, ADR-002
-- `research/pre-scope/` — predictor reference
+- `simulator/` — code ทั้งหมด
+- `research/experiments/EXP-001-buffer-sim/` — buffer results
+- `research/experiments/EXP-003-timing-sim/` — timing results
 
 ---
 

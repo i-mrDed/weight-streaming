@@ -5,7 +5,40 @@
 
 ---
 
-## [0.4.0] - 2026-07-27
+## [0.5.0] - 2026-07-27
+
+### 🧪 Phase 3a: Prototype Simulator
+
+- สร้าง Python simulator framework ครบ 5 modules:
+  - `access_pattern.py` — synthetic K3 workload generator (Zipf + temporal)
+  - `buffer.py` — cache policy simulation (LRU, LFU, LRU+priority)
+  - `predictor.py` — perfect + heuristic prediction models
+  - `timing.py` — NVMe I/O + compute timing model
+  - `run.py` — main simulation runner + sweeps
+- EXP-001: Buffer size sweep (5 sizes × 3 policies) → **LFU 512 MB = 78.2% hit rate**
+- EXP-003: Timing analysis → **76.7% overlap efficiency, 2.74 tok/s**
+- Findings ที่กระทบ design:
+  - ต้องเพิ่ม buffer default จาก 256 MB → **512 MB**
+  - เปลี่ยน eviction policy จาก LRU+priority → **LFU**
+  - Priority boost ปิด จนกว่า predictor accuracy >30%
+  - Predictor accuracy = leverage ที่ใหญ่ที่สุดสำหรับ performance improvement
+
+#### ไฟล์ที่สร้าง/แก้ไข
+- `simulator/README.md` — document
+- `simulator/config.py` — config dataclasses
+- `simulator/access_pattern.py` — workload generator
+- `simulator/buffer.py` — buffer simulation
+- `simulator/predictor.py` — predictor models
+- `simulator/timing.py` — I/O + compute timing
+- `simulator/run.py` — main runner
+- `research/experiments/EXP-001-buffer-sim/` — setup, results, analysis
+- `research/experiments/EXP-002-predictor-sim/` — partial setup
+- `research/experiments/EXP-003-timing-sim/` — setup, analysis
+- `research/experiments/index.md` — อัปเดต
+- `TASKS.md` — อัปเดต
+- `SESSION_LOG.md` — เพิ่ม S004
+
+---
 
 ### 🏗️ Phase 2: Architecture Design Complete
 

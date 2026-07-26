@@ -41,10 +41,12 @@
 
 | สถานะ | Task | Priority | Notes |
 |-------|------|---------|-------|
+| ✅ | Create simulator framework | 🔴 | access_pattern, buffer, predictor, timing, run |
+| ✅ | EXP-001: Buffer size + eviction policy | 🔴 | LFU 512 MB → 78.2% hit rate (confirmed) |
+| ✅ | EXP-002: Predictor accuracy impact | 🟡 | Partial — ต้องปรับ access model |
+| ✅ | EXP-003: Timing + overlap efficiency | 🔴 | 76.7% overlap, 2.74 tok/s |
 | ⬜ | Select small MoE model for PoC | 🟡 | Mixtral? Qwen MoE? |
-| ⬜ | Implement buffer simulator | 🔴 | |
-| ⬜ | Implement predictor (heuristic first) | 🔴 | |
-| ⬜ | Implement pre-fetch scheduler | 🔴 | |
+| ⬜ | Implement pre-fetch scheduler (real I/O) | 🔴 | |
 | ⬜ | Integrate with existing inference engine | 🔴 | |
 
 ---
