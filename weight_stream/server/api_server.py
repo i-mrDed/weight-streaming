@@ -23,7 +23,8 @@ from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse, JSONResponse
+from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from .config import get_config, ServerConfig
 from .model_manager import ModelManager
@@ -80,10 +81,21 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
         allow_headers=["*"],
     )
     
+    # Mount static files (SPA)
+    import os
+    static_dir = os.path.join(os.path.dirname(__file__), "static")
+    if os.path.isdir(static_dir):
+        app.mount("/app", StaticFiles(directory=static_dir, html=True), name="static")
+    
     # Health check
     @app.get("/health")
     async def health():
         return {"status": "ok", "version": "0.11.0"}
+    
+    # Redirect root to SPA
+    @app.get("/")
+    async def root():
+        return {"message": "Weight Streaming API v0.11.0", "docs": "/docs", "app": "/app"}
     
     # ── REST Endpoints ──────────────────────────────────────────────
     
