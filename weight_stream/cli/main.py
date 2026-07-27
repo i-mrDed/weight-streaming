@@ -101,6 +101,41 @@ def main():
     tui_p.add_argument("--server", "-s", type=str, default="http://127.0.0.1:8765",
                        help="API server URL (default: http://127.0.0.1:8765)")
     
+    # ── issues ────────────────────────────────────────────────────────
+    issues_p = sub.add_parser("issues", help="Issue tracking (report / list / manage)")
+    issues_sub = issues_p.add_subparsers(dest="issues_cmd", required=True)
+    
+    ir = issues_sub.add_parser("report", help="Report a new issue")
+    ir.add_argument("--title", "-t", required=True, help="Issue title")
+    ir.add_argument("--desc", "-d", required=True, help="Description")
+    ir.add_argument("--severity", "-s", default="medium",
+                    choices=["low", "medium", "high", "critical"])
+    ir.add_argument("--expected", default="", help="Expected behavior")
+    ir.add_argument("--actual", default="", help="Actual behavior")
+    
+    il = issues_sub.add_parser("list", help="List issues")
+    il.add_argument("--status", default=None, help="Filter by status")
+    il.add_argument("--severity", default=None, help="Filter by severity")
+    
+    iss = issues_sub.add_parser("show", help="Show issue detail")
+    iss.add_argument("id", help="Issue ID (e.g. ISSUE-001)")
+    
+    ist = issues_sub.add_parser("set-status", help="Update issue status (maintainer)")
+    ist.add_argument("id", help="Issue ID")
+    ist.add_argument("status", help="New status")
+    ist.add_argument("--root-cause", default=None)
+    ist.add_argument("--fix", default=None, dest="fix_summary")
+    ist.add_argument("--commit", default=None)
+    ist.add_argument("--verify-steps", default=None)
+    ist.add_argument("--note", default=None)
+    
+    iv = issues_sub.add_parser("verify", help="Verify a fix")
+    iv.add_argument("id", help="Issue ID")
+    iv.add_argument("--fail", action="store_true", help="Mark as still broken")
+    iv.add_argument("--note", default="")
+    
+    ie = issues_sub.add_parser("export", help="Export issues summary markdown")
+    
     args = parser.parse_args()
     
     # Route command
@@ -117,6 +152,8 @@ def main():
             cmd_ui(args)
         elif args.command == "tui":
             cmd_tui(args)
+        elif args.command == "issues":
+            cmd_issues(args)
     except WeightStreamError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -431,4 +468,103 @@ def cmd_tui(args):
     from weight_stream.tui.app import WeightStreamTUI
     app = WeightStreamTUI(server_url=args.server)
     app.run()
+
+
+def cmd_issues(args):
+    """Issue tracking CLI."""
+    from weight_stream.issues import (
+        IssueCreate,
+        IssueService,
+        IssueUpdate,
+        IssueVerify,
+        Severity,
+        IssueStatus,
+        collect_debug_context,
+    )
+    
+    svc = IssueService()
+    cmd = args.issues_cmd
+    
+    if cmd == "report":
+        issue = svc.create(IssueCreate(
+            title=args.title,
+            description=args.desc,
+            severity=Severity(args.severity),
+            expected=args.expected,
+            actual=args.actual,
+            context=collect_debug_context(),
+        ))
+        print(f"Created {issue.id}: {issue.title}")
+        print(f"  Status: {issue.status.value}")
+        print(f"  Saved: data/issues/{issue.id}.json")
+    
+    elif cmd == "list":
+        issues = svc.list(status=args.status, severity=args.severity)
+        if not issues:
+            print("No issues found.")
+            return
+        print(f"{'ID':<12} {'Status':<16} {'Sev':<10} Title")
+        print("-" * 70)
+        for i in issues:
+            print(f"{i.id:<12} {i.status.value:<16} {i.severity.value:<10} {i.title[:40]}")
+    
+    elif cmd == "show":
+        issue = svc.get(args.id)
+        if not issue:
+            print(f"Issue {args.id} not found")
+            sys.exit(1)
+        print(f"{issue.id}: {issue.title}")
+        print(f"  Status:   {issue.status.value}")
+        print(f"  Severity: {issue.severity.value}")
+        print(f"  Created:  {issue.created_at} by {issue.created_by}")
+        print(f"  Updated:  {issue.updated_at}")
+        print(f"\nDescription:\n  {issue.description}")
+        if issue.root_cause:
+            print(f"\nRoot cause:\n  {issue.root_cause}")
+        if issue.fix_summary:
+            print(f"\nFix:\n  {issue.fix_summary}")
+        if issue.verify_steps:
+            print(f"\nVerify:\n  {issue.verify_steps}")
+        if issue.timeline:
+            print("\nTimeline:")
+            for ev in issue.timeline:
+                note = f" — {ev.note}" if ev.note else ""
+                print(f"  {ev.at}  {ev.event}  ({ev.by}){note}")
+    
+    elif cmd == "set-status":
+        try:
+            status = IssueStatus(args.status)
+        except ValueError:
+            print(f"Invalid status: {args.status}")
+            print(f"Valid: {[s.value for s in IssueStatus]}")
+            sys.exit(1)
+        try:
+            issue = svc.update(args.id, IssueUpdate(
+                status=status,
+                root_cause=args.root_cause,
+                fix_summary=args.fix_summary,
+                commit=args.commit,
+                verify_steps=args.verify_steps,
+                note=args.note,
+            ))
+            print(f"Updated {issue.id} → {issue.status.value}")
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+    
+    elif cmd == "verify":
+        try:
+            issue = svc.verify(args.id, IssueVerify(
+                verified=not args.fail,
+                note=args.note,
+            ))
+            print(f"{issue.id} → {issue.status.value}")
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+    
+    elif cmd == "export":
+        md = svc.export_markdown()
+        print(md)
+        print(f"\n(Saved to data/issues/ISSUES_SUMMARY.md)")
 

@@ -5,6 +5,26 @@
 
 ---
 
+## [0.12.0] - 2026-07-27
+
+### Issue Tracking System (full product loop)
+- New package `weight_stream/issues/`: models, store, service, context, export
+- API: POST/GET/PATCH `/v1/issues`, verify, export, `/v1/debug/context`
+- CLI: `issues report|list|show|set-status|verify|export`
+- SPA: Report Issue modal, My Issues tab, Verify/Still broken, Report this on load errors
+- Lifecycle enforced: open → … → fixed → verify_pending → verified → closed
+- Local storage: `data/issues/` (JSON + MD mirror + summary)
+- Secret redaction in debug context
+- Plan: `docs/ISSUE_SYSTEM_PLAN.md`
+- Tests: 10 new issue lifecycle tests
+
+### Engine upgrade
+- llama-cpp-python **0.3.16 → 0.3.34**
+- Qwen3.5/Qwen3.6 architectures (`qwen35`, `qwen35moe`) now load
+- Verified: Qwen3.6-35B-A3B loads and generates coherent text
+
+---
+
 ## [0.11.0] - 2026-07-27
 
 ### 🔌 Phase 6: API Server + Full Frontend Platform + Anthropic Support

@@ -1,6 +1,8 @@
 # Issues — Weight Streaming
 
-> Template สำหรับรายงาน + แก้ไข + ยืนยัน issue อย่างเป็นระบบ
+> **Product Issue System (v0.12):** Use in-app **Report Issue**, CLI `weight-stream issues`, or API `/v1/issues`.  
+> Runtime data: `data/issues/` · Plan: `docs/ISSUE_SYSTEM_PLAN.md` · Summary: `data/issues/ISSUES_SUMMARY.md`  
+> This file keeps historical developer notes from early sessions.
 
 ---
 

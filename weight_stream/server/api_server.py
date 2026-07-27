@@ -31,6 +31,13 @@ from .config import get_config, ServerConfig
 from .model_manager import ModelManager
 from .openai_compat import handle_chat_completion
 from .anthropic_compat import handle_anthropic_messages
+from ..issues import (
+    IssueCreate,
+    IssueService,
+    IssueUpdate,
+    IssueVerify,
+    collect_debug_context,
+)
 from .schemas import (
     GenerateRequest,
     GenerateResponse,
@@ -54,6 +61,9 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
         config = get_config()
     
     manager = ModelManager()
+    issue_service = IssueService()
+    # Ring buffer of recent log-like events for debug context
+    recent_errors: list[str] = []
     
     @asynccontextmanager
     async def lifespan(app: FastAPI):
@@ -458,6 +468,88 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
         except Exception as e:
             logger.exception("Anthropic message failed")
             raise HTTPException(status_code=500, detail=str(e))
+    
+    # ── Issue Tracking ──────────────────────────────────────────────
+    
+    @app.get("/v1/debug/context")
+    async def debug_context(
+        model_path: str | None = None,
+        last_error: str | None = None,
+        last_endpoint: str | None = None,
+    ):
+        """Collect privacy-safe debug context for issue reports."""
+        arch = None
+        models = await manager.list_models()
+        if models:
+            model_path = model_path or models[0].path
+            arch = models[0].arch
+        return collect_debug_context(
+            model_path=model_path,
+            model_architecture=arch,
+            last_error=last_error,
+            last_endpoint=last_endpoint,
+            log_tail=list(recent_errors[-50:]),
+        )
+    
+    @app.post("/v1/issues")
+    async def create_issue(body: IssueCreate):
+        """Create a new issue report."""
+        try:
+            # Merge server debug context if client context incomplete
+            if not body.context.get("app_version"):
+                body.context = {
+                    **collect_debug_context(log_tail=list(recent_errors[-50:])),
+                    **(body.context or {}),
+                }
+            issue = issue_service.create(body)
+            return issue.model_dump()
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    
+    @app.get("/v1/issues")
+    async def list_issues(status: str | None = None, severity: str | None = None):
+        """List issues, optionally filtered by status/severity."""
+        try:
+            issues = issue_service.list(status=status, severity=severity)
+            return [i.model_dump() for i in issues]
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    
+    @app.get("/v1/issues/export")
+    async def export_issues(format: str = "md"):
+        """Export issues summary (md or json)."""
+        if format == "json":
+            issues = issue_service.list()
+            return [i.model_dump() for i in issues]
+        md = issue_service.export_markdown()
+        from fastapi.responses import PlainTextResponse
+        return PlainTextResponse(md, media_type="text/markdown")
+    
+    @app.get("/v1/issues/{issue_id}")
+    async def get_issue(issue_id: str):
+        """Get a single issue by ID."""
+        issue = issue_service.get(issue_id)
+        if not issue:
+            raise HTTPException(status_code=404, detail=f"Issue {issue_id} not found")
+        return issue.model_dump()
+    
+    @app.patch("/v1/issues/{issue_id}")
+    async def update_issue(issue_id: str, body: IssueUpdate):
+        """Update issue fields/status (maintainer)."""
+        try:
+            issue = issue_service.update(issue_id, body)
+            return issue.model_dump()
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+    
+    @app.post("/v1/issues/{issue_id}/verify")
+    async def verify_issue(issue_id: str, body: IssueVerify):
+        """User verification of a fix."""
+        try:
+            issue = issue_service.verify(issue_id, body)
+            return issue.model_dump()
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
     
     return app, manager
 

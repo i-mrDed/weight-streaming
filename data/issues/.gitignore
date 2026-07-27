@@ -1,0 +1,7 @@
+# Issue tracking runtime data
+data/issues/*.json
+data/issues/*.jsonl
+data/issues/ISSUE-*.md
+data/issues/counter.txt
+!data/issues/.gitkeep
+!data/issues/ISSUES_SUMMARY.md

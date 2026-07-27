@@ -350,6 +350,8 @@ footer {
       <span id="server-dot"></span>
       <span id="server-url">http://127.0.0.1:8765</span>
     </div>
+    <button id="btn-report" onclick="openReportModal()" style="background:var(--primary);color:#fff;border:none;padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">Report Issue</button>
+    <button id="btn-my-issues" onclick="switchTab('issues')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">My Issues</button>
     <button id="theme-toggle" title="Toggle theme">🌓</button>
   </div>
 </header>
@@ -361,6 +363,7 @@ footer {
   <button class="active" data-tab="chat">Chat</button>
   <button data-tab="stats">Stats</button>
   <button data-tab="models">Models</button>
+  <button data-tab="issues">Issues</button>
 </nav>
 
 <!-- ══════════════════════════════════════════════════════════════
@@ -458,7 +461,47 @@ footer {
      </div>
    </div>
 
+  <!-- Issues Tab -->
+  <div id="tab-issues" style="display:none;flex:1;overflow-y:auto;padding:20px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h3 style="margin:0;">Issue Tracker</h3>
+      <button class="primary" onclick="openReportModal()" style="font-size:0.85em;">+ New Report</button>
+    </div>
+    <div id="issues-list"><p style="color:var(--text-dim);">Loading...</p></div>
+  </div>
+
 </main>
+
+<!-- Report Issue Modal -->
+<div id="report-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:min(520px,92vw);max-height:90vh;overflow-y:auto;">
+    <h3 style="margin:0 0 12px;">Report Issue</h3>
+    <label style="font-size:0.8em;color:var(--text-dim);">Title *</label>
+    <input id="rpt-title" style="width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-family:var(--font);" />
+    <label style="font-size:0.8em;color:var(--text-dim);">What happened? *</label>
+    <textarea id="rpt-desc" rows="4" style="width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-family:var(--font);"></textarea>
+    <label style="font-size:0.8em;color:var(--text-dim);">Severity</label>
+    <select id="rpt-severity" style="width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);">
+      <option value="low">low</option>
+      <option value="medium" selected>medium</option>
+      <option value="high">high</option>
+      <option value="critical">critical</option>
+    </select>
+    <label style="font-size:0.8em;color:var(--text-dim);">Expected</label>
+    <input id="rpt-expected" style="width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-family:var(--font);" />
+    <label style="font-size:0.8em;color:var(--text-dim);">Actual</label>
+    <input id="rpt-actual" style="width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-family:var(--font);" />
+    <details style="margin-bottom:12px;">
+      <summary style="cursor:pointer;font-size:0.85em;color:var(--text-dim);">Debug context (auto-attached)</summary>
+      <pre id="rpt-context" style="font-size:0.7em;max-height:120px;overflow:auto;background:var(--surface2);padding:8px;border-radius:var(--radius-sm);margin-top:6px;"></pre>
+    </details>
+    <p id="rpt-msg" style="font-size:0.8em;min-height:1.2em;"></p>
+    <div style="display:flex;gap:8px;justify-content:flex-end;">
+      <button onclick="closeReportModal()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:var(--radius-sm);cursor:pointer;">Cancel</button>
+      <button class="primary" onclick="submitReport()">Submit</button>
+    </div>
+  </div>
+</div>
 
 <!-- ══════════════════════════════════════════════════════════════
      Footer
@@ -477,6 +520,9 @@ let currentModel = 'default';
 let abortController = null;
 let scanned = false;
 let conversationHistory = [];
+let lastError = null;
+let lastEndpoint = null;
+let reportContext = {};
 
 // Load chat history from localStorage
 try {
@@ -509,13 +555,16 @@ function clearChatHistory() {
    ═══════════════════════════════════════════════════════════════ */
 async function api(path, opts = {}) {
   const url = API + path;
+  lastEndpoint = path;
   const res = await fetch(url, {
     headers: { 'Content-Type': 'application/json', ...opts.headers },
     ...opts,
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || err.error || `HTTP ${res.status}`);
+    const msg = err.detail || err.error || ('HTTP ' + res.status);
+    lastError = msg;
+    throw new Error(msg);
   }
   return res;
 }
@@ -561,8 +610,10 @@ function switchTab(tab) {
   document.getElementById('tab-chat').style.display = tab === 'chat' ? 'flex' : 'none';
   document.getElementById('tab-stats').style.display = tab === 'stats' ? 'block' : 'none';
   document.getElementById('tab-models').style.display = tab === 'models' ? 'block' : 'none';
+  document.getElementById('tab-issues').style.display = tab === 'issues' ? 'block' : 'none';
   if (tab === 'stats') refreshStats();
   if (tab === 'models') { if (!scanned) { scanModels(); scanned = true; } refreshModels(); }
+  if (tab === 'issues') refreshIssues();
   window.location.hash = tab;
 }
 
@@ -573,7 +624,7 @@ document.querySelectorAll('nav button').forEach(btn => {
 // Restore tab on page load or hash change
 function restoreTab() {
   const hash = (window.location.hash || '').replace('#', '');
-  const valid = ['chat', 'stats', 'models'];
+  const valid = ['chat', 'stats', 'models', 'issues'];
   switchTab(valid.includes(hash) ? hash : 'chat');
 }
 window.addEventListener('hashchange', restoreTab);
@@ -937,7 +988,8 @@ async function loadModel(force) {
       document.getElementById('reload-btn').style.display = 'inline-block';
       document.getElementById('load-btn').style.display = 'none';
     } else {
-      loadMsg.innerHTML = '<span style="color:var(--error);">Load failed: ' + escapeHtml(msg) + '</span>';
+      loadMsg.innerHTML = '<span style="color:var(--error);">Load failed: ' + escapeHtml(msg) +
+        '</span> <button onclick="reportLastError()" style="margin-left:8px;background:var(--primary);color:#fff;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.75em;">Report this</button>';
     }
   }
   btn.disabled = false;
@@ -957,6 +1009,119 @@ async function unloadModel(id) {
 
 document.getElementById('load-btn').addEventListener('click', function() { loadModel(false); });
 document.getElementById('reload-btn').addEventListener('click', function() { loadModel(true); });
+
+/* ═══════════════════════════════════════════════════════════════
+   Issue Reporting
+   ═══════════════════════════════════════════════════════════════ */
+async function openReportModal(prefill) {
+  const modal = document.getElementById('report-modal');
+  modal.style.display = 'flex';
+  document.getElementById('rpt-msg').textContent = '';
+  if (prefill) {
+    if (prefill.title) document.getElementById('rpt-title').value = prefill.title;
+    if (prefill.desc) document.getElementById('rpt-desc').value = prefill.desc;
+    if (prefill.actual) document.getElementById('rpt-actual').value = prefill.actual;
+  }
+  try {
+    const q = new URLSearchParams();
+    if (lastError) q.set('last_error', lastError);
+    if (lastEndpoint) q.set('last_endpoint', lastEndpoint);
+    const ctx = await apiJSON('/v1/debug/context?' + q.toString());
+    reportContext = ctx;
+    document.getElementById('rpt-context').textContent = JSON.stringify(ctx, null, 2);
+  } catch (e) {
+    reportContext = { last_error: lastError, last_endpoint: lastEndpoint, note: 'context fetch failed: ' + e.message };
+    document.getElementById('rpt-context').textContent = JSON.stringify(reportContext, null, 2);
+  }
+}
+
+function closeReportModal() {
+  document.getElementById('report-modal').style.display = 'none';
+}
+
+async function submitReport() {
+  const title = document.getElementById('rpt-title').value.trim();
+  const desc = document.getElementById('rpt-desc').value.trim();
+  const msg = document.getElementById('rpt-msg');
+  if (title.length < 5 || desc.length < 10) {
+    msg.innerHTML = '<span style="color:var(--error);">Title (5+) and description (10+) required.</span>';
+    return;
+  }
+  msg.innerHTML = '<span style="color:var(--warn);">Submitting...</span>';
+  try {
+    const issue = await apiJSON('/v1/issues', {
+      title: title,
+      description: desc,
+      severity: document.getElementById('rpt-severity').value,
+      expected: document.getElementById('rpt-expected').value,
+      actual: document.getElementById('rpt-actual').value || lastError || '',
+      context: reportContext,
+    });
+    msg.innerHTML = '<span style="color:var(--success);">Created <b>' + issue.id + '</b></span>';
+    setTimeout(function() {
+      closeReportModal();
+      document.getElementById('rpt-title').value = '';
+      document.getElementById('rpt-desc').value = '';
+      switchTab('issues');
+    }, 800);
+  } catch (e) {
+    msg.innerHTML = '<span style="color:var(--error);">Failed: ' + escapeHtml(e.message) + '</span>';
+  }
+}
+
+async function refreshIssues() {
+  const el = document.getElementById('issues-list');
+  try {
+    const issues = await apiJSON('/v1/issues');
+    if (!issues.length) {
+      el.innerHTML = '<p style="color:var(--text-dim);">No issues yet. Click Report Issue when something goes wrong.</p>';
+      return;
+    }
+    el.innerHTML = issues.map(function(i) {
+      var verifyBtn = '';
+      if (i.status === 'verify_pending' || i.status === 'fixed') {
+        verifyBtn = '<button data-vid="' + i.id + '" data-vok="1" class="btn-verify" style="background:var(--success);color:#000;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.75em;margin-left:4px;">Verified</button>' +
+          '<button data-vid="' + i.id + '" data-vok="0" class="btn-verify" style="background:var(--error);color:#fff;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.75em;margin-left:4px;">Still broken</button>';
+      }
+      return '<div class="model-card" style="flex-direction:column;align-items:stretch;gap:6px;">' +
+        '<div style="display:flex;justify-content:space-between;gap:8px;">' +
+        '<div><b>' + escapeHtml(i.id) + '</b> ' + escapeHtml(i.title) + '</div>' +
+        '<span class="badge ' + (i.status === 'closed' ? 'loaded' : 'unloaded') + '">' + escapeHtml(i.status) + '</span>' +
+        '</div>' +
+        '<div class="model-meta">' + escapeHtml(i.severity) + ' · ' + escapeHtml(i.created_at) + '</div>' +
+        '<div style="font-size:0.85em;color:var(--text-dim);">' + escapeHtml((i.description || '').slice(0, 160)) + '</div>' +
+        (i.verify_steps ? '<div style="font-size:0.8em;"><b>Verify:</b> ' + escapeHtml(i.verify_steps) + verifyBtn + '</div>' : '') +
+        '</div>';
+    }).join('');
+    el.querySelectorAll('.btn-verify').forEach(function(btn) {
+      btn.addEventListener('click', function() {
+        verifyIssue(btn.getAttribute('data-vid'), btn.getAttribute('data-vok') === '1');
+      });
+    });
+  } catch (e) {
+    el.innerHTML = '<p style="color:var(--error);">Error: ' + escapeHtml(e.message) + '</p>';
+  }
+}
+
+async function verifyIssue(id, ok) {
+  try {
+    await apiJSON('/v1/issues/' + id + '/verify', {
+      verified: ok,
+      note: ok ? 'User confirmed fix' : 'Still broken',
+    });
+    refreshIssues();
+  } catch (e) {
+    alert('Verify failed: ' + e.message);
+  }
+}
+
+function reportLastError() {
+  openReportModal({
+    title: lastError ? ('Error: ' + lastError.slice(0, 60)) : 'Issue report',
+    desc: lastError ? ('An error occurred:\n' + lastError) : 'Describe what went wrong.',
+    actual: lastError || '',
+  });
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Theme Toggle
