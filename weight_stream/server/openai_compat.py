@@ -36,20 +36,21 @@ async def handle_chat_completion(
     """
     Handle an OpenAI-compatible chat completion request.
     
-    Converts messages to a prompt string and delegates to ModelManager.
-    Returns either a complete ChatCompletionResponse or a streaming
-    SSE response depending on request.stream.
+    Uses llama-cpp-python's create_chat_completion() which automatically
+    applies the model's built-in chat template (Qwen uses <|im_start|>,
+    Llama uses [INST], etc.) — producing much better responses than
+    manual prompt construction.
     """
-    # Convert messages array to prompt string
-    prompt = _messages_to_prompt(request.messages)
+    # Convert our ChatMessage objects to dicts for llama.cpp
+    messages = [{"role": m.role, "content": m.content} for m in request.messages]
     
-    # Token estimation (approximate — we don't have direct tokenizer access)
-    prompt_tokens = len(prompt.split())
+    # Token estimation (approximate)
+    prompt_tokens = sum(len(m["content"].split()) for m in messages)
     
     if request.stream:
-        return await _stream_response(request, prompt, prompt_tokens, manager)
+        return await _stream_response(request, messages, prompt_tokens, manager)
     else:
-        return await _complete_response(request, prompt, prompt_tokens, manager)
+        return await _complete_response(request, messages, prompt_tokens, manager)
 
 
 def _messages_to_prompt(messages: list[ChatMessage]) -> str:
@@ -67,26 +68,17 @@ def _messages_to_prompt(messages: list[ChatMessage]) -> str:
 
 async def _complete_response(
     request: ChatCompletionRequest,
-    prompt: str,
+    messages: list[dict],
     prompt_tokens: int,
     manager: ModelManager,
 ) -> ChatCompletionResponse:
     """Generate a complete (non-streaming) chat completion response."""
-    gen_request = GenerateRequest(
-        model=request.model,
-        prompt=prompt,
+    result = await manager.chat_completion(
+        model_id=request.model,
+        messages=messages,
         max_tokens=request.max_tokens,
         temperature=request.temperature,
         top_p=request.top_p,
-        stream=False,
-    )
-    
-    result = await manager.generate(
-        model_id=gen_request.model,
-        prompt=gen_request.prompt,
-        max_tokens=gen_request.max_tokens,
-        temperature=gen_request.temperature,
-        top_p=gen_request.top_p,
     )
     
     completion_tokens = result.get("tokens_generated", 0)
@@ -115,7 +107,7 @@ async def _complete_response(
 
 async def _stream_response(
     request: ChatCompletionRequest,
-    prompt: str,
+    messages: list[dict],
     prompt_tokens: int,
     manager: ModelManager,
 ) -> StreamingResponse:
@@ -124,9 +116,9 @@ async def _stream_response(
     created = int(time.time())
     
     async def generate():
-        gen = manager.generate_stream(
+        gen = manager.chat_completion_stream(
             model_id=request.model,
-            prompt=prompt,
+            messages=messages,
             max_tokens=request.max_tokens,
             temperature=request.temperature,
             top_p=request.top_p,
@@ -134,7 +126,6 @@ async def _stream_response(
         
         async for event in gen:
             if event.get("done"):
-                # Final chunk with finish_reason
                 chunk = {
                     "id": chat_id,
                     "object": "chat.completion.chunk",

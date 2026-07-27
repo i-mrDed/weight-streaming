@@ -109,6 +109,37 @@
 - Verification: All getElementById references now have matching HTML elements (automated check passes).
 - Files: `static/index.html`
 - Commit: (pending)
+
+### [ISSUE-011] Chat quality: model echoes question instead of answering
+- Reported: 2026-07-27
+- Status: 🟡 Improved (model limitation documented)
+- Symptom: Model responds with gibberish or echoes the question
+- Root Cause: Two factors:
+  1. **Template**: Was using plain "System: / User: / Assistant:" format instead of model's built-in chat template. Fixed by using llama-cpp-python's `create_chat_completion()` which reads Qwen's `<|im_start|>` template from GGUF metadata.
+  2. **Model quality**: Qwen1.5-MoE-A2.7B_Q2_K is 2-bit quantized — severe quality loss (~60-70%). The model echoes/repeats because it can't generate coherent responses at this quantization level. This is a model limitation, not a bug.
+- Fix:
+  - openai_compat.py now passes messages array directly to `create_chat_completion()` (proper template)
+  - Added ModelManager.chat_completion() + chat_completion_stream() methods
+  - No Agent system needed — template was the issue
+- Recommendation: Use Q4_K or higher quantization for usable chat quality. Q2_K is suitable only for weight-streaming benchmarking, not production chat.
+- Files: `openai_compat.py`, `model_manager.py`
+- Commit: (pending)
+
+### [ISSUE-012] Chat history lost on page reload
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
+- Symptom: All chat messages disappear after browser refresh
+- Fix: Added localStorage persistence (ws-chat-history key). Saves last 20 messages. Restores on page load. Added Clear button to reset history.
+- Files: `static/index.html`
+- Commit: (pending)
+
+### [ISSUE-013] No quick way to browse models from common directories
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
+- Symptom: User wants to load models from Jan Desktop (C:\Users\dedch\AppData\Roaming\Jan\data\llamacpp\models) or D:\models but has to type the full path manually
+- Fix: Added preset quick-scan buttons: Jan Desktop, D:\models, Current Dir, All Drives. One-click scan of common model locations.
+- Files: `static/index.html`
+- Commit: (pending)
 - Reported: 2026-07-27
 - Status: 🟢 Fixed
 - Symptom: Refreshing page always goes to Chat tab, even when on Models

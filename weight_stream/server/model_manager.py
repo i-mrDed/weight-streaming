@@ -271,6 +271,99 @@ class ModelManager:
             finally:
                 self._generating[model_id] = False
     
+    async def chat_completion(
+        self,
+        model_id: str,
+        messages: list[dict],
+        max_tokens: int = 128,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        **kwargs,
+    ) -> dict:
+        """Chat completion using model's built-in chat template."""
+        model = self._get_model(model_id)
+        
+        async with self._locks[model_id]:
+            self._generating[model_id] = True
+            self._last_used[model_id] = time.time()
+            try:
+                loop = asyncio.get_running_loop()
+                start = time.time()
+                
+                result = await loop.run_in_executor(
+                    None,
+                    lambda: model._llm.create_chat_completion(
+                        messages=messages,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        stream=False,
+                        **kwargs,
+                    )
+                )
+                
+                elapsed = time.time() - start
+                
+                content = result["choices"][0]["message"]["content"]
+                usage = result.get("usage", {})
+                token_count = usage.get("completion_tokens", 0)
+                
+                return {
+                    "model": model_id,
+                    "output": content,
+                    "tokens_generated": token_count,
+                    "elapsed_seconds": round(elapsed, 3),
+                    "tokens_per_second": round(token_count / elapsed, 2) if elapsed > 0 else 0,
+                }
+            finally:
+                self._generating[model_id] = False
+    
+    async def chat_completion_stream(
+        self,
+        model_id: str,
+        messages: list[dict],
+        max_tokens: int = 128,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        **kwargs,
+    ) -> AsyncIterator[dict]:
+        """Chat completion with streaming, using model's built-in chat template."""
+        model = self._get_model(model_id)
+        
+        async with self._locks[model_id]:
+            self._generating[model_id] = True
+            self._last_used[model_id] = time.time()
+            try:
+                stream = model._llm.create_chat_completion(
+                    messages=messages,
+                    max_tokens=max_tokens,
+                    temperature=temperature,
+                    top_p=top_p,
+                    stream=True,
+                    **kwargs,
+                )
+                
+                token_count = 0
+                for chunk in stream:
+                    if "choices" in chunk and len(chunk["choices"]) > 0:
+                        delta = chunk["choices"][0].get("delta", {})
+                        text = delta.get("content", "")
+                        if text:
+                            yield {
+                                "token": text,
+                                "index": token_count,
+                                "done": False,
+                            }
+                            token_count += 1
+                
+                yield {
+                    "token": "",
+                    "index": token_count,
+                    "done": True,
+                }
+            finally:
+                self._generating[model_id] = False
+    
     # ── Stats ────────────────────────────────────────────────────────
     
     async def get_stats(self, model_id: Optional[str] = None) -> dict:
