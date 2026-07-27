@@ -402,10 +402,13 @@ footer {
          Quick-scan common directories or enter a custom path.
        </p>
        <div class="form-row" style="margin-bottom:8px;">
-         <button onclick="scanPreset('jan')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">Jan Desktop</button>
-         <button onclick="scanPreset('d')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">D:\models</button>
-         <button onclick="scanPreset('cwd')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">Current Dir</button>
-         <button onclick="scanPreset('all')" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">All Drives</button>
+         <button onclick="browseModel()" style="background:var(--primary);color:#fff;border:none;padding:8px 16px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.85em;font-family:var(--font);font-weight:600;">Browse Model File</button>
+         <button onclick="browseDir()" style="background:var(--secondary);color:#fff;border:none;padding:8px 16px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.85em;font-family:var(--font);font-weight:600;">Browse Folder</button>
+         <span style="font-size:0.75rem;color:var(--text-dim);align-self:center;">or scan below</span>
+       </div>
+       <div class="form-row" style="margin-bottom:8px;">
+         <button onclick="scanModels()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">Scan Default Dirs</button>
+         <button onclick="scanDirCustom()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">Scan Custom Path</button>
        </div>
        <div class="form-row">
          <div style="flex:1;">
@@ -811,15 +814,49 @@ async function scanModels(dir) {
   }
 }
 
-// Quick scan presets
-function scanPreset(preset) {
-  const paths = {
-    'jan': 'C:\\Users\\dedch\\AppData\\Roaming\\Jan\\data\\llamacpp\\models',
-    'd': 'D:\\models',
-    'cwd': '',
-    'all': ''
-  };
-  scanModels(paths[preset] || null);
+// Native browse: open Windows file dialog on server
+async function browseModel() {
+  try {
+    const data = await apiJSON('/v1/browse');
+    if (data.path) {
+      document.getElementById('load-path').value = data.path;
+      const name = data.name.replace('.gguf', '').replace(/[^a-zA-Z0-9_-]/g, '-');
+      document.getElementById('load-id').value = name || 'default';
+      // Add to picker dropdown
+      pickerAddOption(data.path, data.name + ' (' + data.size_gb + ' GB)');
+      document.getElementById('load-btn').style.display = 'inline-block';
+      document.getElementById('reload-btn').style.display = 'none';
+    }
+  } catch(e) { console.error('Browse error:', e); }
+}
+
+async function browseDir() {
+  try {
+    const data = await apiJSON('/v1/browse-dir');
+    if (data.path) {
+      document.getElementById('scan-dir').value = data.path;
+      scanModels(data.path);
+    }
+  } catch(e) { console.error('Browse dir error:', e); }
+}
+
+function scanDirCustom() {
+  var dir = document.getElementById('scan-dir').value.trim();
+  if (dir) scanModels(dir);
+  else alert('Enter a directory path first');
+}
+
+
+
+function pickerAddOption(path, label) {
+  const picker = document.getElementById('model-picker');
+  if (!picker.querySelector('option[value="' + path.replace(/"/g, '') + '"]')) {
+    const opt = document.createElement('option');
+    opt.value = path;
+    opt.textContent = label;
+    picker.appendChild(opt);
+    picker.value = path;
+  }
 }
 
 // Scan button: scan the custom directory

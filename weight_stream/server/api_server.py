@@ -157,6 +157,69 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
         """List all loaded models."""
         return await manager.list_models()
     
+    @app.get("/v1/browse")
+    async def browse_model():
+        """
+        Open a native file dialog on the server to let the user pick a model.
+        Runs in a subprocess to avoid blocking the asyncio event loop.
+        Returns the full path of the selected .gguf file.
+        """
+        import subprocess, sys, os
+        
+        try:
+            # Run tkinter dialog in subprocess to avoid blocking asyncio
+            result = await asyncio.get_running_loop().run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    [sys.executable, "-c",
+                     "import tkinter as tk; from tkinter import filedialog; "
+                     "r=tk.Tk(); r.withdraw(); r.attributes('-topmost',True); "
+                     "p=filedialog.askopenfilename(title='Select GGUF Model', "
+                     "filetypes=[('GGUF Models','*.gguf'),('All Files','*.*')]); "
+                     "r.destroy(); print(p)"],
+                    capture_output=True, text=True, timeout=60,
+                )
+            )
+            path = result.stdout.strip()
+            if path and os.path.isfile(path):
+                size = os.path.getsize(path)
+                return {
+                    "path": os.path.abspath(path),
+                    "name": os.path.basename(path),
+                    "size_gb": round(size / (1024**3), 2),
+                }
+            return {"path": None, "cancelled": True}
+        except subprocess.TimeoutExpired:
+            return {"path": None, "error": "Dialog timed out"}
+        except Exception as e:
+            return {"path": None, "error": str(e)}
+    
+    @app.get("/v1/browse-dir")
+    async def browse_directory():
+        """Open a native directory picker in a subprocess."""
+        import subprocess, sys, os
+        
+        try:
+            result = await asyncio.get_running_loop().run_in_executor(
+                None,
+                lambda: subprocess.run(
+                    [sys.executable, "-c",
+                     "import tkinter as tk; from tkinter import filedialog; "
+                     "r=tk.Tk(); r.withdraw(); r.attributes('-topmost',True); "
+                     "p=filedialog.askdirectory(title='Select Model Directory'); "
+                     "r.destroy(); print(p)"],
+                    capture_output=True, text=True, timeout=60,
+                )
+            )
+            path = result.stdout.strip()
+            if path and os.path.isdir(path):
+                return {"path": os.path.abspath(path)}
+            return {"path": None, "cancelled": True}
+        except subprocess.TimeoutExpired:
+            return {"path": None, "error": "Dialog timed out"}
+        except Exception as e:
+            return {"path": None, "error": str(e)}
+    
     @app.get("/v1/models/scan")
     async def scan_models(dir: str | None = None):
         """
@@ -189,8 +252,10 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
         for search_dir in search_dirs:
             if not os.path.isdir(search_dir):
                 continue
-            pattern = os.path.join(search_dir, "*.gguf")
-            for path in sorted(glob.glob(pattern)):
+            # Recursive scan: **/*.gguf to find models in subfolders
+            # (e.g., Jan Desktop stores models in models/model-name/model.gguf)
+            pattern = os.path.join(search_dir, "**", "*.gguf")
+            for path in sorted(glob.glob(pattern, recursive=True)):
                 abspath = os.path.abspath(path)
                 if abspath in seen:
                     continue

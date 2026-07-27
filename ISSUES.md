@@ -152,6 +152,37 @@
 
 ## Issue Workflow
 
+### [ISSUE-014] Model scan not recursive — misses models in subfolders
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
+- Symptom: Quick-scan buttons find no models. Jan Desktop stores models in `models/model-name/model.gguf` (subfolder) but scan only checks immediate directory.
+- Root Cause: `glob("*.gguf")` is not recursive — doesn't enter subfolders.
+- Fix: Changed to `glob("**/*.gguf", recursive=True)` in scan endpoint.
+- Verification: Recursive scan finds models in nested directory structures.
+- Files: `api_server.py`
+- Commit: (pending)
+
+### [ISSUE-015] Hardcoded quick-scan paths not generic
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
+- Symptom: Quick-scan buttons hardcoded to user-specific paths — not portable for other users.
+- Fix: Replaced with generic buttons (Scan Default Dirs, Scan Custom Path). Added native Windows file/folder dialogs via `/v1/browse` and `/v1/browse-dir` endpoints (subprocess-based, non-blocking).
+- Files: `api_server.py`, `static/index.html`
+- Commit: (pending)
+
+### [ISSUE-016] Stats tab shows all zeros
+- Reported: 2026-07-27
+- Status: ⚪ Documented (expected behavior)
+- Symptom: Stats tab shows 0 for hit rate, hot shards, prefetches, resident ratio, speed, tokens.
+- Root Cause: Generation stats are empty until first generation completes (by design). Buffer hit_rate is 0% because `buffer.access()` is never called during generation — llama-cpp-python tensor loading is opaque from Python. Page cache requires sampling during generation.
+- Explanation: Stats populate after first generation. Hit rate remains 0% until C++ backend patch is implemented. This is a known limitation documented in code.
+- Files: N/A (documentation)
+- Commit: (pending)
+
+---
+
+## Issue Workflow
+
 ```
 Report → Analyze → Fix → Test → Verify → Close
   1. User reports symptom
