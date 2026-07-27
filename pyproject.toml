@@ -42,7 +42,8 @@ server = [
     "websockets>=13.0",
 ]
 gradio = ["gradio>=5.0.0"]
-all = ["weight-streaming[llama-cpp,server,gradio]"]
+tui = ["textual>=1.0.0", "rich>=13.0.0"]
+all = ["weight-streaming[llama-cpp,server,gradio,tui]"]
 
 [project.urls]
 homepage = "https://github.com/weight-streaming/weight-streaming"

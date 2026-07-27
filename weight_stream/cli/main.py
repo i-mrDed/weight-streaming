@@ -95,6 +95,12 @@ def main():
     ui_p.add_argument("--share", action="store_true",
                       help="Create a public shareable link (use with caution)")
     
+    # ── tui ───────────────────────────────────────────────────────────
+    tui_p = sub.add_parser("tui", help="Launch the Textual terminal UI",
+                           epilog="Example: python -m weight_stream tui --server http://localhost:8080")
+    tui_p.add_argument("--server", "-s", type=str, default="http://127.0.0.1:8080",
+                       help="API server URL (default: http://127.0.0.1:8080)")
+    
     args = parser.parse_args()
     
     # Route command
@@ -109,6 +115,8 @@ def main():
             cmd_server(args)
         elif args.command == "ui":
             cmd_ui(args)
+        elif args.command == "tui":
+            cmd_tui(args)
     except WeightStreamError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -400,4 +408,16 @@ def cmd_ui(args):
     
     from weight_stream.ui.gradio_app import launch
     launch(server_url=args.server, share=args.share)
+
+
+def cmd_tui(args):
+    """Launch the Textual terminal UI."""
+    print(f"  Starting Textual TUI...")
+    print(f"  API Server: {args.server}")
+    print(f"  Make sure the API server is running:")
+    print(f"    python -m weight_stream server --model model.gguf\n")
+    
+    from weight_stream.tui.app import WeightStreamTUI
+    app = WeightStreamTUI(server_url=args.server)
+    app.run()
 
