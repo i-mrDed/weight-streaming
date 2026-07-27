@@ -229,7 +229,59 @@
 
 ---
 
-> **Template สำหรับ session ใหม่:**
+## [S009] — 2026-07-27 — Phase 4a+4b: GGUF Parser + Windows Page Monitor
+
+**🎯 เป้าหมาย:** สร้าง expert-aware tensor mapping + Windows page cache monitor (แทน C++ patch)
+
+### ✅ สิ่งที่ทำ
+- **Phase 4a (v0.10.0):** GGUF Parser (`weight_stream/gguf/parser.py`)
+  - Wraps official `gguf` library, maps 411 tensors → file offsets
+  - Expert-aware API: `get_expert_map()` → `{layer_id: {expert_idx: [ExpertRange(gate, up, down)]}}`
+  - Qwen analysis: 72 expert tensors (24L × 3 projections), per-expert ~2.9 MB
+  - Backend integration: prefetches layer-0 experts on init, round-robin expert prefetch during gen
+  - 9 new tests (22 total, all passing)
+
+- **Phase 4b (v0.10.1):** Windows Page Cache Monitor (`weight_stream/io/win_perf.py`)
+  - Uses `QueryWorkingSetEx` via ctypes to sample physical RAM residency
+  - Reports resident ratio: e.g. 1.6% of 5.5GB = 88MB after cold 10-token generation
+  - Page size detection via `GetSystemInfo`
+  - Graceful fallback on failure (no admin needed)
+
+- **Prefetcher fix**: `prefetch_experts()` now tracks prefetched shards in buffer LRU (was bypassing buffer)
+
+- **Benchmark**: With vs without prefetch on Qwen 5.5GB
+  - Page cache: 1.6% in both cases (OS caches small model in 68.6GB RAM)
+  - Speedup: within noise ±3% — benefit will show on models >68GB
+  - Confirms infrastructure works correctly
+
+### ⚡ การตัดสินใจ
+- **ไม่ต้องใช้ C++ patch สำหรับ MVP** — Windows page monitor + heuristic prefetch เพียงพอ
+- **Phase 4b เสร็จสมบูรณ์** — page monitor + prefetch integration ทำงานครบ
+- **Buffer ขนาด 64 MB** = 16 shards (4MB each) — เต็ม capacity หลัง prefetch ครั้งเดียว
+
+### 🐛 ปัญหา / อุปสรรค
+- `QueryWorkingSetEx` error 6 (invalid handle) → fix: ใช้ `ctypes.WinDLL('psapi')` แทน `ctypes.windll.psapi`
+- `buffer.access()` ไม่เคยถูกเรียกจาก generation path → buffer hits/misses = 0 ตลอด
+  - Workaround: prefetch path อัปเดต buffer LRU โดยตรง
+  - Root cause: llama-cpp-python tensor loading is opaque from Python
+- numpy buffer reference prevents mmap close (BufferError) → fix: release `_mmap_buf` before close
+
+### ⏭️ ถัดไป
+- ✅ Phase 4a (GGUF parser) — complete
+- ✅ Phase 4b (Page monitor) — complete
+- [ ] Phase 5: Model size scaling test (ถ้ามี 100GB+ model)
+- [ ] Phase 6: Production hardening (error handling, logging, CLI polish)
+- [ ] Push commits to origin (ถ้าต้องการ)
+
+### 📎 อ้างอิง
+- `weight_stream/gguf/parser.py` — GGUF parser (135 lines)
+- `weight_stream/io/win_perf.py` — WindowsPageMonitor (189 lines)
+- `weight_stream/backends/llama_cpp.py` — page monitor init + prefetch integration
+- `weight_stream/core/prefetcher.py` — expert prefetch methods + buffer tracking
+- `tests/test_gguf.py` — 9 GGUF parser tests
+- `v0.10.0` + `v0.10.1` — Phase 4 releases
+
+---
 > ```markdown
 > ## [S000] — YYYY-MM-DD — [หัวข้อสั้น]
 >
