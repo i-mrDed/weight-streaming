@@ -391,52 +391,60 @@ footer {
   </div>
 
   <!-- Models Tab -->
-   <div id="tab-models" style="display:none;">
-    <div id="models-list"></div>
+    <div id="tab-models" style="display:none;">
+     <div id="models-list"></div>
 
-    <!-- Browse Available Models -->
-    <div class="load-form" style="margin-bottom:16px;">
-      <h3>Available Models</h3>
-      <div class="form-row">
-        <div style="flex:1;">
-          <select id="model-picker" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);">
-            <option value="">-- Select a model --</option>
-          </select>
-        </div>
-        <div style="display:flex;align-items:flex-end;">
-          <button class="primary" id="scan-btn" style="font-size:0.8em;padding:8px 14px;">Scan</button>
-        </div>
-      </div>
-    </div>
+     <!-- Browse Available Models -->
+     <div class="load-form" style="margin-bottom:16px;">
+       <h3>Available Models</h3>
+       <p style="font-size:0.8rem;color:var(--text-dim);margin-bottom:8px;">
+         Automatically scanned from your model directories.
+         Set <code>WS_MODELS_DIR</code> env var to configure.
+       </p>
+       <div class="form-row">
+         <div style="flex:1;">
+           <select id="model-picker" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);">
+             <option value="">-- Select a model or browse --</option>
+           </select>
+         </div>
+         <div style="display:flex;align-items:flex-end;gap:4px;">
+           <label for="browse-file" style="cursor:pointer;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius-sm);font-size:0.8em;font-family:var(--font);">Browse</label>
+           <input type="file" id="browse-file" accept=".gguf" style="display:none;" />
+           <button class="primary" id="refresh-btn" style="font-size:0.75em;padding:8px 10px;" title="Refresh model list">Refresh</button>
+         </div>
+       </div>
+     </div>
 
-    <!-- Manual Load -->
-    <div class="load-form">
-      <h3>Or Load Manually</h3>
-      <div class="form-row">
-        <div>
-          <label>Model Path</label>
-          <input type="text" id="load-path" placeholder="path/to/model.gguf" style="width:300px;" />
-        </div>
-        <div>
-          <label>Model ID</label>
-          <input type="text" id="load-id" value="default" style="width:150px;" />
-        </div>
-      </div>
-      <div class="form-row">
-        <div>
-          <label>Buffer (MB)</label>
-          <input type="number" id="load-buffer" value="64" min="1" style="width:100px;" />
-        </div>
-        <div>
-          <label>Context</label>
-          <input type="number" id="load-ctx" value="512" min="8" style="width:100px;" />
-        </div>
-        <div style="display:flex;align-items:flex-end;">
-          <button class="primary" id="load-btn">Load Model</button>
-        </div>
-      </div>
-    </div>
-  </div>
+     <!-- Load Form -->
+     <div class="load-form" id="load-section">
+       <h3 id="load-header">Load Model</h3>
+       <div class="form-row">
+         <div>
+           <label>Model Path</label>
+           <input type="text" id="load-path" placeholder="path/to/model.gguf" style="width:300px;" />
+         </div>
+         <div>
+           <label>Model ID</label>
+           <input type="text" id="load-id" value="default" style="width:150px;" />
+         </div>
+       </div>
+       <div class="form-row">
+         <div>
+           <label>Buffer (MB)</label>
+           <input type="number" id="load-buffer" value="64" min="1" style="width:100px;" />
+         </div>
+         <div>
+           <label>Context</label>
+           <input type="number" id="load-ctx" value="512" min="8" style="width:100px;" />
+         </div>
+         <div style="display:flex;align-items:flex-end;gap:8px;">
+           <button class="primary" id="load-btn">Load Model</button>
+           <button id="reload-btn" style="display:none;background:var(--warn);color:#000;border:none;padding:10px 16px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.85em;font-family:var(--font);">Reload (Force)</button>
+         </div>
+       </div>
+       <p id="load-msg" style="margin-top:8px;font-size:0.8rem;"></p>
+     </div>
+   </div>
 
 </main>
 
@@ -668,115 +676,163 @@ function card(label, value) {
    ═══════════════════════════════════════════════════════════════ */
 async function refreshModels() {
   const list = document.getElementById('models-list');
+  const reloadBtn = document.getElementById('reload-btn');
+  const loadBtn = document.getElementById('load-btn');
+  const loadMsg = document.getElementById('load-msg');
+  const loadHeader = document.getElementById('load-header');
+  
   try {
     const models = await apiJSON('/v1/models');
-    if (models.length === 0) {
-      list.innerHTML = '<p style="color:var(--text-dim);">No models loaded</p>';
-    } else {
-      list.innerHTML = models.map(m => `
-        <div class="model-card">
-          <div>
-            <div class="model-name">${escapeHtml(m.id)}</div>
-            <div class="model-meta">${escapeHtml(m.path || '')} · ${m.arch || 'unknown'} · ${m.n_experts} experts</div>
-          </div>
-          <div style="display:flex;align-items:center;gap:8px;">
-            <span class="badge loaded">loaded</span>
-            ${m.id !== 'default' ? `<button onclick="unloadModel('${escapeHtml(m.id)}')" style="background:none;border:1px solid var(--border);color:var(--text-dim);padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;">Unload</button>` : ''}
-          </div>
-        </div>
-      `).join('');
+    if (!models || models.length === 0) {
+      list.innerHTML = '<p style="color:var(--text-dim);">No models loaded yet. Select one below and click Load Model.</p>';
+      reloadBtn.style.display = 'none';
+      loadBtn.style.display = 'inline-block';
+      loadHeader.textContent = 'Load Model';
+      loadMsg.textContent = '';
+      return;
     }
-    if (models.length > 0) currentModel = models[0].id;
+    
+    list.innerHTML = models.map(m => `
+      <div class="model-card">
+        <div>
+          <div class="model-name">${escapeHtml(m.id)}</div>
+          <div class="model-meta">${escapeHtml(m.path || '')} · ${m.arch || 'unknown'} · ${m.n_experts} experts</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <span class="badge loaded">loaded</span>
+          <button onclick="unloadModel('${escapeHtml(m.id)}')" style="background:none;border:1px solid var(--border);color:var(--text-dim);padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;">Unload</button>
+        </div>
+      </div>
+    `).join('');
+    
+    // Set current model and update load form
+    const loaded = models[0];
+    currentModel = loaded.id;
+    document.getElementById('load-path').value = loaded.path || '';
+    document.getElementById('load-id').value = loaded.id;
+    
+    reloadBtn.style.display = 'inline-block';
+    loadBtn.style.display = 'none';
+    loadHeader.textContent = 'Model Loaded';
+    loadMsg.innerHTML = '<span style="color:var(--success);">Model <b>' + escapeHtml(loaded.id) + '</b> is loaded and ready.</span>';
   } catch (e) {
-    list.innerHTML = `<p style="color:var(--error);">Error: ${escapeHtml(e.message)}</p>`;
+    list.innerHTML = '<p style="color:var(--error);">Error: ' + escapeHtml(e.message) + '</p>';
   }
 }
 
 async function scanModels() {
   const picker = document.getElementById('model-picker');
-  const scanBtn = document.getElementById('scan-btn');
-  scanBtn.disabled = true;
-  scanBtn.textContent = 'Scanning...';
-  picker.innerHTML = '<option>Scanning for .gguf files...</option>';
   
   try {
     const data = await apiJSON('/v1/models/scan');
     const models = data.models || [];
-    picker.innerHTML = '<option value="">-- Select a model (' + models.length + ' found) --</option>';
+    let html = '<option value="">-- Select a model (' + models.length + ' found) --</option>';
     for (const m of models) {
-      picker.innerHTML += `<option value="${escapeHtml(m.path)}">${escapeHtml(m.name)} (${m.size_gb} GB)</option>`;
+      html += '<option value="' + escapeHtml(m.path) + '">' + escapeHtml(m.name) + ' (' + m.size_gb + ' GB)</option>';
     }
     if (models.length === 0) {
-      picker.innerHTML = '<option value="">No .gguf files found. Try setting WS_MODELS_DIR env var.</option>';
+      html = '<option value="">No .gguf files found in default directories</option>';
     }
+    picker.innerHTML = html;
   } catch (e) {
-    picker.innerHTML = `<option value="">Error: ${escapeHtml(e.message)}</option>`;
+    picker.innerHTML = '<option value="">Scan error: ' + escapeHtml(e.message) + '</option>';
   }
-  scanBtn.disabled = false;
-  scanBtn.textContent = 'Scan';
 }
 
-// Auto-fill path when dropdown selection changes
+// Dropdown selection → auto-fill path + ID
 document.getElementById('model-picker').addEventListener('change', function() {
   const path = this.value;
   if (path) {
     document.getElementById('load-path').value = path;
-    // Auto-generate model ID from filename
     const name = path.split(/[\\/]/).pop().replace('.gguf', '').replace(/[^a-zA-Z0-9_-]/g, '-');
     document.getElementById('load-id').value = name || 'default';
+    document.getElementById('load-btn').style.display = 'inline-block';
+    document.getElementById('reload-btn').style.display = 'none';
   }
 });
 
-// Auto-scan on Models tab open
-let scanned = false;
-document.querySelectorAll('nav button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    if (btn.dataset.tab === 'models' && !scanned) {
-      scanModels();
-      scanned = true;
-    }
-  });
+// Browse button → file input
+document.getElementById('browse-file').addEventListener('change', function() {
+  const file = this.files[0];
+  if (file) {
+    document.getElementById('load-path').value = file.name;
+    const name = file.name.replace('.gguf', '').replace(/[^a-zA-Z0-9_-]/g, '-');
+    document.getElementById('load-id').value = name || 'default';
+    // Also add to picker dropdown
+    pickerAddOption(file.name, 'Browsed file');
+  }
 });
 
-document.getElementById('scan-btn').addEventListener('click', scanModels);
+function pickerAddOption(path, label) {
+  const picker = document.getElementById('model-picker');
+  if (!picker.querySelector('option[value="' + path.replace(/"/g, '') + '"]')) {
+    const opt = document.createElement('option');
+    opt.value = path;
+    opt.textContent = label;
+    picker.appendChild(opt);
+  }
+}
 
-async function loadModel() {
+async function loadModel(force) {
   const path = document.getElementById('load-path').value.trim();
   const id = document.getElementById('load-id').value.trim() || 'default';
   const buffer = parseInt(document.getElementById('load-buffer').value) || 64;
   const ctx = parseInt(document.getElementById('load-ctx').value) || 512;
+  const loadMsg = document.getElementById('load-msg');
   
-  if (!path) { alert('Please enter a model path'); return; }
+  if (!path) { loadMsg.innerHTML = '<span style="color:var(--error);">Please enter or select a model path.</span>'; return; }
   
-  document.getElementById('load-btn').disabled = true;
-  document.getElementById('load-btn').textContent = 'Loading...';
+  const btn = force ? document.getElementById('reload-btn') : document.getElementById('load-btn');
+  btn.disabled = true;
+  btn.textContent = force ? 'Reloading...' : 'Loading...';
+  loadMsg.innerHTML = '<span style="color:var(--warn);">Loading model... this may take a minute.</span>';
   
   try {
-    await apiJSON('/v1/models/load', {
-      model_id: id, model_path: path,
-      buffer_mb: buffer, n_ctx: ctx,
-    });
+    const body = { model_id: id, model_path: path, buffer_mb: buffer, n_ctx: ctx };
+    if (force) body.force = true;
+    await apiJSON('/v1/models/load', body);
     currentModel = id;
+    loadMsg.innerHTML = '<span style="color:var(--success);">Loaded! Model <b>' + escapeHtml(id) + '</b> is ready for chat.</span>';
     await refreshModels();
-    document.getElementById('load-path').value = '';
   } catch (e) {
-    alert('Load failed: ' + e.message);
-  } finally {
-    document.getElementById('load-btn').disabled = false;
-    document.getElementById('load-btn').textContent = 'Load Model';
+    const msg = e.message || 'Unknown error';
+    if (msg.includes('already loaded')) {
+      loadMsg.innerHTML = '<span style="color:var(--warn);">Model already loaded. Click Reload to force reload.</span>';
+      document.getElementById('reload-btn').style.display = 'inline-block';
+      document.getElementById('load-btn').style.display = 'none';
+    } else {
+      loadMsg.innerHTML = '<span style="color:var(--error);">Load failed: ' + escapeHtml(msg) + '</span>';
+    }
   }
+  btn.disabled = false;
+  btn.textContent = force ? 'Reload (Force)' : 'Load Model';
 }
 
 async function unloadModel(id) {
   try {
     await apiJSON('/v1/models/unload', { model_id: id });
+    document.getElementById('load-msg').textContent = '';
     await refreshModels();
+    if (currentModel === id) currentModel = 'default';
   } catch (e) {
     alert('Unload failed: ' + e.message);
   }
 }
 
-document.getElementById('load-btn').addEventListener('click', loadModel);
+document.getElementById('load-btn').addEventListener('click', function() { loadModel(false); });
+document.getElementById('reload-btn').addEventListener('click', function() { loadModel(true); });
+document.getElementById('refresh-btn').addEventListener('click', function() { scanModels(); refreshModels(); });
+
+// Auto-scan on first visit to Models tab
+let scanned = false;
+const modelTabBtn = document.querySelector('nav button[data-tab="models"]');
+if (modelTabBtn) {
+  const origClick = modelTabBtn.onclick;
+  modelTabBtn.addEventListener('click', function() {
+    if (!scanned) { scanModels(); scanned = true; }
+    refreshModels();
+  });
+}
 
 /* ═══════════════════════════════════════════════════════════════
    Theme Toggle

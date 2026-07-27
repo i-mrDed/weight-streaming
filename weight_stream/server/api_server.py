@@ -152,6 +152,11 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
     
+    @app.get("/v1/models", response_model=list[ModelStatus])
+    async def list_models():
+        """List all loaded models."""
+        return await manager.list_models()
+    
     @app.get("/v1/models/scan")
     async def scan_models(dir: str | None = None):
         """
