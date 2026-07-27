@@ -803,28 +803,6 @@ document.getElementById('model-picker').addEventListener('change', function() {
   }
 });
 
-// Browse button → file input
-document.getElementById('browse-file').addEventListener('change', function() {
-  const file = this.files[0];
-  if (file) {
-    document.getElementById('load-path').value = file.name;
-    const name = file.name.replace('.gguf', '').replace(/[^a-zA-Z0-9_-]/g, '-');
-    document.getElementById('load-id').value = name || 'default';
-    // Also add to picker dropdown
-    pickerAddOption(file.name, 'Browsed file');
-  }
-});
-
-function pickerAddOption(path, label) {
-  const picker = document.getElementById('model-picker');
-  if (!picker.querySelector('option[value="' + path.replace(/"/g, '') + '"]')) {
-    const opt = document.createElement('option');
-    opt.value = path;
-    opt.textContent = label;
-    picker.appendChild(opt);
-  }
-}
-
 async function loadModel(force) {
   const path = document.getElementById('load-path').value.trim();
   const id = document.getElementById('load-id').value.trim() || 'default';

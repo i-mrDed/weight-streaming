@@ -99,6 +99,16 @@
 - Fix: Remove duplicate declarations. All three state variables now declared once at top of script (lines 468-470).
 - Files: `static/index.html`
 - Commit: (pending)
+
+### [ISSUE-010] SPA still broken — null reference to removed Browse element
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
+- Symptom: SPA still non-functional after ISSUE-009 fix
+- Root Cause: Event listener for `browse-file` (removed in ISSUE-006) was still in JS. `document.getElementById('browse-file')` returns null → `.addEventListener` on null → TypeError → entire JS script crashes.
+- Fix: Removed dead code: browse-file event listener + pickerAddOption function (lines 806-826).
+- Verification: All getElementById references now have matching HTML elements (automated check passes).
+- Files: `static/index.html`
+- Commit: (pending)
 - Reported: 2026-07-27
 - Status: 🟢 Fixed
 - Symptom: Refreshing page always goes to Chat tab, even when on Models
