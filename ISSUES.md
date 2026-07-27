@@ -179,6 +179,37 @@
 - Files: N/A (documentation)
 - Commit: (pending)
 
+### [ISSUE-017] Browse Model File / Browse Folder buttons do nothing
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
+- Symptom: Clicking Browse buttons produces no dialog and no feedback
+- Root Cause: `asyncio` was not imported in `api_server.py`. Browse endpoints called `asyncio.get_running_loop()` → NameError → silent 500. SPA had no error display.
+- Fix:
+  1. Added `import asyncio` to api_server.py
+  2. SPA now shows status messages (opening dialog / selected / cancelled / error)
+  3. Dialog runs in subprocess (non-blocking) with topmost flag
+- Verification: asyncio import confirmed; browse endpoints no longer crash
+- Files: `api_server.py`, `static/index.html`
+- Commit: (pending)
+
+### [ISSUE-018] Chat quality — root cause found and fixed
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
+- Symptom: Model echoes questions or generates gibberish instead of answering
+- Root Cause (empirically verified with 6 prompt formats):
+  - ChatML template (`<|im_start|>`) causes echo/garbage on Qwen Q2_K
+  - Q&A style (`User: ...\nAssistant:`) produces correct answers
+  - Verified: "What is the capital of France?" → "The capital of France is Paris."
+  - Not an Agent system issue — pure prompt format problem
+- Fix:
+  - Replaced ChatML with robust Q&A prompt format
+  - Added stop tokens: `\nUser:`, `\nSystem:`, etc.
+  - Added repeat_penalty=1.15
+  - Output cleanup strips role markers
+- Verification: Answer = "The capital of France is Paris." (clean, correct)
+- Files: `model_manager.py`, `backends/llama_cpp.py`
+- Commit: (pending)
+
 ---
 
 ## Issue Workflow

@@ -271,6 +271,43 @@ class ModelManager:
             finally:
                 self._generating[model_id] = False
     
+    @staticmethod
+    def _format_chat_prompt(messages: list[dict]) -> str:
+        """
+        Format messages in a robust Q&A style that works across models,
+        including heavily quantized ones where ChatML fails.
+        
+        Empirically verified: Q&A / Instruct style produces correct answers
+        on Qwen Q2_K, while ChatML (<|im_start|>) causes echo/garbage.
+        """
+        system = "You are a helpful assistant."
+        parts = []
+        for msg in messages:
+            role = msg.get("role", "user")
+            content = (msg.get("content") or "").strip()
+            if role == "system" and content:
+                system = content
+            elif role == "user":
+                parts.append(f"User: {content}")
+            elif role == "assistant":
+                parts.append(f"Assistant: {content}")
+        
+        prompt = f"System: {system}\n\n"
+        prompt += "\n".join(parts)
+        prompt += "\nAssistant:"
+        return prompt
+    
+    @staticmethod
+    def _clean_chat_output(text: str) -> str:
+        """Strip trailing garbage from model output."""
+        text = text.strip()
+        # Stop at role markers if model continues the dialogue
+        for marker in ("\nUser:", "\nSystem:", "\nAssistant:", "\n\nUser", "\n\nSystem"):
+            idx = text.find(marker)
+            if idx > 0:
+                text = text[:idx]
+        return text.strip()
+    
     async def chat_completion(
         self,
         model_id: str,
@@ -280,7 +317,7 @@ class ModelManager:
         top_p: float = 0.9,
         **kwargs,
     ) -> dict:
-        """Chat completion using model's built-in chat template."""
+        """Chat completion using robust Q&A prompt format."""
         model = self._get_model(model_id)
         
         async with self._locks[model_id]:
@@ -289,24 +326,26 @@ class ModelManager:
             try:
                 loop = asyncio.get_running_loop()
                 start = time.time()
+                prompt = self._format_chat_prompt(messages)
                 
                 result = await loop.run_in_executor(
                     None,
-                    lambda: model._llm.create_chat_completion(
-                        messages=messages,
+                    lambda: model._llm(
+                        prompt,
                         max_tokens=max_tokens,
                         temperature=temperature,
                         top_p=top_p,
+                        repeat_penalty=1.15,
+                        stop=["\nUser:", "\nSystem:", "\n\nUser", "\n\nSystem", "<|im_end|>", "<|im_start|>"],
                         stream=False,
                         **kwargs,
                     )
                 )
                 
                 elapsed = time.time() - start
-                
-                content = result["choices"][0]["message"]["content"]
-                usage = result.get("usage", {})
-                token_count = usage.get("completion_tokens", 0)
+                raw = result["choices"][0]["text"]
+                content = self._clean_chat_output(raw)
+                token_count = result.get("usage", {}).get("completion_tokens", 0) or len(content.split())
                 
                 return {
                     "model": model_id,
@@ -327,18 +366,21 @@ class ModelManager:
         top_p: float = 0.9,
         **kwargs,
     ) -> AsyncIterator[dict]:
-        """Chat completion with streaming, using model's built-in chat template."""
+        """Chat completion with streaming (robust Q&A format)."""
         model = self._get_model(model_id)
         
         async with self._locks[model_id]:
             self._generating[model_id] = True
             self._last_used[model_id] = time.time()
             try:
-                stream = model._llm.create_chat_completion(
-                    messages=messages,
+                prompt = self._format_chat_prompt(messages)
+                stream = model._llm(
+                    prompt,
                     max_tokens=max_tokens,
                     temperature=temperature,
                     top_p=top_p,
+                    repeat_penalty=1.15,
+                    stop=["\nUser:", "\nSystem:", "\n\nUser", "\n\nSystem", "<|im_end|>", "<|im_start|>"],
                     stream=True,
                     **kwargs,
                 )
@@ -346,8 +388,7 @@ class ModelManager:
                 token_count = 0
                 for chunk in stream:
                     if "choices" in chunk and len(chunk["choices"]) > 0:
-                        delta = chunk["choices"][0].get("delta", {})
-                        text = delta.get("content", "")
+                        text = chunk["choices"][0].get("text", "")
                         if text:
                             yield {
                                 "token": text,

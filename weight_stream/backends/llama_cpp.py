@@ -155,6 +155,9 @@ class WeightStreamModel(WeightStreamBackend):
         # Step 4: Open the model with llama-cpp-python
         try:
             llm = _get_llama()
+            # Prefer ChatML format (Qwen, many instruct models) unless caller overrides
+            if "chat_format" not in kwargs:
+                kwargs["chat_format"] = "chatml"
             self._llm = llm.Llama(
                 model_path=model_path,
                 n_ctx=n_ctx,

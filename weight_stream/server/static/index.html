@@ -816,28 +816,50 @@ async function scanModels(dir) {
 
 // Native browse: open Windows file dialog on server
 async function browseModel() {
+  const msg = document.getElementById('load-msg');
+  msg.innerHTML = '<span style="color:var(--warn);">Opening file dialog... (check taskbar if not visible)</span>';
   try {
     const data = await apiJSON('/v1/browse');
-    if (data.path) {
-      document.getElementById('load-path').value = data.path;
-      const name = data.name.replace('.gguf', '').replace(/[^a-zA-Z0-9_-]/g, '-');
-      document.getElementById('load-id').value = name || 'default';
-      // Add to picker dropdown
-      pickerAddOption(data.path, data.name + ' (' + data.size_gb + ' GB)');
-      document.getElementById('load-btn').style.display = 'inline-block';
-      document.getElementById('reload-btn').style.display = 'none';
+    if (data.error) {
+      msg.innerHTML = '<span style="color:var(--error);">Browse error: ' + escapeHtml(data.error) + '</span>';
+      return;
     }
-  } catch(e) { console.error('Browse error:', e); }
+    if (data.cancelled || !data.path) {
+      msg.innerHTML = '<span style="color:var(--text-dim);">Browse cancelled.</span>';
+      return;
+    }
+    document.getElementById('load-path').value = data.path;
+    const name = data.name.replace('.gguf', '').replace(/[^a-zA-Z0-9_-]/g, '-');
+    document.getElementById('load-id').value = name || 'default';
+    pickerAddOption(data.path, data.name + ' (' + data.size_gb + ' GB)');
+    document.getElementById('load-btn').style.display = 'inline-block';
+    document.getElementById('reload-btn').style.display = 'none';
+    msg.innerHTML = '<span style="color:var(--success);">Selected: ' + escapeHtml(data.name) + ' — click Load Model</span>';
+  } catch(e) {
+    msg.innerHTML = '<span style="color:var(--error);">Browse failed: ' + escapeHtml(e.message) + '</span>';
+  }
 }
 
 async function browseDir() {
+  const msg = document.getElementById('load-msg');
+  msg.innerHTML = '<span style="color:var(--warn);">Opening folder dialog... (check taskbar if not visible)</span>';
   try {
     const data = await apiJSON('/v1/browse-dir');
-    if (data.path) {
-      document.getElementById('scan-dir').value = data.path;
-      scanModels(data.path);
+    if (data.error) {
+      msg.innerHTML = '<span style="color:var(--error);">Browse error: ' + escapeHtml(data.error) + '</span>';
+      return;
     }
-  } catch(e) { console.error('Browse dir error:', e); }
+    if (data.cancelled || !data.path) {
+      msg.innerHTML = '<span style="color:var(--text-dim);">Browse cancelled.</span>';
+      return;
+    }
+    document.getElementById('scan-dir').value = data.path;
+    msg.innerHTML = '<span style="color:var(--warn);">Scanning: ' + escapeHtml(data.path) + '</span>';
+    await scanModels(data.path);
+    msg.innerHTML = '<span style="color:var(--success);">Scanned: ' + escapeHtml(data.path) + '</span>';
+  } catch(e) {
+    msg.innerHTML = '<span style="color:var(--error);">Browse failed: ' + escapeHtml(e.message) + '</span>';
+  }
 }
 
 function scanDirCustom() {
