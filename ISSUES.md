@@ -1,8 +1,15 @@
 # Issues — Weight Streaming
 
-> **Product Issue System (v0.12):** Use in-app **Report Issue**, CLI `weight-stream issues`, or API `/v1/issues`.  
-> Runtime data: `data/issues/` · Plan: `docs/ISSUE_SYSTEM_PLAN.md` · Summary: `data/issues/ISSUES_SUMMARY.md`  
-> This file keeps historical developer notes from early sessions.
+> **Two separate issue tracking systems:**
+>
+> | System | ID format | Where | Scope |
+> |--------|-----------|-------|-------|
+> | **Developer log** (this file) | `ISSUE-001` ~ `ISSUE-018` | `ISSUES.md` (git) | Project-wide development notes |
+> | **User report system** (SPA/CLI/API) | `Report-ISSUE-001`, `002`, ... | `data/issues/` (local) | User-reported issues via UI |
+>
+> These two systems are **intentionally separate** — different prefixes, different storage, different audiences.  
+> Developer issues (`ISSUE-NNN`) are historical records from early development sessions.  
+> User reports (`Report-ISSUE-NNN`) are live issues from the product issue tracking system.
 
 ---
 

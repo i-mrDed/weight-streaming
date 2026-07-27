@@ -30,7 +30,7 @@ class TestIssueLifecycle:
             description="Dialog disappears before I can select a file",
             severity=Severity.HIGH,
         ))
-        assert issue.id.startswith("ISSUE-")
+        assert issue.id.startswith("Report-ISSUE-")
         assert issue.status == IssueStatus.OPEN
         got = svc.get(issue.id)
         assert got is not None

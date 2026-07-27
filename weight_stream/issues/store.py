@@ -23,6 +23,8 @@ class IssueStore:
         self._counter_file = self.base / "counter.txt"
         self._jsonl = self.base / "issues.jsonl"
 
+    ID_PREFIX = "Report-ISSUE-"
+
     def _next_id(self) -> str:
         with self._lock:
             n = 1
@@ -34,12 +36,12 @@ class IssueStore:
             else:
                 n = self._scan_max_id() + 1
             self._counter_file.write_text(str(n), encoding="utf-8")
-            return f"ISSUE-{n:03d}"
+            return f"{self.ID_PREFIX}{n:03d}"
 
     def _scan_max_id(self) -> int:
         max_n = 0
-        for p in self.base.glob("ISSUE-*.json"):
-            m = re.match(r"ISSUE-(\d+)\.json", p.name)
+        for p in self.base.glob("Report-ISSUE-*.json"):
+            m = re.match(r"Report-ISSUE-(\d+)\.json", p.name)
             if m:
                 max_n = max(max_n, int(m.group(1)))
         return max_n
@@ -73,7 +75,7 @@ class IssueStore:
     ) -> List[Issue]:
         issues: List[Issue] = []
         with self._lock:
-            for path in sorted(self.base.glob("ISSUE-*.json")):
+            for path in sorted(self.base.glob("Report-ISSUE-*.json")):
                 try:
                     data = json.loads(path.read_text(encoding="utf-8"))
                     issue = Issue.model_validate(data)
