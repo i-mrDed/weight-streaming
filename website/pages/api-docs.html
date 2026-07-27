@@ -211,15 +211,112 @@ print(response.content)</code></pre>
 
       <div class="card" style="margin-bottom:24px;">
         <h4>VS Code / Continue.dev</h4>
+        <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:8px;">ใส่ใน <code>~/.continue/config.json</code>:</p>
         <pre><code>{
   "models": [{
     "title": "WeightStream Local",
     "provider": "openai",
-    "apiBase": "http://localhost:8765/v1"
+    "model": "default",
+    "apiBase": "http://localhost:8765/v1",
+    "apiKey": "not-needed"
   }]
 }</code></pre>
       </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h4>Cursor IDE</h4>
+        <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:8px;">Settings → Models → OpenAI → API Base:</p>
+        <pre><code>http://localhost:8765/v1</code></pre>
+        <p style="font-size:0.8rem;color:var(--text-dim);">API Key: anything (eg. <code>not-needed</code>)</p>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h4>Cline (VS Code)</h4>
+        <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:8px;">API Provider → OpenAI Compatible:</p>
+        <pre><code>Base URL: http://localhost:8765/v1
+API Key:  not-needed
+Model ID: default</code></pre>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h4>Aider (CLI)</h4>
+        <pre><code>export OPENAI_API_BASE=http://localhost:8765/v1
+export OPENAI_API_KEY=not-needed
+aider --model openai/default</code></pre>
+        <p style="font-size:0.8rem;color:var(--text-dim);margin-top:4px;">Windows: <code>$env:OPENAI_API_BASE="http://localhost:8765/v1"</code></p>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h4>Node.js / TypeScript</h4>
+        <pre><code>import OpenAI from "openai";
+const client = new OpenAI({
+  baseURL: "http://localhost:8765/v1",
+  apiKey: "not-needed",
+});
+const r = await client.chat.completions.create({
+  model: "default",
+  messages: [{ role: "user", content: "Hello" }],
+});</code></pre>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h4>Environment Variables (all tools)</h4>
+        <p style="font-size:0.85rem;color:var(--text-dim);margin-bottom:8px;">ตั้งค่าเดียวใช้ได้ทุก IDE/tool:</p>
+        <pre><code># Windows PowerShell
+$env:OPENAI_BASE_URL = "http://localhost:8765/v1"
+$env:OPENAI_API_KEY = "not-needed"
+
+# Linux / macOS / WSL
+export OPENAI_BASE_URL=http://localhost:8765/v1
+export OPENAI_API_KEY=not-needed</code></pre>
+      </div>
     </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         Anthropic Compat
+         ══════════════════════════════════════════════════════════ -->
+    <section id="anthropic" style="margin-top:60px;">
+      <h2 style="margin-bottom:32px;">Anthropic-Compatible Endpoint</h2>
+      <p style="color:var(--text-dim);margin-bottom:24px;">
+        The <code>POST /v1/messages</code> endpoint follows the Anthropic Messages API format.
+        Use this with Claude Code or any tool expecting the Anthropic API.
+      </p>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h3>Chat</h3>
+        <pre><code>curl -X POST http://localhost:8765/v1/messages \
+  -H "Content-Type: application/json" \
+  -H "x-api-key: not-needed" \
+  -d '{
+    "model": "default",
+    "messages": [{"role": "user", "content": "Hello"}],
+    "max_tokens": 100
+  }'</code></pre>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h4>Claude Code (CLI)</h4>
+        <pre><code>export ANTHROPIC_BASE_URL=http://localhost:8765/v1
+export ANTHROPIC_API_KEY=not-needed
+claude</code></pre>
+        <p style="font-size:0.8rem;color:var(--text-dim);margin-top:4px;">Windows: <code>$env:ANTHROPIC_BASE_URL="http://localhost:8765/v1"</code></p>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h4>Anthropic Python SDK</h4>
+        <pre><code>from anthropic import Anthropic
+
+client = Anthropic(
+    base_url="http://localhost:8765/v1",
+    api_key="not-needed",
+)
+response = client.messages.create(
+    model="default",
+    messages=[{"role": "user", "content": "Hello"}],
+    max_tokens=100,
+)
+print(response.content[0].text)</code></pre>
+      </div>
 
     <!-- ══════════════════════════════════════════════════════════
          WebSocket

@@ -21,7 +21,7 @@ import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator
 
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -29,6 +29,7 @@ from fastapi.staticfiles import StaticFiles
 from .config import get_config, ServerConfig
 from .model_manager import ModelManager
 from .openai_compat import handle_chat_completion
+from .anthropic_compat import handle_anthropic_messages
 from .schemas import (
     GenerateRequest,
     GenerateResponse,
@@ -295,7 +296,7 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
         
         Compatible with any OpenAI SDK, VS Code Continue.dev, Cline, etc.
         
-        Set `OPENAI_BASE_URL=http://localhost:8080/v1` and use
+        Set `OPENAI_BASE_URL=http://localhost:8765/v1` and use
         any `model_id` as the model name.
         """
         try:
@@ -304,6 +305,26 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:
             logger.exception("Chat completion failed")
+            raise HTTPException(status_code=500, detail=str(e))
+    
+    # ── Anthropic-Compatible Endpoint ──────────────────────────────
+    
+    @app.post("/v1/messages")
+    async def anthropic_messages(request: Request):
+        """
+        Anthropic-compatible Messages API endpoint.
+        
+        Compatible with Claude Code, Anthropic SDK, and any Anthropic-compatible client.
+        
+        Set `ANTHROPIC_BASE_URL=http://localhost:8765/v1` and use
+        any `model_id` as the model name.
+        """
+        try:
+            return await handle_anthropic_messages(request, manager)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            logger.exception("Anthropic message failed")
             raise HTTPException(status_code=500, detail=str(e))
     
     return app, manager
