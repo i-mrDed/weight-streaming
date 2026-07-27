@@ -41,7 +41,8 @@ server = [
     "sse-starlette>=2.2.0",
     "websockets>=13.0",
 ]
-all = ["weight-streaming[llama-cpp,server]"]
+gradio = ["gradio>=5.0.0"]
+all = ["weight-streaming[llama-cpp,server,gradio]"]
 
 [project.urls]
 homepage = "https://github.com/weight-streaming/weight-streaming"
