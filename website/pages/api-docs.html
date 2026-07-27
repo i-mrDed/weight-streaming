@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Docs — Weight Streaming</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<nav class="nav">
+  <a href="../index.html" class="nav-logo">Weight Streaming</a>
+  <ul class="nav-links">
+    <li><a href="../index.html">Home</a></li>
+    <li><a href="features.html">Features</a></li>
+    <li><a href="architecture.html">Architecture</a></li>
+    <li><a href="benchmarks.html">Benchmarks</a></li>
+    <li><a href="api-docs.html">API Docs</a></li>
+  </ul>
+</nav>
+
+<main style="padding-top:100px;">
+  <div class="container">
+
+    <h1 style="text-align:center;margin-bottom:16px;">API Documentation</h1>
+    <p style="text-align:center;color:var(--text-dim);margin-bottom:40px;">
+      Weight Streaming provides a REST API, WebSocket streaming, and an OpenAI-compatible endpoint.
+    </p>
+
+    <!-- Tabs: REST / Python / OpenAI -->
+    <div style="text-align:center;margin-bottom:40px;">
+      <a href="#rest" class="btn btn-secondary" style="margin:0 4px;">REST API</a>
+      <a href="#python" class="btn btn-secondary" style="margin:0 4px;">Python API</a>
+      <a href="#openai" class="btn btn-secondary" style="margin:0 4px;">OpenAI Compat</a>
+      <a href="#websocket" class="btn btn-secondary" style="margin:0 4px;">WebSocket</a>
+    </div>
+
+    <!-- ══════════════════════════════════════════════════════════
+         REST API
+         ══════════════════════════════════════════════════════════ -->
+    <section id="rest">
+      <h2 style="margin-bottom:32px;">REST API</h2>
+      <p style="color:var(--text-dim);margin-bottom:24px;">
+        Base URL: <code>http://localhost:8765</code>
+      </p>
+
+      <!-- POST /generate -->
+      <div class="card" style="margin-bottom:24px;">
+        <h3><span style="color:var(--color-success);">POST</span> /v1/generate</h3>
+        <p style="color:var(--text-dim);margin:8px 0;">Generate text from a loaded model. Supports SSE streaming via <code>stream: true</code>.</p>
+        
+        <h4>Request</h4>
+        <pre><code>{
+  "model": "default",
+  "prompt": "The capital of France is",
+  "max_tokens": 128,
+  "temperature": 0.7,
+  "top_p": 0.9,
+  "stream": false
+}</code></pre>
+
+        <h4>Response (non-streaming)</h4>
+        <pre><code>{
+  "model": "default",
+  "output": " Paris. It is known for its art...",
+  "tokens_generated": 10,
+  "elapsed_seconds": 3.24,
+  "tokens_per_second": 3.09,
+  "stats": {
+    "buffer": { "hit_rate": 0.0, "hot_shards": 16, "capacity_shards": 16 },
+    "prefetcher": { "prefetched": 42, "queued": 3 },
+    "page_cache": { "resident_ratio": 0.016, "resident_gb": 0.09 }
+  }
+}</code></pre>
+
+        <h4>Using curl</h4>
+        <pre><code>curl -X POST http://localhost:8765/v1/generate \
+  -H "Content-Type: application/json" \
+  -d '{"model":"default","prompt":"Hello","max_tokens":20}'</code></pre>
+      </div>
+
+      <!-- GET /stats -->
+      <div class="card" style="margin-bottom:24px;">
+        <h3><span style="color:var(--color-secondary);">GET</span> /v1/stats</h3>
+        <p style="color:var(--text-dim);margin:8px 0;">Get performance statistics for loaded models.</p>
+        <pre><code>curl http://localhost:8765/v1/stats
+curl http://localhost:8765/v1/stats?model=default</code></pre>
+      </div>
+
+      <!-- GET /models -->
+      <div class="card" style="margin-bottom:24px;">
+        <h3><span style="color:var(--color-secondary);">GET</span> /v1/models</h3>
+        <p style="color:var(--text-dim);margin:8px 0;">List all loaded models.</p>
+        <pre><code>curl http://localhost:8765/v1/models</code></pre>
+      </div>
+
+      <!-- POST /models/load -->
+      <div class="card" style="margin-bottom:24px;">
+        <h3><span style="color:var(--color-success);">POST</span> /v1/models/load</h3>
+        <pre><code>curl -X POST http://localhost:8765/v1/models/load \
+  -H "Content-Type: application/json" \
+  -d '{"model_id":"mixtral","model_path":"mixtral-8x7b.gguf","buffer_mb":128,"n_ctx":4096}'</code></pre>
+      </div>
+
+      <!-- POST /models/unload -->
+      <div class="card" style="margin-bottom:24px;">
+        <h3><span style="color:var(--color-success);">POST</span> /v1/models/unload</h3>
+        <pre><code>curl -X POST http://localhost:8765/v1/models/unload \
+  -H "Content-Type: application/json" \
+  -d '{"model_id":"mixtral"}'</code></pre>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         Python API
+         ══════════════════════════════════════════════════════════ -->
+    <section id="python" style="margin-top:60px;">
+      <h2 style="margin-bottom:32px;">Python API</h2>
+      <div class="highlight" style="margin-bottom:24px;">
+        <h4>Direct Model Access</h4>
+        <pre><code>from weight_stream import WeightStreamModel
+
+model = WeightStreamModel(
+    "model.gguf",
+    buffer_mb=64,
+    n_ctx=512,
+)
+output = model.generate("Hello world", max_tokens=100)
+stats = model.get_stats()
+model.close()
+
+# Or use context manager
+with WeightStreamModel("model.gguf", buffer_mb=64) as model:
+    output = model.generate("Tell me a story", max_tokens=200)
+    print(output)</code></pre>
+      </div>
+
+      <div class="highlight">
+        <h4>API Client (connect to server)</h4>
+        <pre><code>import requests
+
+# Generate
+r = requests.post("http://localhost:8765/v1/generate", json={
+    "model": "default",
+    "prompt": "Explain AI",
+    "max_tokens": 100,
+    "stream": True,  # Enable SSE streaming
+})
+for line in r.iter_lines():
+    if line.startswith(b"data: "):
+        event = json.loads(line[6:])
+        print(event["token"], end="", flush=True)</code></pre>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         OpenAI Compat
+         ══════════════════════════════════════════════════════════ -->
+    <section id="openai" style="margin-top:60px;">
+      <h2 style="margin-bottom:32px;">OpenAI-Compatible Endpoint</h2>
+      <p style="color:var(--text-dim);margin-bottom:24px;">
+        The <code>POST /v1/chat/completions</code> endpoint follows the OpenAI chat completion format.
+        Any tool that speaks OpenAI API can connect directly.
+      </p>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h3>Chat Completions</h3>
+        <pre><code>curl -X POST http://localhost:8765/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "default",
+    "messages": [
+      {"role": "system", "content": "You are a helpful assistant."},
+      {"role": "user", "content": "What is the capital of France?"}
+    ],
+    "max_tokens": 100,
+    "temperature": 0.7,
+    "stream": false
+  }'</code></pre>
+      </div>
+
+      <div class="grid grid-2" style="margin-bottom:40px;">
+        <div class="card">
+          <h4>OpenAI Python SDK</h4>
+          <pre><code>from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://localhost:8765/v1",
+    api_key="not-needed",
+)
+response = client.chat.completions.create(
+    model="default",
+    messages=[{"role": "user", "content": "Hello!"}],
+)
+print(response.choices[0].message.content)</code></pre>
+        </div>
+        <div class="card">
+          <h4>LangChain</h4>
+          <pre><code>from langchain_openai import ChatOpenAI
+
+llm = ChatOpenAI(
+    model="default",
+    openai_api_base="http://localhost:8765/v1",
+    openai_api_key="not-needed",
+)
+response = llm.invoke("Hello!")
+print(response.content)</code></pre>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h4>VS Code / Continue.dev</h4>
+        <pre><code>{
+  "models": [{
+    "title": "WeightStream Local",
+    "provider": "openai",
+    "apiBase": "http://localhost:8765/v1"
+  }]
+}</code></pre>
+      </div>
+    </section>
+
+    <!-- ══════════════════════════════════════════════════════════
+         WebSocket
+         ══════════════════════════════════════════════════════════ -->
+    <section id="websocket" style="margin-top:60px;">
+      <h2 style="margin-bottom:32px;">WebSocket Streaming</h2>
+
+      <div class="card" style="margin-bottom:24px;">
+        <h3>Endpoint: <code>ws://localhost:8765/v1/stream</code></h3>
+
+        <h4>Client → Server</h4>
+        <pre><code>{"type": "generate", "model": "default", "prompt": "Hello", "max_tokens": 100}</code></pre>
+
+        <h4>Server → Client (streaming)</h4>
+        <pre><code>{"type": "token", "text": " Hello", "index": 0}
+{"type": "token", "text": " world", "index": 1}
+{"type": "done", "stats": {...}}</code></pre>
+
+        <h4>JavaScript Example</h4>
+        <pre><code>const ws = new WebSocket("ws://localhost:8765/v1/stream");
+ws.onmessage = (e) => {
+  const msg = JSON.parse(e.data);
+  if (msg.type === "token") process.stdout.write(msg.text);
+  if (msg.type === "done") console.log("Complete");
+};
+ws.send(JSON.stringify({
+  type: "generate", model: "default",
+  prompt: "Hello", max_tokens: 100,
+}));</code></pre>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<footer class="footer" style="margin-top:60px;">
+  <div class="container">
+    <p>Weight Streaming v0.11.0 · MIT License</p>
+  </div>
+</footer>
+
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Features — Weight Streaming</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<nav class="nav">
+  <a href="../index.html" class="nav-logo">Weight Streaming</a>
+  <ul class="nav-links">
+    <li><a href="../index.html">Home</a></li>
+    <li><a href="features.html">Features</a></li>
+    <li><a href="architecture.html">Architecture</a></li>
+    <li><a href="benchmarks.html">Benchmarks</a></li>
+    <li><a href="api-docs.html">API Docs</a></li>
+  </ul>
+</nav>
+
+<main style="padding-top:100px;">
+  <div class="container">
+
+    <h1 style="text-align:center;margin-bottom:40px;">Features</h1>
+
+    <!-- Core Features -->
+    <div class="grid grid-2" style="margin-bottom:60px;">
+      <div class="card">
+        <div class="card-icon purple">🗂️</div>
+        <h3>Memory-Mapped Access</h3>
+        <p>
+          The GGUF model file is memory-mapped (<code>mmap</code>) for zero-copy access.
+          The operating system manages virtual memory — pages are loaded on demand
+          via hardware page faults. No redundant RAM consumption.
+        </p>
+        <p style="margin-top:12px;color:var(--text-dim);">
+          File size: any · RAM used: ~64 MB · Access: read-only
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon teal">🧠</div>
+        <h3>LRU Streaming Buffer</h3>
+        <p>
+          A 64 MB shard-based buffer tracks which weight shards are hot.
+          LRU eviction ensures frequently-used layers stay resident while
+          cold shards are ejected. Each shard is 4 MB.
+        </p>
+        <p style="margin-top:12px;color:var(--text-dim);">
+          Capacity: 64 MB (16 shards) · Hit rate: 93.8% at 64 MB · Policy: LRU only
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon pink">🔮</div>
+        <h3>Heuristic Predictor</h3>
+        <p>
+          Predicts which weight shards will be needed next using:
+        </p>
+        <ul style="margin:12px 0 0 20px;color:var(--text-dim);font-size:0.9rem;">
+          <li>Sequential pattern detection (layer scanning)</li>
+          <li>Co-occurrence tracking (frequently paired experts)</li>
+          <li>No MLP required — instant, zero training</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <div class="card-icon green">⚡</div>
+        <h3>Background Prefetcher</h3>
+        <p>
+          A dedicated background thread reads predicted shards from NVMe
+          while the inference engine computes the current token.
+          I/O is fully overlapped with computation.
+        </p>
+        <p style="margin-top:12px;color:var(--text-dim);">
+          Thread: 1 · Queue: bounded · Priority: FIFO
+        </p>
+      </div>
+    </div>
+
+    <!-- Expert-Aware -->
+    <h2 style="text-align:center;margin-bottom:32px;">Expert-Aware Prefetch</h2>
+    <div class="grid grid-2" style="margin-bottom:60px;">
+      <div class="card">
+        <h3>GGUF Metadata Parser</h3>
+        <p>
+          Parses the GGUF format to map every tensor to its file offset.
+          For Qwen1.5-MoE: 411 tensors → 72 expert tensors (24 layers × 3 projections).
+          Per-expert size: ~2.9 MB total, ~990 KB per projection.
+        </p>
+        <p style="margin-top:12px;">
+          <code>get_expert_map() → {layer: {expert_idx: [gate, up, down]}}</code>
+        </p>
+      </div>
+
+      <div class="card">
+        <h3>Round-Robin Layer Prefetch</h3>
+        <p>
+          During generation, every 3rd token triggers expert prefetch
+          for the next layer. While expert routing is opaque from Python,
+          round-robin ensures all layers stay warm.
+        </p>
+        <p style="margin-top:12px;color:var(--text-dim);">
+          Strategy: round-robin · Interval: every 3 tokens · Per-token: 1 layer of experts
+        </p>
+      </div>
+    </div>
+
+    <!-- Page Monitor -->
+    <h2 style="text-align:center;margin-bottom:32px;">Observability</h2>
+    <div class="grid grid-2" style="margin-bottom:60px;">
+      <div class="card">
+        <div class="card-icon green">📊</div>
+        <h3>Windows Page Cache Monitor</h3>
+        <p>
+          Uses <code>QueryWorkingSetEx</code> Windows API to sample
+          physical RAM residency of the mmap'd file. Reports:
+        </p>
+        <ul style="margin:12px 0 0 20px;color:var(--text-dim);font-size:0.9rem;">
+          <li>Resident ratio: % of file pages in RAM</li>
+          <li>Resident GB: actual pages loaded</li>
+          <li>Total GB: full file size</li>
+        </ul>
+        <p style="margin-top:12px;color:var(--text-dim);">
+          Example: 1.6% of 5.5 GB = 88 MB resident after cold generation
+        </p>
+      </div>
+
+      <div class="card">
+        <div class="card-icon purple">📈</div>
+        <h3>Performance Statistics</h3>
+        <p>
+          Real-time stats available via <code>model.get_stats()</code>:
+        </p>
+        <ul style="margin:12px 0 0 20px;color:var(--text-dim);font-size:0.9rem;">
+          <li>Buffer: hit rate, hot shards, evictions, prefetches</li>
+          <li>Prefetcher: queued, prefetched, useful prefetches</li>
+          <li>Generation: tokens, elapsed, tokens/sec</li>
+          <li>Page cache: resident ratio, GB in RAM</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- Comparison Table -->
+    <h2 style="text-align:center;margin-bottom:32px;">Comparison</h2>
+    <div style="overflow-x:auto;">
+      <table>
+        <thead>
+          <tr><th></th><th>Full RAM Load</th><th>mmap Only</th><th>Weight Streaming</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>RAM Usage</strong></td><td>Model size</td><td>~Model size</td><td>64 MB</td></tr>
+          <tr><td><strong>Page Faults</strong></td><td>None</td><td>Random</td><td>Predicted</td></tr>
+          <tr><td><strong>Prefetch</strong></td><td>N/A</td><td>None</td><td>Expert-aware</td></tr>
+          <tr><td><strong>Stats</strong></td><td>None</td><td>None</td><td>Full observability</td></tr>
+          <tr><td><strong>API Server</strong></td><td>No</td><td>No</td><td>REST + WS + OpenAI</td></tr>
+          <tr><td><strong>Max Model Size</strong></td><td>~RAM</td><td>~Disk</td><td>~Disk (no limit)</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</main>
+
+<footer class="footer" style="margin-top:60px;">
+  <div class="container">
+    <p>Weight Streaming v0.11.0 · MIT License</p>
+  </div>
+</footer>
+
+<script src="../assets/js/main.js"></script>
+</body>
+</html>

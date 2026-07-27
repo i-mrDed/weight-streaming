@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Run LLMs larger than your RAM using NVMe as extension of memory. Weight Streaming enables speculative weight streaming from NVMe for consumer hardware.">
+<title>Weight Streaming — Run LLMs Larger Than Your RAM</title>
+<link rel="stylesheet" href="assets/css/style.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════════════
+     Navigation
+     ══════════════════════════════════════════════════════════════ -->
+<nav class="nav">
+  <a href="index.html" class="nav-logo">Weight Streaming</a>
+  <ul class="nav-links">
+    <li><a href="index.html">Home</a></li>
+    <li><a href="pages/features.html">Features</a></li>
+    <li><a href="pages/architecture.html">Architecture</a></li>
+    <li><a href="pages/benchmarks.html">Benchmarks</a></li>
+    <li><a href="pages/api-docs.html">API Docs</a></li>
+  </ul>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════════════
+     Hero
+     ══════════════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="container">
+    <h1>Run LLMs Larger<br>Than Your RAM</h1>
+    <p>
+      Weight Streaming enables large language models (100B–3T+ parameters)
+      on consumer hardware with just 32–64 GB RAM. Speculative weight streaming
+      from NVMe keeps only hot shards in memory — the rest stays on disk.
+    </p>
+    <div class="btn-group">
+      <a href="pages/api-docs.html" class="btn btn-primary">Get Started</a>
+      <a href="pages/features.html" class="btn btn-secondary">Learn More</a>
+    </div>
+
+    <!-- Hero stats -->
+    <div class="grid grid-3" style="margin-top:60px;">
+      <div class="stat animate delay-1">
+        <div class="stat-value">64 MB</div>
+        <div class="stat-label">Buffer Size</div>
+      </div>
+      <div class="stat animate delay-2">
+        <div class="stat-value">93.8%</div>
+        <div class="stat-label">Buffer Hit Rate</div>
+      </div>
+      <div class="stat animate delay-3">
+        <div class="stat-value">92%</div>
+        <div class="stat-label">Compute-Bound</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     Features Grid
+     ══════════════════════════════════════════════════════════════ -->
+<section class="section" style="background:var(--bg-alt);">
+  <div class="container">
+    <h2 style="text-align:center;margin-bottom:48px;">How It Works</h2>
+    <div class="grid grid-4">
+      <div class="card animate delay-1">
+        <div class="card-icon purple">🗂️</div>
+        <h3>Memory-Mapped File</h3>
+        <p>Zero-copy access to the GGUF model file via mmap. No redundant loading into RAM — the OS manages page faults.</p>
+      </div>
+      <div class="card animate delay-2">
+        <div class="card-icon teal">🧠</div>
+        <h3>Smart LRU Buffer</h3>
+        <p>64 MB shard-based buffer tracks which weights are hot. LRU eviction ensures frequently-used layers stay resident.</p>
+      </div>
+      <div class="card animate delay-3">
+        <div class="card-icon pink">🔮</div>
+        <h3>Heuristic Predictor</h3>
+        <p>Sequential + co-occurrence pattern detection predicts which experts will be needed next. No MLP required.</p>
+      </div>
+      <div class="card animate delay-4">
+        <div class="card-icon green">⚡</div>
+        <h3>Background Prefetch</h3>
+        <p>Expert-aware prefetch loads predicted shards during compute time. I/O overlaps with inference — zero overhead.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     Supported Models
+     ══════════════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="container">
+    <h2 style="text-align:center;margin-bottom:48px;">Supported Models</h2>
+    <table>
+      <thead>
+        <tr><th>Model</th><th>Type</th><th>Parameters</th><th>Experts</th><th>Active</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>Kimi K3</td><td>MoE</td><td>2,800B</td><td>896</td><td>16</td></tr>
+        <tr><td>Qwen1.5-MoE-A2.7B</td><td>MoE</td><td>2.7B</td><td>60</td><td>2</td></tr>
+        <tr><td>Mixtral 8x7B</td><td>MoE</td><td>47B</td><td>8</td><td>2</td></tr>
+        <tr><td>DeepSeek-V2</td><td>MoE</td><td>236B</td><td>160</td><td>6</td></tr>
+        <tr><td>Dense models (any)</td><td>Dense</td><td>Any</td><td>N/A</td><td>All</td></tr>
+      </tbody>
+    </table>
+    <p style="text-align:center;color:var(--text-dim);margin-top:16px;">
+      Supports both MoE and Dense architectures. For dense models, prefetch focuses on sequential layer access.
+    </p>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     Quick Start
+     ══════════════════════════════════════════════════════════════ -->
+<section class="section" style="background:var(--bg-alt);">
+  <div class="container">
+    <h2 style="text-align:center;margin-bottom:48px;">Quick Start</h2>
+    
+    <div class="grid grid-2" style="max-width:900px;margin:0 auto;">
+      <div class="card">
+        <h3>1. Install</h3>
+        <pre><code>pip install weight-streaming[llama-cpp]</code></pre>
+      </div>
+      <div class="card">
+        <h3>2. Start API Server</h3>
+        <pre><code>python -m weight_stream server --model model.gguf</code></pre>
+      </div>
+      <div class="card">
+        <h3>3. Generate Text (CLI)</h3>
+        <pre><code>python -m weight_stream run model.gguf \
+  --prompt "Hello" --max-tokens 100</code></pre>
+      </div>
+      <div class="card">
+        <h3>4. Or Use Python API</h3>
+        <pre><code>from weight_stream import WeightStreamModel
+model = WeightStreamModel("model.gguf")
+output = model.generate("Hello")
+print(output)</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     CTA
+     ══════════════════════════════════════════════════════════════ -->
+<section class="section" style="text-align:center;">
+  <div class="container">
+    <h2 style="margin-bottom:16px;">Ready to Run Bigger Models?</h2>
+    <p style="color:var(--text-dim);max-width:500px;margin:0 auto 32px;">
+      No GPU required. No cloud bills. Just your NVMe drive and Weight Streaming.
+    </p>
+    <div class="btn-group">
+      <a href="pages/api-docs.html" class="btn btn-primary">View API Docs</a>
+      <a href="pages/features.html" class="btn btn-secondary">Explore Features</a>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════════════════════════════════════════════════
+     Footer
+     ══════════════════════════════════════════════════════════════ -->
+<footer class="footer">
+  <div class="container">
+    <p>Weight Streaming v0.11.0 · MIT License</p>
+    <p style="margin-top:8px;">
+      <a href="pages/features.html">Features</a> ·
+      <a href="pages/architecture.html">Architecture</a> ·
+      <a href="pages/api-docs.html">API Docs</a> ·
+      <a href="pages/benchmarks.html">Benchmarks</a>
+    </p>
+  </div>
+</footer>
+
+<script src="assets/js/main.js"></script>
+</body>
+</html>

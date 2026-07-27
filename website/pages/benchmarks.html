@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Benchmarks — Weight Streaming</title>
+<link rel="stylesheet" href="../assets/css/style.css">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+
+<nav class="nav">
+  <a href="../index.html" class="nav-logo">Weight Streaming</a>
+  <ul class="nav-links">
+    <li><a href="../index.html">Home</a></li>
+    <li><a href="features.html">Features</a></li>
+    <li><a href="architecture.html">Architecture</a></li>
+    <li><a href="benchmarks.html">Benchmarks</a></li>
+    <li><a href="api-docs.html">API Docs</a></li>
+  </ul>
+</nav>
+
+<main style="padding-top:100px;">
+  <div class="container">
+
+    <h1 style="text-align:center;margin-bottom:16px;">Benchmarks</h1>
+    <p style="text-align:center;color:var(--text-dim);max-width:600px;margin:0 auto 50px;">
+      Real-world performance measurements on consumer hardware.
+    </p>
+
+    <!-- Test Setup -->
+    <div class="highlight" style="max-width:700px;margin:0 auto 40px;">
+      <h3 style="margin-bottom:12px;">Test Hardware</h3>
+      <table style="margin:0;">
+        <tr><td style="color:var(--text-dim);">CPU</td><td>AMD Ryzen (Python 3.14.2)</td></tr>
+        <tr><td style="color:var(--text-dim);">RAM</td><td>68.6 GB</td></tr>
+        <tr><td style="color:var(--text-dim);">GPU</td><td>RTX 3060 12 GB (CPU-only mode)</td></tr>
+        <tr><td style="color:var(--text-dim);">Model</td><td>Qwen1.5-MoE-A2.7B (Q2_K, 5.48 GB)</td></tr>
+      </table>
+    </div>
+
+    <!-- Key Results -->
+    <div class="grid grid-4" style="margin-bottom:60px;text-align:center;">
+      <div class="card">
+        <div class="stat-value">13.4</div>
+        <div class="stat-label">tok/s (CLI run)</div>
+      </div>
+      <div class="card">
+        <div class="stat-value">14.6</div>
+        <div class="stat-label">tok/s (warm benchmark)</div>
+      </div>
+      <div class="card">
+        <div class="stat-value">1.6%</div>
+        <div class="stat-label">Page cache (cold start)</div>
+      </div>
+      <div class="card">
+        <div class="stat-value">92%</div>
+        <div class="stat-label">Compute-bound</div>
+      </div>
+    </div>
+
+    <!-- Scaling Projection -->
+    <h2 style="text-align:center;margin-bottom:32px;">Scaling to Larger Models</h2>
+    <div class="grid grid-2" style="margin-bottom:60px;">
+      <div class="card">
+        <h3>Kimi K3 (2.8T params)</h3>
+        <p style="color:var(--text-dim);margin-bottom:16px;">
+          Projected from Qwen1.5-MoE baseline, scaled by expert count ratio.
+        </p>
+        <table style="margin:0;">
+          <tr><td style="color:var(--text-dim);">Model size</td><td>~1.4 TB</td></tr>
+          <tr><td style="color:var(--text-dim);">Experts</td><td>896 (16 active/token)</td></tr>
+          <tr><td style="color:var(--text-dim);">Compute-only</td><td>815 ms/token</td></tr>
+          <tr><td style="color:var(--text-dim);">+ I/O overhead</td><td>0-8% (64 MB buffer)</td></tr>
+          <tr><td style="color:var(--text-dim);">Effective speed</td><td>~1.1 tok/s</td></tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <h3>Buffer Size vs Hit Rate</h3>
+        <p style="color:var(--text-dim);margin-bottom:12px;">
+          Experiment: varying buffer sizes on Qwen1.5-MoE.
+        </p>
+        <table style="margin:0;">
+          <tr><th>Buffer</th><th>LRU Hit</th><th>LFU Hit</th></tr>
+          <tr><td>8 MB</td><td>26.9%</td><td>16.3%</td></tr>
+          <tr><td>16 MB</td><td>56.4%</td><td>22.8%</td></tr>
+          <tr><td style="color:var(--color-secondary);">64 MB</td><td style="color:var(--color-secondary);">93.8%</td><td>27.2%</td></tr>
+          <tr><td>128 MB</td><td>95.6%</td><td>29.1%</td></tr>
+        </table>
+        <p style="margin-top:12px;font-size:0.8rem;color:var(--text-dim);">
+          LRU dominates LFU. 64 MB is the sweet spot — diminishing returns beyond.
+        </p>
+      </div>
+    </div>
+
+    <!-- Methodology -->
+    <div style="max-width:700px;margin:0 auto 60px;">
+      <h3 style="margin-bottom:16px;">Methodology</h3>
+      <div class="card">
+        <ul style="color:var(--text-dim);font-size:0.9rem;line-height:2;list-style-position:inside;">
+          <li><strong>EXP-001v2:</strong> Buffer policy sweep (LRU vs LFU, priority boost)</li>
+          <li><strong>EXP-002:</strong> Predictor accuracy sweep (LR depth, co-occurrence window)</li>
+          <li><strong>EXP-004:</strong> Real hardware benchmark (compute vs I/O time)</li>
+          <li>All experiments reproducible via the simulator and benchmark CLI</li>
+          <li>Measurements: tok/s, hit rate, page cache residency, per-shard timing</li>
+        </ul>
+      </div>
+    </div>
+
+    <div style="text-align:center;margin-bottom:40px;">
+      <a href="api-docs.html" class="btn btn-primary">Run Your Own Benchmark</a>
+    </div>
+
+  </div>
+</main>
+
+<footer class="footer">
+  <div class="container">
+    <p>Weight Streaming v0.11.0 · MIT License</p>
+  </div>
+</footer>
+
+<script src="../assets/js/main.js"></script>
+</body>
+</html>
