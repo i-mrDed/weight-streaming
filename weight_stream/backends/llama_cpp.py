@@ -26,6 +26,7 @@ from typing import Any, Dict, Iterator, List, Optional
 from ..core.buffer import StreamingBuffer, SHARD_SIZE
 from ..core.predictor import HeuristicPredictor
 from ..core.prefetcher import Prefetcher
+from ..gguf import GGUFParser
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,17 @@ class WeightStreamModel:
             predictor=self.predictor,
         )
         
-        # Step 3: Open the model with llama-cpp-python
+        # Step 3: Parse GGUF for expert-aware tensor mapping
+        self._gguf = GGUFParser(model_path)
+        self._expert_map = self._gguf.get_expert_map()
+        self._expert_tensors = self._gguf.get_expert_tensors()
+        logger.info(
+            f"Expert map: {len(self._expert_map)} layers, "
+            f"{sum(len(e) for e in self._expert_map.values())} experts total, "
+            f"per-expert ~{self._get_avg_expert_size() / 1024:.1f} KB"
+        )
+        
+        # Step 4: Open the model with llama-cpp-python
         llm = _get_llama()
         self._llm = llm.Llama(
             model_path=model_path,
@@ -180,7 +191,14 @@ class WeightStreamModel:
                 # We can't see expert routing, but we can infer from
                 # which file regions were accessed (via buffer stats)
                 
-                # Record buffer state changes
+                        # Expert-aware prefetch: load next token's experts during compute
+                # Since expert routing is opaque from Python, we prefetch via
+                # round-robin across layers. Each token loads ~1 layer worth of experts.
+                if token_count > 0 and token_count % 3 == 0:
+                    target_layer = (token_count // 3) % max(len(self._expert_map), 1)
+                    self._prefetch_layer_experts(target_layer)
+                
+                # Record buffer state
                 if hasattr(self.buffer, 'get_hot_set'):
                     shard_access_log.append({
                         'token': token_count,
@@ -230,12 +248,63 @@ class WeightStreamModel:
     def _warm_up_buffer(self):
         """Preload initial shards into buffer"""
         # Touch first 64MB of file to ensure metadata tensors are hot
+        # Preload first 64MB (metadata + shared layers)
         warm_size = min(
             self.buffer_mb * 1024 * 1024,
-            self._mmap.size() // 4  # Don't load too much
+            self._mmap.size() // 4
         )
         _ = self._mmap[:warm_size]
         logger.info(f"Warm-up: {warm_size / 1024**2:.1f} MB loaded")
+        
+        # Prefetch layer-0 experts for first-token acceleration
+        self._prefetch_layer0()
+        
+        # Warm up predictor with initial knowledge
+        self._warm_predictor()
+    
+    def _prefetch_layer0(self):
+        """Prefetch all experts in layer 0 for faster first-token."""
+        if 0 in self._expert_map:
+            for ei, ranges in self._expert_map[0].items():
+                for r in ranges:
+                    offset = r.start_offset
+                    length = min(r.size_bytes, self._mmap.size() - offset)
+                    _ = self._mmap[offset:offset + length]
+            logger.info(
+                f"Prefetched layer-0: "
+                f"{len(self._expert_map[0])} experts"
+            )
+    
+    def _get_avg_expert_size(self) -> int:
+        """Get average per-expert size in bytes."""
+        if not self._expert_tensors:
+            return 4 * 1024 * 1024  # default 4MB
+        total = 0
+        count = 0
+        for t in self._expert_tensors:
+            total += t.per_expert_size
+            count += 1
+        return total // count if count > 0 else 4 * 1024 * 1024
+    
+    def _prefetch_layer_experts(self, layer_id: int):
+        """Prefetch all experts in a given layer using GGUF expert map."""
+        if layer_id in self._expert_map:
+            for ei, ranges in self._expert_map[layer_id].items():
+                self.prefetcher.prefetch_experts(ranges, self._mmap)
+    
+    def _warm_predictor(self):
+        """Warm up heuristic predictor with sequential pattern knowledge."""
+        n_layers = len(self._expert_map)
+        n_experts = max((len(e) for e in self._expert_map.values()), default=60)
+        
+        # Seed predictor with sequential access pattern
+        for i in range(min(100, n_layers * n_experts)):
+            layer = i % n_layers if n_layers > 0 else 0
+            expert = i % n_experts if n_experts > 0 else 0
+            # Predictor records shard access pattern
+            self.predictor.observe(expert)
+        
+        logger.debug(f"Predictor warmed: {n_layers}L x {n_experts}E pattern")
     
     def __enter__(self):
         return self

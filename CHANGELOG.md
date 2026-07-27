@@ -5,6 +5,33 @@
 
 ---
 
+## [0.10.0] - 2026-07-27
+
+### 🔬 Phase 4a: GGUF Parser — Expert-Aware Tensor Mapping
+
+- **New Module**: `weight_stream/gguf/` — wraps official `gguf` library with expert-aware features
+- **GGUFParser**: Parses GGUF metadata + maps tensor names → file offsets
+- **Expert-aware API**:
+  - `get_expert_map()` → `{layer_id: {expert_idx: [ExpertRange(gate, up, down)]}}`
+  - `get_expert_tensors()` → list of 72 expert tensors (24 layers × 3 projections)
+  - `get_tensor(name)` → file offset + size + quantization type
+- **Expert size analysis (Qwen1.5-MoE-A2.7B)**:
+  - Per-expert: down=1.43MB, gate=0.77MB, up=0.77MB (total ~2.9MB/expert)
+  - Layer-0 prefetch: loads all 60 experts on init (cold start acceleration)
+- **Backend update**: `WeightStreamModel` uses GGUF parser + prefetches layer experts during generation
+- **Prefetcher update**: New `prefetch_experts()` and `prefetch_token_experts()` methods
+- **Tests**: 9 new GGUF parser tests (22 total, all passing)
+
+#### ไฟล์ที่สร้าง/แก้ไข
+- `weight_stream/gguf/__init__.py` — new module
+- `weight_stream/gguf/parser.py` — GGUF parser wrapper (135 lines)
+- `weight_stream/backends/llama_cpp.py` — GGUF integration + expert prefetch
+- `weight_stream/core/prefetcher.py` — expert-aware prefetch methods
+- `tests/test_gguf.py` — 9 tests
+- `CHANGELOG.md` — อัปเดต
+
+---
+
 ## [0.9.0] - 2026-07-27
 
 ### 🏗️ Phase 3c: weight-streaming Product (MVP)

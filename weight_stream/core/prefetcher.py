@@ -61,17 +61,53 @@ class Prefetcher:
         Called when a shard is accessed.
         
         Records the access and kicks off background prefetch.
-        This runs synchronously (fast — just records access),
-        then spawns prefetch in background thread.
         """
-        # Record access (always fast)
         self.predictor.observe(shard_id, step)
-        
-        # Generate predictions
         next_shards = self.predictor.predict_next(shard_id)
-        
-        # Kick off background prefetch
         self._prefetch_async(next_shards)
+    
+    def prefetch_experts(self, expert_ranges: list, mmap_obj=None):
+        """
+        Prefetch specific expert weights by file offset range.
+        
+        This is the expert-aware method used when GGUF tensor metadata
+        is available. Takes a list of ExpertRange objects and loads
+        the corresponding file regions into the OS page cache.
+        
+        Args:
+            expert_ranges: List of ExpertRange (from GGUFParser.get_expert_map())
+            mmap_obj: mmap to prefetch from (optional, uses buffer's mmap if not set)
+        """
+        mmap_src = mmap_obj if mmap_obj is not None else getattr(self.buffer, 'mmap', None)
+        if mmap_src is None:
+            return
+        
+        for er in expert_ranges:
+            if er.start_offset < mmap_src.size():
+                length = min(er.size_bytes, mmap_src.size() - er.start_offset)
+                _ = mmap_src[er.start_offset:er.start_offset + length]
+                self.prefetched_count += 1
+    
+    def prefetch_token_experts(self, layer_ids: list, expert_ids: list, 
+                                expert_map: dict, mmap_obj=None):
+        """
+        Prefetch experts for the next token across multiple layers.
+        
+        Args:
+            layer_ids: list of layer indices to prefetch
+            expert_ids: list of expert indices per layer
+            expert_map: {layer_id: {expert_idx: [ExpertRange]}} from GGUFParser
+            mmap_obj: mmap to read from
+        """
+        ranges = []
+        for lid in layer_ids:
+            if lid in expert_map:
+                for eid in expert_ids:
+                    if eid in expert_map[lid]:
+                        ranges.extend(expert_map[lid][eid])
+        
+        if ranges:
+            self.prefetch_experts(ranges, mmap_obj)
     
     def start(self):
         """Start background prefetch thread"""
