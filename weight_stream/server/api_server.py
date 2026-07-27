@@ -152,10 +152,57 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
         except ValueError as e:
             raise HTTPException(status_code=404, detail=str(e))
     
-    @app.get("/v1/models", response_model=list[ModelStatus])
-    async def list_models():
-        """List all loaded models."""
-        return await manager.list_models()
+    @app.get("/v1/models/scan")
+    async def scan_models(dir: str | None = None):
+        """
+        Scan directories for available GGUF model files.
+        
+        Scans the configured models directory (WS_MODELS_DIR env var,
+        default: current directory + common model locations).
+        Returns a list of found .gguf files with size info.
+        """
+        import os, glob
+        
+        search_dirs = []
+        if dir:
+            search_dirs.append(dir)
+        else:
+            # Default search paths
+            ws_dir = os.environ.get("WS_MODELS_DIR", "")
+            if ws_dir:
+                search_dirs.append(ws_dir)
+            # Also search current dir + common locations
+            search_dirs.extend([
+                os.getcwd(),
+                os.path.join(os.getcwd(), "research", "models"),
+                os.path.join(os.getcwd(), "models"),
+                os.path.expanduser("~/models"),
+            ])
+        
+        found = []
+        seen = set()
+        for search_dir in search_dirs:
+            if not os.path.isdir(search_dir):
+                continue
+            pattern = os.path.join(search_dir, "*.gguf")
+            for path in sorted(glob.glob(pattern)):
+                abspath = os.path.abspath(path)
+                if abspath in seen:
+                    continue
+                seen.add(abspath)
+                try:
+                    size = os.path.getsize(abspath)
+                    found.append({
+                        "path": abspath,
+                        "name": os.path.basename(abspath),
+                        "size_bytes": size,
+                        "size_gb": round(size / (1024**3), 2),
+                        "directory": os.path.dirname(abspath),
+                    })
+                except OSError:
+                    pass
+        
+        return {"models": found, "total": len(found)}
     
     @app.post("/v1/models/load", response_model=ModelActionResponse)
     async def load_model(request: ModelLoadRequest):
