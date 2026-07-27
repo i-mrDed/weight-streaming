@@ -280,8 +280,69 @@
 - `weight_stream/core/prefetcher.py` — expert prefetch methods + buffer tracking
 - `tests/test_gguf.py` — 9 GGUF parser tests
 - `v0.10.0` + `v0.10.1` — Phase 4 releases
+---
+
+## [S010] — 2026-07-27 — Phase 6: Full Frontend Platform + Anthropic API
+
+**🎯 เป้าหมาย:** Complete production hardening + build all frontends + add Anthropic compatibility
+
+### ✅ สิ่งที่ทำ
+
+**Production Hardening (8 dimensions)**
+- Security: GitHub token removed, .gitignore hardened, safe mmap, path validation
+- Architecture: `backends/_base.py` abstract class, exception hierarchy (6 types)
+- Error Handling: ModelError, GenerationError, ConfigError with structured details
+- Logging: Clean format, appropriate levels
+- CLI: `--version`, short flags, validation, stats table, JSON output
+- Testing: 43 tests (was 22), integration + edge case tests
+- Docs: README.md, API reference, architecture diagrams
+- Packaging: pyproject.toml v0.11.0, [server], [gradio], [tui] extras
+
+**API Server**
+- 7 REST endpoints + WebSocket streaming
+- OpenAI-compatible (`/v1/chat/completions`) + Anthropic-compatible (`/v1/messages`)
+- ModelManager: async lifecycle, thread-safe, auto-idle unload
+- Port 8765 (verified free — no conflict with Ollama, MySQL, Docker, app at 8090)
+
+**4 Frontends + Marketing Site**
+- SPA: Vanilla JS, chat + stats + model tabs, `/app` route
+- Gradio Web UI: interactive chat, stats panel, model load/unload
+- TUI (Textual): keyboard-navigable, split layout, live stats
+- Marketing Website: 5 pages (landing, features, architecture, benchmarks, api-docs)
+
+### 🐛 ปัญหา / อุปสรรค
+- **Server startup bug**: `factory=True` + tuple return → Internal Server Error across all endpoints.
+  - Fix: Create app/manager explicitly, pass app directly to uvicorn
+- **Port 8080 conflict**: default API port clashes with web dev tools, Docker, etc.
+  - Fix: Changed to 8765 (verified free on this machine)
+- **Gradio 6.x breaking changes**: theme/css moved to `launch()`, Chatbot API changed
+  - Fix: Migrated to Gradio 6.x API
+- **Exception bug**: `**` dict unpacking fails when optional field is None
+  - Fix: Use `dict()` + conditional insert instead of triple `**` pattern
+
+### ⚡ การตัดสินใจ
+- Port 8765: override available via `--port`/`--server`
+- Anthropic compatibility: separate endpoint (not blended with OpenAI)
+- Desktop GUI (PyQt6): deferred — 5.5 days, narrow audience, low priority
+
+### ⏭️ ถัดไป
+- [ ] Desktop GUI (PyQt6) — when needed
+- [ ] Phase 5: Large model testing (>100GB) — when disk space freed
+- [ ] Push to dedicated repo — when user creates new repo
+
+### 📎 อ้างอิง
+- `weight_stream/server/` — 9 files (API server + Anthropic compat)
+- `weight_stream/ui/gradio_app.py` — Gradio Web UI
+- `weight_stream/tui/app.py` — Textual terminal UI
+- `weight_stream/server/static/index.html` — SPA web app
+- `website/` — 7 files (5-page marketing site)
+- `docs/FULL_PLATFORM_ARCHITECTURE.md` — 12-chapter platform plan
+- `docs/IDE_INTEGRATION.md` — 9 IDE/tool config examples
+- `tests/test_backend.py` (13), `tests/test_exceptions.py` (8), `tests/test_server.py` (7)
+- Commits: 12 this session (Phase 6 hardening through Anthropic API)
 
 ---
+
 > ```markdown
 > ## [S000] — YYYY-MM-DD — [หัวข้อสั้น]
 >

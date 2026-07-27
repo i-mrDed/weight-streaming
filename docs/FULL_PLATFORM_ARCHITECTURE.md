@@ -50,6 +50,7 @@
 │  │  GET  /v1/models       →  ModelManager.list_models()               │    │
 │  │  WS   /v1/stream       →  Token-by-token streaming                 │    │
 │  │  POST /v1/chat/completions → OpenAI-compatible endpoint            │    │
+│  │  POST /v1/messages → Anthropic-compatible endpoint              │    │
 │  │                                                                    │    │
 │  │  ┌─────────────────────────────────────────────────────────────┐   │    │
 │  │  │  ModelManager                                              │   │    │

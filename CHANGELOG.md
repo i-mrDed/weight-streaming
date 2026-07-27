@@ -5,6 +5,69 @@
 
 ---
 
+## [0.11.0] - 2026-07-27
+
+### 🔌 Phase 6: API Server + Full Frontend Platform + Anthropic Support
+
+#### API Server (`weight_stream/server/`)
+- **REST API**: 7 endpoints — generate, stats, models (load/unload/list), health
+- **WebSocket**: `ws://host/v1/stream` — token-by-token streaming with cancel
+- **OpenAI Compat**: `POST /v1/chat/completions` — VS Code, Cursor, Continue.dev, Cline
+- **Anthropic Compat**: `POST /v1/messages` — Claude Code, Anthropic SDK
+- **ModelManager**: async model lifecycle, auto-idle unload, thread-safe
+
+#### CLI — 3 commands added
+- `server` — start API server with auto-load model (port 8765)
+- `ui` — launch Gradio Web UI
+- `tui` — launch Textual terminal UI
+
+#### 5 Frontends
+| # | Frontend | Technology | Access |
+|---|----------|-----------|--------|
+| 1 | SPA | Vanilla JS (single HTML) | `http://localhost:8765/app` |
+| 2 | Gradio Web UI | Gradio 6.x | `python -m weight_stream ui` |
+| 3 | TUI | Textual 8.x | `python -m weight_stream tui` |
+| 4 | API Docs | Swagger | `http://localhost:8765/docs` |
+| 5 | Marketing Site | Static HTML (5 pages) | `website/index.html` |
+
+#### Bug Fixes
+- Server startup: factory=True tuple bug fixed
+- Port: default 8080 → 8765 (checked free on this machine)
+- Gradio 6.x API: theme/css migrated to launch()
+- Exception ** unpacking bug in ModelError/GenerationError fixed
+
+#### Documentation
+- `docs/FULL_PLATFORM_ARCHITECTURE.md` — 12-chapter platform architecture
+- `docs/IDE_INTEGRATION.md` — 9 IDE/tool config examples
+- `website/` — 5-page marketing site (landing, features, architecture, benchmarks, api-docs)
+
+#### Testing
+- 43 unit tests pass, 7 server e2e tests
+- Anthropic endpoint: 3/3 scenarios verified
+
+#### Security
+- GitHub token removed from remote URL
+- .gitignore hardened
+- All mmap: ACCESS_READ only
+
+#### Files (Phase 6)
+- `weight_stream/server/` — 8 files (API server)
+- `weight_stream/ui/gradio_app.py` — Gradio UI
+- `weight_stream/tui/app.py` — Textual TUI
+- `weight_stream/server/static/index.html` — SPA
+- `weight_stream/server/anthropic_compat.py` — Anthropic compat
+- `weight_stream/backends/_base.py` — abstract backend
+- `weight_stream/core/exceptions.py` — 6 exception types
+- `weight_stream/cli/main.py` — polished (5 commands)
+- `website/` — 7 files (marketing site)
+- `docs/FULL_PLATFORM_ARCHITECTURE.md`
+- `docs/IDE_INTEGRATION.md`
+- `README.md`
+- `pyproject.toml` — v0.11.0
+- `tests/test_backend.py`, `tests/test_exceptions.py`, `tests/test_server.py`
+
+---
+
 ## [0.10.0] - 2026-07-27
 
 ### 🔬 Phase 4a: GGUF Parser — Expert-Aware Tensor Mapping
