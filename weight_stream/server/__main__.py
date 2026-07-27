@@ -34,8 +34,8 @@ def main():
         help="Bind address (default: 127.0.0.1)",
     )
     parser.add_argument(
-        "--port", type=int, default=8080,
-        help="Bind port (default: 8080)",
+        "--port", type=int, default=8765,
+        help="Bind port (default: 8765)",
     )
     parser.add_argument(
         "--model", type=str, default=None,

@@ -42,7 +42,7 @@ from textual.binding import Binding
 
 
 class APIClient:
-    def __init__(self, base_url: str = "http://127.0.0.1:8080"):
+    def __init__(self, base_url: str = "http://127.0.0.1:8765"):
         self.base_url = base_url.rstrip("/")
         self._session = requests.Session()
 
@@ -208,10 +208,10 @@ class WeightStreamTUI(App):
         Binding("ctrl+s", "focus_input", "Send", show=False),
     ]
 
-    server_url = reactive("http://127.0.0.1:8080")
+    server_url = reactive("http://127.0.0.1:8765")
     current_model = reactive("default")
 
-    def __init__(self, server_url: str = "http://127.0.0.1:8080"):
+    def __init__(self, server_url: str = "http://127.0.0.1:8765"):
         super().__init__()
         self.server_url = server_url
         self.api = APIClient(server_url)

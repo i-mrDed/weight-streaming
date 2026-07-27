@@ -72,8 +72,8 @@ def main():
                               epilog="Example: python -m weight_stream server --model model.gguf")
     server_p.add_argument("--host", type=str, default="127.0.0.1",
                           help="Bind address (default: 127.0.0.1)")
-    server_p.add_argument("--port", "-p", type=int, default=8080,
-                          help="Bind port (default: 8080)")
+    server_p.add_argument("--port", "-p", type=int, default=8765,
+                          help="Bind port (default: 8765)")
     server_p.add_argument("--model", "-m", type=str, default=None,
                           help="Auto-load a model on startup (path to GGUF)")
     server_p.add_argument("--model-id", type=str, default="default",
@@ -89,17 +89,17 @@ def main():
     
     # ── ui ────────────────────────────────────────────────────────────
     ui_p = sub.add_parser("ui", help="Launch the Gradio Web UI",
-                          epilog="Example: python -m weight_stream ui --server http://localhost:8080")
-    ui_p.add_argument("--server", "-s", type=str, default="http://127.0.0.1:8080",
-                      help="API server URL (default: http://127.0.0.1:8080)")
+                          epilog="Example: python -m weight_stream ui --server http://localhost:8765")
+    ui_p.add_argument("--server", "-s", type=str, default="http://127.0.0.1:8765",
+                      help="API server URL (default: http://127.0.0.1:8765)")
     ui_p.add_argument("--share", action="store_true",
                       help="Create a public shareable link (use with caution)")
     
     # ── tui ───────────────────────────────────────────────────────────
     tui_p = sub.add_parser("tui", help="Launch the Textual terminal UI",
-                           epilog="Example: python -m weight_stream tui --server http://localhost:8080")
-    tui_p.add_argument("--server", "-s", type=str, default="http://127.0.0.1:8080",
-                       help="API server URL (default: http://127.0.0.1:8080)")
+                           epilog="Example: python -m weight_stream tui --server http://localhost:8765")
+    tui_p.add_argument("--server", "-s", type=str, default="http://127.0.0.1:8765",
+                       help="API server URL (default: http://127.0.0.1:8765)")
     
     args = parser.parse_args()
     

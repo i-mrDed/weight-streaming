@@ -1,13 +1,35 @@
-"""Integration test for the API server."""
+"""Integration test for the API server.
+
+Requires: the API server must be running on port 8383.
+Start it with: python tests/test_server.py
+Or run standalone: python tests/test_server.py
+
+These tests are skipped in normal pytest runs because they
+need a live server.
+"""
 import sys, time, json, os
 sys.path.insert(0, '.')
 sys.stdout.reconfigure(encoding='utf-8')
 
+import pytest
 import requests
-import threading
 
 MODEL = "research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf"
-SERVER_URL = "http://127.0.0.1:8383"
+SERVER_URL = "http://127.0.0.1:8765"
+
+
+def _server_running() -> bool:
+    try:
+        requests.get(f"{SERVER_URL}/health", timeout=2)
+        return True
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _server_running(),
+    reason="API server not running on port 8383. Start with: python tests/test_server.py"
+)
 
 def test_health():
     r = requests.get(f"{SERVER_URL}/health", timeout=5)

@@ -18,7 +18,7 @@ class ServerConfig:
         default_factory=lambda: os.getenv("WS_HOST", "127.0.0.1")
     )
     port: int = field(
-        default_factory=lambda: int(os.getenv("WS_PORT", "8080"))
+        default_factory=lambda: int(os.getenv("WS_PORT", "8765"))
     )
     
     # Model defaults
