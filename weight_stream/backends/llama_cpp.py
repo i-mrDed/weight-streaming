@@ -17,6 +17,7 @@ Usage:
     model = WeightStreamModel("model.gguf", buffer_mb=64)
     output = model.generate("Hello", max_tokens=100)
 """
+import ctypes
 import logging
 import mmap
 import os
@@ -27,6 +28,7 @@ from ..core.buffer import StreamingBuffer, SHARD_SIZE
 from ..core.predictor import HeuristicPredictor
 from ..core.prefetcher import Prefetcher
 from ..gguf import GGUFParser
+from ..io.win_perf import WindowsPageMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -143,6 +145,28 @@ class WeightStreamModel:
             f"{self.n_experts_used} used per token"
         )
         
+        # Step 5: Get mmap address for page monitoring
+        self._page_monitor = None
+        try:
+            import numpy as np
+            # Keep numpy buffer alive (holds pointer to mmap address)
+            self._mmap_buf = np.frombuffer(self._mmap, dtype=np.uint8, count=1)
+            mmap_addr = self._mmap_buf.ctypes.data
+            logger.debug(f"mmap address: 0x{mmap_addr:x}")
+            self._page_monitor = WindowsPageMonitor(
+                mmap_addr=mmap_addr,
+                mmap_size=file_size,
+            )
+            # Test sample
+            res = self._page_monitor.sample_resident_pages()
+            logger.info(
+                f"Page cache monitor active: "
+                f"{self._page_monitor.get_resident_ratio():.1%} resident"
+            )
+        except Exception as e:
+            import traceback
+            logger.warning(f"Page monitor init failed: {e}\n{traceback.format_exc()}")
+        
         # Warm up buffer with initial shards
         self._warm_up_buffer()
         
@@ -198,6 +222,10 @@ class WeightStreamModel:
                     target_layer = (token_count // 3) % max(len(self._expert_map), 1)
                     self._prefetch_layer_experts(target_layer)
                 
+                # Sample page cache every 5 tokens
+                if token_count % 5 == 0 and self._page_monitor:
+                    self._page_monitor.sample_resident_pages()
+                
                 # Record buffer state
                 if hasattr(self.buffer, 'get_hot_set'):
                     shard_access_log.append({
@@ -210,10 +238,16 @@ class WeightStreamModel:
         tokens_per_sec = token_count / elapsed if elapsed > 0 else 0
         
         stats = self.buffer.get_stats()
+        cache_info = ""
+        if self._page_monitor:
+            ratio = self._page_monitor.get_resident_ratio()
+            cache_info = f", page cache: {ratio:.1%} resident"
+        
         logger.info(
             f"Generation: {token_count} tokens in {elapsed:.2f}s "
             f"({tokens_per_sec:.2f} tok/s), "
             f"buffer hit rate: {stats['hit_rate']:.1%}"
+            f"{cache_info}"
         )
         
         return output
@@ -222,10 +256,15 @@ class WeightStreamModel:
         """Clean up resources"""
         self.prefetcher.stop()
         self._llm.close()
+        # Release numpy buffer before closing mmap
+        if hasattr(self, '_mmap_buf') and self._mmap_buf is not None:
+            self._mmap_buf = None
         if self._mmap:
             self._mmap.close()
         if self._file:
             self._file.close()
+        if hasattr(self, '_gguf'):
+            self._gguf.close()
     
     def get_stats(self) -> Dict[str, Any]:
         """Return all system statistics"""

@@ -82,11 +82,20 @@ class Prefetcher:
         if mmap_src is None:
             return
         
+        shard_ids_to_prefetch = []
         for er in expert_ranges:
             if er.start_offset < mmap_src.size():
                 length = min(er.size_bytes, mmap_src.size() - er.start_offset)
                 _ = mmap_src[er.start_offset:er.start_offset + length]
+                # Track shards in the buffer
+                start_shard = er.start_offset // self.buffer.shard_size
+                end_shard = (er.start_offset + length - 1) // self.buffer.shard_size
+                for sid in range(start_shard, end_shard + 1):
+                    if sid not in self.buffer:
+                        shard_ids_to_prefetch.append(sid)
                 self.prefetched_count += 1
+        if shard_ids_to_prefetch:
+            self.buffer.prefetch(shard_ids_to_prefetch)
     
     def prefetch_token_experts(self, layer_ids: list, expert_ids: list, 
                                 expert_map: dict, mmap_obj=None):

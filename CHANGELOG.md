@@ -25,9 +25,39 @@
 #### ไฟล์ที่สร้าง/แก้ไข
 - `weight_stream/gguf/__init__.py` — new module
 - `weight_stream/gguf/parser.py` — GGUF parser wrapper (135 lines)
-- `weight_stream/backends/llama_cpp.py` — GGUF integration + expert prefetch
-- `weight_stream/core/prefetcher.py` — expert-aware prefetch methods
+- `weight_stream/backends/llama_cpp.py` — GGUF integration + expert prefetch + page monitor init
+- `weight_stream/core/prefetcher.py` — expert-aware prefetch methods + buffer tracking
 - `tests/test_gguf.py` — 9 tests
+- `CHANGELOG.md` — อัปเดต
+
+---
+
+## [0.10.1] - 2026-07-27
+
+### 🔬 Phase 4b: Windows Page Cache Monitor + Buffer Integration
+
+- **New Module**: `weight_stream/io/win_perf.py` — WindowsPageMonitor using `QueryWorkingSetEx`
+  - Samples page cache residency via `QueryWorkingSetEx` API
+  - Reports resident ratio: how much of the mmap'd file is in physical RAM
+  - Page size detection via `GetSystemInfo`
+- **Backend fix**: `WeightStreamModel` now initializes page monitor on startup
+  - Uses numpy to extract mmap virtual address for `QueryWorkingSetEx`
+  - Monitor is optional — gracefully reports `None` on failure
+  - Samples page cache every 5 tokens during generation
+- **Prefetcher fix**: `prefetch_experts()` now tracks prefetched shards in the buffer LRU
+  - Previously, expert prefetch used direct mmap reads without buffer tracking
+  - Now shards are properly tracked: buffer shows 66 prefetches, 16 entries after 10-token gen
+- **Cleanup fix**: `WeightStreamModel.close()` releases numpy buffer before closing mmap
+- **Benchmark validation** (Qwen1.5-MoE-A2.7B, 5.5GB):
+  - Page monitor confirms: 0% → 1.6% resident after cold generation
+  - With/without prefetch: within noise (±3%) for small model
+  - Prediction: prefetch benefit scales with model size (>68GB needed for visible effect)
+- **Tests**: 22/22 passing (no new tests needed — monitor is optional and graceful)
+
+#### ไฟล์ที่สร้าง/แก้ไข
+- `weight_stream/io/win_perf.py` — WindowsPageMonitor (new, 189 lines)
+- `weight_stream/backends/llama_cpp.py` — page monitor init + close fix
+- `weight_stream/core/prefetcher.py` — buffer tracking in prefetch_experts
 - `CHANGELOG.md` — อัปเดต
 
 ---
