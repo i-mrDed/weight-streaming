@@ -104,10 +104,23 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
     async def health():
         return {"status": "ok", "version": "0.11.0"}
     
-    # Redirect root to SPA
+    # Root → SPA (product frontend for end users)
     @app.get("/")
     async def root():
-        return {"message": "Weight Streaming API v0.11.0", "docs": "/docs", "app": "/app"}
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(url="/app/", status_code=302)
+    
+    # API info (for developers / health dashboards)
+    @app.get("/api")
+    async def api_info():
+        from weight_stream import __version__
+        return {
+            "message": f"Weight Streaming API v{__version__}",
+            "docs": "/docs",
+            "app": "/app",
+            "health": "/health",
+            "issues": "/v1/issues",
+        }
     
     # ── REST Endpoints ──────────────────────────────────────────────
     
