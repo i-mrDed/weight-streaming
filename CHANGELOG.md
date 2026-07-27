@@ -5,6 +5,38 @@
 
 ---
 
+## [0.9.0] - 2026-07-27
+
+### 🏗️ Phase 3c: weight-streaming Product (MVP)
+
+- **New Package**: `weight_stream/` — 8 modules, pip-installable product
+- **core/buffer.py**: LRU StreamingBuffer — zero-copy mmap, hot-set tracker, hit/miss stats
+- **core/predictor.py**: HeuristicPredictor — sequential pattern + co-occurrence, no MLP
+- **core/prefetcher.py**: Background thread — speculative prefetch during compute time
+- **backends/llama_cpp.py**: WeightStreamModel — wraps llama-cpp-python with mmap overlay
+- **cli/main.py**: 3 commands (`run`, `stats`, `benchmark`) + JSON output
+- **tests/test_buffer.py**: 13 unit tests — LRU eviction, prefetch, hit rate, zero-copy
+- **ADR-003**: Product architecture decision (LRU-only, 64MB, heuristic, mmap-based)
+- **End-to-end validation**: Qwen1.5-MoE-A2.7B generates at 13.43 tok/s
+
+#### ไฟล์ที่สร้าง/แก้ไข
+- `weight_stream/` — new package (11 files)
+- `weight_stream/__init__.py` — public API
+- `weight_stream/__main__.py` — `python -m` entry
+- `weight_stream/core/buffer.py` — LRU buffer tracker
+- `weight_stream/core/predictor.py` — heuristic predictor
+- `weight_stream/core/prefetcher.py` — background prefetch
+- `weight_stream/backends/llama_cpp.py` — llama-cpp-python adapter
+- `weight_stream/cli/main.py` — 3 CLI commands
+- `weight_stream/io/__init__.py` — I/O abstraction stub
+- `tests/test_buffer.py` — 13 unit tests
+- `pyproject.toml` — package config
+- `docs/DECISIONS.md` — ADR-003 added
+- `SESSION_LOG.md` — เพิ่ม S008
+- `CHANGELOG.md` — อัปเดต
+
+---
+
 ## [0.5.0] - 2026-07-27
 
 ### 🧪 Phase 3a: Prototype Simulator

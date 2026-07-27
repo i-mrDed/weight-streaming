@@ -1,0 +1,35 @@
+[project]
+name = "weight-streaming"
+version = "0.1.0"
+description = "Run LLMs larger than your RAM — speculative weight streaming from NVMe"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [
+    { name = "Weight Streaming Contributors" },
+]
+requires-python = ">=3.11"
+dependencies = [
+    "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+llama-cpp = ["llama-cpp-python>=0.3.0"]
+all = ["weight-streaming[llama-cpp]"]
+
+[project.urls]
+homepage = "https://github.com/weight-streaming/weight-streaming"
+source = "https://github.com/weight-streaming/weight-streaming"
+documentation = "https://github.com/weight-streaming/weight-streaming/docs"
+
+[project.scripts]
+weight-streaming = "weight_stream.cli.main:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["weight_stream*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

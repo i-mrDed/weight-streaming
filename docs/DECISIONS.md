@@ -75,6 +75,53 @@ Layer 3: Streaming Buffer → execute from buffer with LRU eviction
 
 ---
 
+## ADR-003: Product Architecture based on Real Hardware Findings
+
+| รายการ | รายละเอียด |
+|--------|-----------|
+| **วันที่** | 2026-07-27 |
+| **สถานะ** | ✅ Accepted |
+| **Context** | หลังจากการ simulation (EXP-001, 002, 003) + real HW benchmark (EXP-004) ได้ empirical evidence ที่ definitive แล้ว — ถึงเวลาออกแบบ product architecture |
+
+### Key Empirical Findings (สรุปจากทุก experiment)
+
+1. **Bottleneck:** K3 on consumer CPU = ~92% compute-bound (815ms compute, 0-67ms I/O stall)
+2. **Eviction:** LRU > LFU สำหรับ shared MoE access pattern (93.8% hit at 64MB vs LFU 27.2%)
+3. **Buffer size:** 64 MB sufficient (98.9% at 512MB, but 93.8% at 64MB is adequate)
+4. **Predictor:** Not critical for throughput. LRU handles temporal locality. Useful for cold start only.
+5. **mmap:** OS memory-mapped files provide free "streaming" — our product adds smart prefetching
+
+### การตัดสินใจ (Architecture changes from ADR-001)
+
+| Component | ADR-001 Design | ADR-003 (Real HW) |
+|-----------|---------------|-------------------|
+| **Buffer eviction** | LRU+priority, 256MB | **LRU plain, 64MB** |
+| **Predictor** | MLP (PreScope, 2M params) | **Heuristic only** (frequency + temporal) |
+| **Priority boost** | ON | **OFF** (LRU doesn't need it) |
+| **Integration** | Fork llama.cpp | **Abstraction layer** + llama-cpp-python adapter |
+| **Weight access** | Custom buffer | **mmap** (OS-managed) + smart prefetching |
+| **I/O model** | io_uring/IOCP | **PrefetchVirtualMemory** (Windows) / madvise (Linux) |
+
+### Product Architecture
+
+```
+weight-streaming (Python package, pip install)
+├── core/           → LRU buffer tracker, prefetcher logic
+├── backends/       → llama-cpp-python (first), more in future
+├── io/             → IOCP (Windows), io_uring (Linux)
+└── cli/            → python -m weight_stream ...
+```
+
+### Consequences
+- ✅ Positive: Ships fast (Python, no C++ build needed on Windows)
+- ✅ Positive: Works with any GGUF model, not just K3
+- ✅ Positive: mmap = zero-copy weight access
+- ⚠️ Negative: Python overhead for buffer tracking (microseconds per access)
+- ⚠️ Negative: Relies on OS page cache (less control than custom buffer)
+- ⚠️ Negative: Needs Platform-native I/O for best perf (IOCP Windows, io_uring Linux)
+
+---
+
 > **Template:**
 > ```markdown
 > ## ADR-NNN: หัวข้อ
