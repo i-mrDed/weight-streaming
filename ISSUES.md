@@ -61,13 +61,36 @@
 - Files: `static/index.html`
 - Commit: (pending)
 
-### [ISSUE-005] SPA: No Browse button for local GGUF files
+### [ISSUE-006] Browse button can't load external models
 - Reported: 2026-07-27
 - Status: 🟢 Fixed
-- Symptom: Only text input for model path, no file browser
-- Fix: Added HTML file input with `.gguf` filter, styled as Browse button. Selection auto-fills path + ID.
+- Symptom: Browse button selects file but only gets filename (no path). "Model file not found" when trying to load models from D:\models\ or Jan Desktop directories.
+- Root Cause: HTML file input returns only filename (browser security). Can't get full path.
+- Fix: Replace Browse with Scan Directory text input. User types custom directory path, scan endpoint supports `?dir=` parameter. Models from Jan app: scan `C:\Users\dedch\AppData\Roaming\Jan\data\llamacpp\models`.
+- Verification: `/v1/models/scan?dir=C:\Users\dedch\AppData\Roaming\Jan\data\llamacpp\models` returns .gguf files
+- Files: `static/index.html`, `api_server.py`
+
+### [ISSUE-007] Chat generates gibberish for Qwen
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
+- Symptom: Model answers irrelevant/random text
+- Root Cause: Raw `/v1/generate` endpoint passes raw prompt without chat template. Qwen MoE models need system prompt + proper message formatting.
+- Fix:
+  - SPA now uses `/v1/chat/completions` (OpenAI endpoint) instead of raw `/v1/generate`
+  - Added system prompt: "You are a helpful, respectful, and honest assistant"
+  - Temperature lowered from 0.7 to 0.3
+  - Conversation history maintained (up to 20 messages)
+- Verification: "What is 2+2?" → "The answer is 4." (correct!)
 - Files: `static/index.html`
-- Commit: (pending)
+
+### [ISSUE-008] Tab resets to Chat on page reload
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
+- Symptom: Refreshing page always goes to Chat tab, even when on Models
+- Root Cause: Tab state not persisted across reloads
+- Fix: URL hash-based tab persistence (#chat, #stats, #models). `restoreTab()` reads hash on load. `switchTab()` updates hash. `hashchange` event handles browser back/forward.
+- Verification: Navigate to Models tab → refresh → stays on Models tab
+- Files: `static/index.html`
 
 ---
 

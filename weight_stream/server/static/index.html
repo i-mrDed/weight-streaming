@@ -394,23 +394,26 @@ footer {
     <div id="tab-models" style="display:none;">
      <div id="models-list"></div>
 
-     <!-- Browse Available Models -->
+     <!-- Scan Directory -->
      <div class="load-form" style="margin-bottom:16px;">
-       <h3>Available Models</h3>
+       <h3>Scan Models</h3>
        <p style="font-size:0.8rem;color:var(--text-dim);margin-bottom:8px;">
-         Automatically scanned from your model directories.
-         Set <code>WS_MODELS_DIR</code> env var to configure.
+         Auto-scans default directories. Enter a custom path to scan elsewhere. 
+         Or type/paste the model path directly below.
        </p>
        <div class="form-row">
          <div style="flex:1;">
-           <select id="model-picker" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);">
-             <option value="">-- Select a model or browse --</option>
-           </select>
+           <input type="text" id="scan-dir" placeholder="Custom directory to scan (or leave empty for defaults)" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);" />
          </div>
          <div style="display:flex;align-items:flex-end;gap:4px;">
-           <label for="browse-file" style="cursor:pointer;background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 12px;border-radius:var(--radius-sm);font-size:0.8em;font-family:var(--font);">Browse</label>
-           <input type="file" id="browse-file" accept=".gguf" style="display:none;" />
-           <button class="primary" id="refresh-btn" style="font-size:0.75em;padding:8px 10px;" title="Refresh model list">Refresh</button>
+           <button class="primary" id="scan-dir-btn" style="font-size:0.8em;padding:8px 12px;">Scan</button>
+         </div>
+       </div>
+       <div class="form-row" style="margin-top:8px;">
+         <div style="flex:1;">
+           <select id="model-picker" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);">
+             <option value="">-- Select a model --</option>
+           </select>
          </div>
        </div>
      </div>
@@ -488,33 +491,6 @@ async function apiJSON(path, body) {
   return res.json();
 }
 
-async function* streamGenerate(model, prompt, maxTokens, temp) {
-  abortController = new AbortController();
-  const res = await api('/v1/generate', {
-    method: 'POST',
-    body: JSON.stringify({ model, prompt, max_tokens: maxTokens, temperature: temp, stream: true }),
-    signal: abortController.signal,
-  });
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop();
-    for (const line of lines) {
-      if (line.startsWith('data: ')) {
-        const event = JSON.parse(line.slice(6));
-        if (event.done) return event;
-        if (event.token) yield event.token;
-      }
-    }
-  }
-}
-
 function stopGeneration() {
   if (abortController) {
     abortController.abort();
@@ -540,21 +516,31 @@ async function checkHealth() {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Tab Switching
-   ═══════════════════════════════════════════════════════════════ */
+/* Tab Switching */
+function switchTab(tab) {
+  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+  const btn = document.querySelector('nav button[data-tab="' + tab + '"]');
+  if (btn) btn.classList.add('active');
+  document.getElementById('tab-chat').style.display = tab === 'chat' ? 'flex' : 'none';
+  document.getElementById('tab-stats').style.display = tab === 'stats' ? 'block' : 'none';
+  document.getElementById('tab-models').style.display = tab === 'models' ? 'block' : 'none';
+  if (tab === 'stats') refreshStats();
+  if (tab === 'models') { if (!scanned) { scanModels(); scanned = true; } refreshModels(); }
+  window.location.hash = tab;
+}
+
 document.querySelectorAll('nav button').forEach(btn => {
-  btn.addEventListener('click', () => {
-    document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-    btn.classList.add('active');
-    const tab = btn.dataset.tab;
-    document.getElementById('tab-chat').style.display = tab === 'chat' ? 'flex' : 'none';
-    document.getElementById('tab-stats').style.display = tab === 'stats' ? 'block' : 'none';
-    document.getElementById('tab-models').style.display = tab === 'models' ? 'block' : 'none';
-    if (tab === 'stats') refreshStats();
-    if (tab === 'models') refreshModels();
-  });
+  btn.addEventListener('click', function() { switchTab(this.dataset.tab); });
 });
+
+// Restore tab on page load or hash change
+function restoreTab() {
+  const hash = (window.location.hash || '').replace('#', '');
+  const valid = ['chat', 'stats', 'models'];
+  switchTab(valid.includes(hash) ? hash : 'chat');
+}
+window.addEventListener('hashchange', restoreTab);
+window.addEventListener('DOMContentLoaded', restoreTab);
 
 /* ═══════════════════════════════════════════════════════════════
    Chat
@@ -563,11 +549,14 @@ const chatMessages = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 const stopBtn = document.getElementById('stop-btn');
+const SYSTEM_PROMPT = 'You are a helpful, respectful, and honest assistant. Answer the user directly and concisely.';
 
-function addMessage(role, content, isError = false) {
+let conversationHistory = [];
+
+function addMessage(role, content, isError) {
   const div = document.createElement('div');
-  div.className = `message ${role}${isError ? ' error' : ''}`;
-  div.innerHTML = `<div class="role">${role}</div>${content}`;
+  div.className = 'message ' + role + (isError ? ' error' : '');
+  div.innerHTML = '<div class="role">' + role + '</div>' + escapeHtml(content).replace(/\n/g, '<br>');
   chatMessages.appendChild(div);
   chatMessages.scrollTop = chatMessages.scrollHeight;
 }
@@ -577,10 +566,7 @@ async function sendMessage() {
   if (!text) return;
   
   const online = await checkHealth();
-  if (!online) {
-    addMessage('error', 'Server is offline', true);
-    return;
-  }
+  if (!online) { addMessage('error', 'Server is offline', true); return; }
   
   chatInput.value = '';
   addMessage('user', text);
@@ -588,28 +574,78 @@ async function sendMessage() {
   sendBtn.disabled = true;
   stopBtn.style.display = 'inline-block';
   
-  const msgDiv = document.createElement('div');
+  // Build messages with conversation history + system prompt
+  var messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+  for (var i = 0; i < conversationHistory.length; i++) {
+    messages.push(conversationHistory[i]);
+  }
+  messages.push({ role: 'user', content: text });
+  
+  var msgDiv = document.createElement('div');
   msgDiv.className = 'message assistant';
   msgDiv.innerHTML = '<div class="role">assistant</div><span class="loading"></span>';
   chatMessages.appendChild(msgDiv);
   chatMessages.scrollTop = chatMessages.scrollHeight;
   
-  let fullResponse = '';
+  abortController = new AbortController();
+  var fullResponse = '';
+  
   try {
-    for await (const token of streamGenerate(currentModel, text, 256, 0.7)) {
-      fullResponse += token;
-      msgDiv.innerHTML = `<div class="role">assistant</div>${escapeHtml(fullResponse)}`;
-      chatMessages.scrollTop = chatMessages.scrollHeight;
+    var res = await fetch(API + '/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model: currentModel, messages: messages, max_tokens: 256, temperature: 0.3, stream: true }),
+      signal: abortController.signal,
+    });
+    
+    if (!res.ok) {
+      var err = await res.json().catch(function() { return { detail: res.statusText }; });
+      throw new Error(err.detail || err.error || 'HTTP ' + res.status);
     }
+    
+    var reader = res.body.getReader();
+    var decoder = new TextDecoder();
+    var buffer = '';
+    
+    while (true) {
+      var result = await reader.read();
+      if (result.done) break;
+      buffer += decoder.decode(result.value, { stream: true });
+      var lines = buffer.split('\n');
+      buffer = lines.pop();
+      for (var li = 0; li < lines.length; li++) {
+        var line = lines[li];
+        if (line.startsWith('data: ')) {
+          var data = line.slice(6);
+          if (data === '[DONE]') continue;
+          try {
+            var event = JSON.parse(data);
+            var delta = (event.choices && event.choices[0] && event.choices[0].delta && event.choices[0].delta.content);
+            if (delta) {
+              fullResponse += delta;
+              msgDiv.innerHTML = '<div class="role">assistant</div>' + escapeHtml(fullResponse).replace(/\n/g, '<br>');
+              chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+          } catch(e) {}
+        }
+      }
+    }
+    
     if (!fullResponse) {
       msgDiv.innerHTML = '<div class="role">assistant</div><em>(empty response)</em>';
     }
+    
+    // Save to conversation history
+    conversationHistory.push({ role: 'user', content: text });
+    conversationHistory.push({ role: 'assistant', content: fullResponse });
+    if (conversationHistory.length > 20) conversationHistory = conversationHistory.slice(-20);
+    
   } catch (e) {
     if (e.name === 'AbortError') {
-      msgDiv.innerHTML = `<div class="role">assistant</div>${escapeHtml(fullResponse)} <em style="color:var(--text-dim);">[stopped]</em>`;
+      msgDiv.innerHTML = '<div class="role">assistant</div>' + escapeHtml(fullResponse).replace(/\n/g, '<br>') + ' <em style="color:var(--text-dim);">[stopped]</em>';
     } else {
       msgDiv.className = 'message error';
-      msgDiv.innerHTML = `<div class="role">error</div>${escapeHtml(e.message)}`;
+      msgDiv.innerHTML = '<div class="role">error</div>' + escapeHtml(e.message);
     }
   }
   
@@ -720,24 +756,40 @@ async function refreshModels() {
   }
 }
 
-async function scanModels() {
+async function scanModels(dir) {
   const picker = document.getElementById('model-picker');
+  var url = '/v1/models/scan';
+  if (dir) url += '?dir=' + encodeURIComponent(dir);
   
   try {
-    const data = await apiJSON('/v1/models/scan');
+    const data = await apiJSON(url);
     const models = data.models || [];
-    let html = '<option value="">-- Select a model (' + models.length + ' found) --</option>';
-    for (const m of models) {
+    var html = '<option value="">-- Select a model (' + models.length + ' found) --</option>';
+    for (var i = 0; i < models.length; i++) {
+      var m = models[i];
       html += '<option value="' + escapeHtml(m.path) + '">' + escapeHtml(m.name) + ' (' + m.size_gb + ' GB)</option>';
     }
     if (models.length === 0) {
-      html = '<option value="">No .gguf files found in default directories</option>';
+      html = '<option value="">No .gguf files found. Try scanning a different directory.</option>';
     }
     picker.innerHTML = html;
   } catch (e) {
     picker.innerHTML = '<option value="">Scan error: ' + escapeHtml(e.message) + '</option>';
   }
 }
+
+// Scan button: scan the custom directory
+document.getElementById('scan-dir-btn').addEventListener('click', function() {
+  var dir = document.getElementById('scan-dir').value.trim();
+  scanModels(dir || null);
+});
+
+// Also scan on Enter in scan-dir input
+document.getElementById('scan-dir').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') {
+    scanModels(this.value.trim() || null);
+  }
+});
 
 // Dropdown selection → auto-fill path + ID
 document.getElementById('model-picker').addEventListener('change', function() {
@@ -821,18 +873,9 @@ async function unloadModel(id) {
 
 document.getElementById('load-btn').addEventListener('click', function() { loadModel(false); });
 document.getElementById('reload-btn').addEventListener('click', function() { loadModel(true); });
-document.getElementById('refresh-btn').addEventListener('click', function() { scanModels(); refreshModels(); });
 
-// Auto-scan on first visit to Models tab
+// Flag for first-time scan
 let scanned = false;
-const modelTabBtn = document.querySelector('nav button[data-tab="models"]');
-if (modelTabBtn) {
-  const origClick = modelTabBtn.onclick;
-  modelTabBtn.addEventListener('click', function() {
-    if (!scanned) { scanModels(); scanned = true; }
-    refreshModels();
-  });
-}
 
 /* ═══════════════════════════════════════════════════════════════
    Theme Toggle
