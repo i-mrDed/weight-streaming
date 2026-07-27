@@ -67,6 +67,26 @@ def main():
     bench_p.add_argument("--json", "-j", action="store_true",
                           help="Output results as JSON")
     
+    # ── server ────────────────────────────────────────────────────────
+    server_p = sub.add_parser("server", help="Start API server for frontends and IDE integration",
+                              epilog="Example: python -m weight_stream server --model model.gguf")
+    server_p.add_argument("--host", type=str, default="127.0.0.1",
+                          help="Bind address (default: 127.0.0.1)")
+    server_p.add_argument("--port", "-p", type=int, default=8080,
+                          help="Bind port (default: 8080)")
+    server_p.add_argument("--model", "-m", type=str, default=None,
+                          help="Auto-load a model on startup (path to GGUF)")
+    server_p.add_argument("--model-id", type=str, default="default",
+                          help="Model ID for auto-loaded model (default: 'default')")
+    server_p.add_argument("--buffer-mb", "-b", type=int, default=64,
+                          help="Buffer size in MB (default: 64)")
+    server_p.add_argument("--n-ctx", type=int, default=512,
+                          help="Context window size (default: 512)")
+    server_p.add_argument("--n-threads", type=int, default=None,
+                          help="Number of CPU threads (default: auto)")
+    server_p.add_argument("--verbose", "-v", action="store_true",
+                          help="Enable debug logging")
+    
     args = parser.parse_args()
     
     # Route command
@@ -77,6 +97,8 @@ def main():
             cmd_stats(args)
         elif args.command == "benchmark":
             cmd_benchmark(args)
+        elif args.command == "server":
+            cmd_server(args)
     except WeightStreamError as e:
         print(f"Error: {e}", file=sys.stderr)
         sys.exit(1)
@@ -320,3 +342,41 @@ def cmd_benchmark(args):
 
 if __name__ == "__main__":
     main()
+
+
+def cmd_server(args):
+    """Start the weight-streaming API server."""
+    import logging
+    
+    logging.basicConfig(
+        level=logging.DEBUG if args.verbose else logging.INFO,
+        format="%(levelname)s: %(name)s: %(message)s",
+    )
+    
+    import uvicorn
+    import os
+    
+    # Set auto-load env vars if --model specified
+    if args.model:
+        os.environ["WS_AUTO_MODEL_PATH"] = args.model
+        os.environ["WS_AUTO_MODEL_ID"] = args.model_id
+        os.environ["WS_BUFFER_MB"] = str(args.buffer_mb)
+        os.environ["WS_N_CTX"] = str(args.n_ctx)
+        if args.n_threads:
+            os.environ["WS_N_THREADS"] = str(args.n_threads)
+    
+    print(f"\n  Weight Streaming API Server v0.11.0")
+    print(f"  Listening on http://{args.host}:{args.port}")
+    print(f"  API docs: http://{args.host}:{args.port}/docs")
+    if args.model:
+        print(f"  Auto-load: {args.model} (id={args.model_id})")
+    print(f"  Press Ctrl+C to stop\n")
+    
+    uvicorn.run(
+        "weight_stream.server.api_server:create_app",
+        host=args.host,
+        port=args.port,
+        log_level="debug" if args.verbose else "info",
+        factory=True,
+    )
+
