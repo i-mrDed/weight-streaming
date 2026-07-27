@@ -79,7 +79,10 @@ class TimingConfig:
     nvme_queue_depth: int = 64       # NVMe command queue depth
     
     # CPU compute
-    compute_time_per_token_us: int = 350_000  # 350ms per token (target)
+    # Source: EXP-004 real HW benchmark (Qwen1.5-MoE-A2.7B → K3 scaling)
+    # Qwen measured: 44ms/token (CPU, 2.7B active params Q2_K)
+    # K3 scaled: 44ms * (50B active / 2.7B active) ≈ 815ms
+    compute_time_per_token_us: int = 815_000  # 815ms per token (from EXP-004)
     draft_time_us: int = 3_000                # 3ms draft head
     predictor_time_us: int = 2_000            # 2ms MLP prediction
     scheduler_overhead_us: int = 500          # 0.5ms scheduler

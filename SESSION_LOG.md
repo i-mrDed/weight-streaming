@@ -79,6 +79,39 @@
 
 ---
 
+## [S007] — 2026-07-27 — Simulator Update + Re-run with Real Timing
+
+**🎯 เป้าหมาย:** อัปเดต simulator timing (815ms) + re-run experiments
+
+### ✅ สิ่งที่ทำ
+- อัปเดต `config.py` timing: `compute_time_per_token_us = 350000 → 815000`
+- Re-run buffer sweep (EXP-001 v2): **LRU beats LFU for shared MoE**
+- Re-run accuracy sweep (EXP-002 v2): conclusions unchanged
+- วิเคราะห์ bottleneck definitively จาก real hardware data
+
+### 🔬 Definitive Findings (จาก real hardware benchmark + simulator re-run)
+
+| Parameter | Value |
+|-----------|-------|
+| Compute (K3 on CPU) | 815ms/token = 1.23 tok/s |
+| I/O overhead range | 0-67ms (0-8% of total) |
+| System bottleneck | **~92% compute-bound** |
+| Buffer role | **RAM reduction** (enables 1.4TB model on 64MB RAM) |
+| Best eviction | **LRU** (93.8% at 64MB, 98.9% at 512MB) |
+| Predictor role | Minor (cold start only) |
+
+### ⚡ Design Changes (update to ARCHITECTURE.md needed)
+- LRU → default eviction (was LFU after EXP-001, now LRU for shared mode)
+- Buffer size → 64 MB sufficient (was 512 MB)
+- Predictor → keep heuristic, no MLP needed
+- Priority boost → OFF (LRU doesn't use it)
+
+### ⏭️ ถัดไป
+- สรุป architecture decision เป็น ADR-003 (real HW findings)
+- ตัดสินใจ: Phase 3c — prototype abstraction layer? หรือสรุป project?
+
+---
+
 ## [S006] — 2026-07-27 — Phase 3b: Real Hardware Benchmark
 
 **🎯 เป้าหมาย:** วัด compute time จริงของ MoE model บน consumer hardware

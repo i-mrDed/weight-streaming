@@ -10,10 +10,10 @@
 
 | # | วันที่ | หัวข้อ | สถานะ | สรุป |
 |---|-------|--------|-------|------|
-| 001 | 2026-07-27 | Buffer Size & Eviction Policy | ✅ Complete | LFU 512 MB → 78.2% hit rate |
-| 002 | 2026-07-27 | Predictor Accuracy Impact | ✅ Complete | LFU flat (76.2%), LRU+P decays with accuracy (priority clogging), throughput compute-bound (2.73 t/s flat) |
-| 003 | 2026-07-27 | Timing & Overlap Efficiency | ✅ Complete | 76.6% overlap efficiency, 2.74 tok/s |
-| 004 | 2026-07-27 | Real MoE Hardware Benchmark | ✅ Complete | K3 I/O-BOUND: compute 815ms vs NVMe 1786ms. Predictor+buffer CRITICAL |
+| 001 | 2026-07-27 | Buffer Size & Eviction Policy | ✅ Complete (v2) | v1 (simulated 350ms): LFU 512 MB → 78.2%. v2 (real 815ms): **LRU 64MB → 93.8%** for shared MoE |
+| 002 | 2026-07-27 | Predictor Accuracy Impact | ✅ Complete (v2) | v1: 2.73 t/s flat. v2: 1.15-1.23 t/s, LRU flat at 98.9%, predictor still not critical |
+| 003 | 2026-07-27 | Timing & Overlap Efficiency | ✅ Complete | 76.6% overlap efficiency (simulated), superseded by EXP-004 real data |
+| 004 | 2026-07-27 | Real MoE Hardware Benchmark | ✅ Complete | K3: 815ms compute vs 67ms max I/O stall → ~92% compute-bound. LRU 64MB sufficient |
 
 ---
 

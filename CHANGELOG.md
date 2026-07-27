@@ -104,7 +104,35 @@
 
 ---
 
-## [0.4.0] - 2026-07-27
+## [0.8.0] - 2026-07-27
+
+### 🔄 Simulator Update + Re-run (EXP-001/002 v2 with Real Timing)
+
+- **Updated `config.py` timing**: `compute_time_per_token_us`: 350,000 → **815,000** (from EXP-004 real HW benchmark)
+- **Re-run EXP-001 (buffer sweep): LRU beats LFU** for shared MoE access pattern
+  - LRU 64 MB → 93.8% hit rate (vs LFU 27.2% at same size!)
+  - LRU 512 MB → 98.9% hit rate, 1ms stall, 1.23 t/s
+  - Shared access pattern (72/80 identical layers) creates extreme temporal locality → LRU dominates
+- **Re-run EXP-002 (accuracy sweep):** conclusions unchanged — LFU flat, LRU+P clogging
+- **Definitive Bottleneck Analysis:**
+  - Compute: 815ms/token (92% of total time)
+  - I/O stall range: 0-67ms (0-8% of total time)
+  - **System is ~92% compute-bound** → buffer enables inference, not throughput
+- **Design Corrections (vs v0.7.0 I/O-BOUND claim):**
+  - v0.7.0 said "I/O-BOUND" — CORRECTED: system is compute-bound
+  - Initial NVMe estimate (1786ms) was misleading — real I/O is only 67ms stall
+  - Predictor/buffer/priority boost do NOT critically affect throughput
+  - Their real value: enabling 1.4TB model on 64MB RAM
+
+#### ไฟล์ที่สร้าง/แก้ไข
+- `simulator/config.py` — timing 815000us (from EXP-004)
+- `simulator/run.py` — sweep-buffer now shows t/s + stall
+- `research/experiments/index.md` — อัปเดต v2 findings
+- `TASKS.md` — อัปเดต
+- `SESSION_LOG.md` — เพิ่ม S007
+- `CHANGELOG.md` — อัปเดต
+
+---
 
 ### 🏗️ Phase 2: Architecture Design Complete
 

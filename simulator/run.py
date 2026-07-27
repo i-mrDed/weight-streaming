@@ -210,8 +210,9 @@ def run_simulation(config: SimConfig, verbose: bool = False) -> SimulationResult
 
 def sweep_buffer_size():
     """Sweep: buffer size vs hit rate"""
-    print("\nSWEEP: Buffer Size vs Hit Rate")
-    print("-" * 50)
+    timing_ms = SimConfig().timing.compute_time_per_token_us / 1000
+    print(f"\nSWEEP: Buffer Size vs Hit Rate (timing: {timing_ms:.0f}ms/token)")
+    print("-" * 60)
     
     sizes = [64, 128, 256, 512, 1024]
     policies = ["lru", "lfu", "lru_priority"]
@@ -226,8 +227,10 @@ def sweep_buffer_size():
             
             result = run_simulation(cfg)
             bs = result.buffer_stats
-            print(f"  {size:>4} MB → hit rate {bs['hit_rate']*100:5.1f}% "
-                  f"(evict: {bs['evictions']})")
+            ts = result.timing_stats
+            print(f"  {size:>4} MB -> hit={bs['hit_rate']*100:5.1f}%  "
+                  f"t/s={ts['tokens_per_sec']:.2f}  "
+                  f"stall={ts['avg_stall_ms']:5.0f}ms")
 
 
 def sweep_predictor():
