@@ -1,11 +1,32 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "weight-streaming"
-version = "0.1.0"
+version = "0.10.1"
 description = "Run LLMs larger than your RAM — speculative weight streaming from NVMe"
 readme = "README.md"
 license = { text = "MIT" }
 authors = [
     { name = "Weight Streaming Contributors" },
+]
+keywords = [
+    "llm", "inference", "moe", "streaming", "nvme", "mmap",
+    "mixture-of-experts", "weight-streaming", "large-language-model",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Operating System :: Microsoft :: Windows",
 ]
 requires-python = ">=3.11"
 dependencies = [
@@ -19,14 +40,11 @@ all = ["weight-streaming[llama-cpp]"]
 [project.urls]
 homepage = "https://github.com/weight-streaming/weight-streaming"
 source = "https://github.com/weight-streaming/weight-streaming"
-documentation = "https://github.com/weight-streaming/weight-streaming/docs"
+documentation = "https://github.com/weight-streaming/weight-streaming"
+issues = "https://github.com/weight-streaming/weight-streaming/issues"
 
 [project.scripts]
 weight-streaming = "weight_stream.cli.main:main"
-
-[build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 include = ["weight_stream*"]

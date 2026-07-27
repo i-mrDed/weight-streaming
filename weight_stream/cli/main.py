@@ -1,67 +1,170 @@
 """
-weight-streaming CLI: Run GGUF models with speculative weight streaming.
+weight-streaming CLI — run GGUF models with speculative weight streaming.
 
 Usage:
     python -m weight_stream run model.gguf --prompt "Hello" --max-tokens 100
     python -m weight_stream stats model.gguf
     python -m weight_stream benchmark model.gguf --buffer-mb 64
+    python -m weight_stream --help
 """
+
 import argparse
 import json
 import logging
 import sys
 import time
 from pathlib import Path
+from typing import Optional
 
 from ..backends.llama_cpp import WeightStreamModel
+from ..core.exceptions import WeightStreamError, ModelError
 
 
 def main():
     parser = argparse.ArgumentParser(
-        description="weight-streaming: Run LLMs larger than your RAM",
+        prog="weight-streaming",
+        description="Run LLMs larger than your RAM — speculative weight streaming from NVMe",
+        epilog="Example: python -m weight_stream run model.gguf --prompt 'Hello' --max-tokens 100",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--version", action="version",
+        version=f"weight-streaming v{_get_version()}",
     )
     sub = parser.add_subparsers(dest="command", required=True)
     
-    # run
+    # ── run ─────────────────────────────────────────────────────────
     run_p = sub.add_parser("run", help="Generate text with weight streaming")
-    run_p.add_argument("model", type=str, help="Path to GGUF model")
-    run_p.add_argument("--prompt", type=str, default="Hello", help="Input prompt")
-    run_p.add_argument("--max-tokens", type=int, default=128, help="Max tokens to generate")
-    run_p.add_argument("--buffer-mb", type=int, default=64, help="Buffer size in MB")
-    run_p.add_argument("--temperature", type=float, default=0.7, help="Sampling temperature")
-    run_p.add_argument("--verbose", action="store_true", help="Enable debug logging")
-    run_p.add_argument("--json", action="store_true", help="Output as JSON")
+    run_p.add_argument("model", type=str, help="Path to GGUF model file")
+    run_p.add_argument("--prompt", "-p", type=str, default="Hello",
+                       help="Input prompt text (default: 'Hello')")
+    run_p.add_argument("--max-tokens", "-n", type=int, default=128,
+                       help="Maximum tokens to generate (default: 128)")
+    run_p.add_argument("--buffer-mb", "-b", type=int, default=64,
+                       help="Buffer size in MB (default: 64)")
+    run_p.add_argument("--temperature", "-t", type=float, default=0.7,
+                       help="Sampling temperature 0.0-2.0 (default: 0.7)")
+    run_p.add_argument("--verbose", "-v", action="store_true",
+                       help="Enable debug logging")
+    run_p.add_argument("--json", "-j", action="store_true",
+                       help="Output results as JSON (machine-readable)")
     
-    # stats
-    stats_p = sub.add_parser("stats", help="Show model metadata")
-    stats_p.add_argument("model", type=str, help="Path to GGUF model")
-    stats_p.add_argument("--buffer-mb", type=int, default=64)
+    # ── stats ────────────────────────────────────────────────────────
+    stats_p = sub.add_parser("stats", help="Show model metadata and buffer configuration")
+    stats_p.add_argument("model", type=str, help="Path to GGUF model file")
+    stats_p.add_argument("--buffer-mb", "-b", type=int, default=64,
+                         help="Buffer size in MB for estimation (default: 64)")
     
-    # benchmark
-    bench_p = sub.add_parser("benchmark", help="Benchmark throughput")
-    bench_p.add_argument("model", type=str, help="Path to GGUF model")
-    bench_p.add_argument("--buffer-mb", type=int, default=64)
-    bench_p.add_argument("--max-tokens", type=int, default=256)
-    bench_p.add_argument("--no-warmup", action="store_true")
+    # ── benchmark ────────────────────────────────────────────────────
+    bench_p = sub.add_parser("benchmark", help="Benchmark generation throughput")
+    bench_p.add_argument("model", type=str, help="Path to GGUF model file")
+    bench_p.add_argument("--buffer-mb", "-b", type=int, default=64,
+                          help="Buffer size in MB (default: 64)")
+    bench_p.add_argument("--max-tokens", "-n", type=int, default=256,
+                          help="Tokens to generate for measurement (default: 256)")
+    bench_p.add_argument("--no-warmup", action="store_true",
+                          help="Skip warmup phase (less accurate but faster)")
+    bench_p.add_argument("--json", "-j", action="store_true",
+                          help="Output results as JSON")
     
     args = parser.parse_args()
     
-    if args.command == "run":
-        cmd_run(args)
-    elif args.command == "stats":
-        cmd_stats(args)
-    elif args.command == "benchmark":
-        cmd_benchmark(args)
+    # Route command
+    try:
+        if args.command == "run":
+            cmd_run(args)
+        elif args.command == "stats":
+            cmd_stats(args)
+        elif args.command == "benchmark":
+            cmd_benchmark(args)
+    except WeightStreamError as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nInterrupted by user", file=sys.stderr)
+        sys.exit(130)
+
+
+def _get_version() -> str:
+    """Return package version without importing __init__ conflicts."""
+    try:
+        from weight_stream import __version__
+        return __version__
+    except ImportError:
+        return "unknown"
+
+
+def _setup_logging(verbose: bool = False):
+    """Configure logging with clean format."""
+    level = logging.DEBUG if verbose else logging.WARNING
+    logging.basicConfig(
+        level=level,
+        format="%(levelname)s: %(message)s",
+        force=True,
+    )
+
+
+def _print_stats_table(stats: dict):
+    """Print formatted statistics table."""
+    buf = stats.get("buffer", {})
+    pref = stats.get("prefetcher", {})
+    gen = stats.get("generation", {})
+    page = stats.get("page_cache", {})
+    
+    print(" " * 4 + "Buffer Statistics:")
+    print(f"{'':>6}Capacity:    {buf.get('capacity_shards', '?')} shards ({buf.get('capacity_mb', '?')} MB)")
+    print(f"{'':>6}Hot shards:  {buf.get('hot_shards', '?')} / {buf.get('capacity_shards', '?')}")
+    print(f"{'':>6}Hit rate:    {buf.get('hit_rate', 0):.1%}")
+    print(f"{'':>6}Hits:        {buf.get('hits', 0)}")
+    print(f"{'':>6}Misses:      {buf.get('misses', 0)}")
+    print(f"{'':>6}Evictions:   {buf.get('evictions', 0)}")
+    print(f"{'':>6}Prefetches:  {buf.get('prefetches', 0)}")
+    print()
+    
+    if pref:
+        print(" " * 4 + "Prefetcher:")
+        print(f"{'':>6}Queued:      {pref.get('queued', 0)}")
+        print(f"{'':>6}Prefetched:  {pref.get('prefetched', 0)}")
+        print()
+    
+    if gen:
+        print(" " * 4 + "Generation:")
+        print(f"{'':>6}Tokens:      {gen.get('token_count', 0)}")
+        print(f"{'':>6}Time:        {gen.get('elapsed', 0):.2f}s")
+        print(f"{'':>6}Speed:       {gen.get('tokens_per_sec', 0):.2f} tok/s")
+        print()
+    
+    if page:
+        print(" " * 4 + "Page Cache (OS mmap):")
+        ratio = page.get("resident_ratio", 0)
+        print(f"{'':>6}Resident:    {ratio:.1%} in physical RAM")
+        print(f"{'':>6}Size:        {page.get('resident_gb', 0):.1f} GB / {page.get('total_gb', 0):.1f} GB")
+        print()
 
 
 def cmd_run(args):
-    logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
-        format="%(message)s",
-    )
+    """Generate text with weight streaming."""
+    _setup_logging(args.verbose)
+    
+    # Validate model file exists early
+    model_path = Path(args.model)
+    if not model_path.exists():
+        print(f"Error: model file not found: {args.model}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Validate parameters
+    if args.buffer_mb < 1:
+        print("Error: --buffer-mb must be >= 1", file=sys.stderr)
+        sys.exit(1)
+    if args.max_tokens < 1:
+        print("Error: --max-tokens must be >= 1", file=sys.stderr)
+        sys.exit(1)
+    if not 0 <= args.temperature <= 2:
+        print("Error: --temperature must be between 0.0 and 2.0", file=sys.stderr)
+        sys.exit(1)
     
     model = WeightStreamModel(
-        args.model,
+        str(model_path),
         buffer_mb=args.buffer_mb,
         verbose=args.verbose,
     )
@@ -81,109 +184,135 @@ def cmd_run(args):
             }
             print(json.dumps(result, indent=2, ensure_ascii=False))
         else:
-            sys.stdout.buffer.write(f"\n{'='*60}\n".encode('utf-8'))
-            sys.stdout.buffer.write(output.encode('utf-8', errors='replace'))
-            sys.stdout.buffer.write(f"\n{'='*60}\n".encode('utf-8'))
+            # Print generation output
+            print("\n" + "=" * 60)
+            sys.stdout.buffer.write(output.encode("utf-8", errors="replace"))
+            print("\n" + "=" * 60)
+            print()
             
+            # Print stats
             stats = model.get_stats()
-            sys.stdout.buffer.write(
-                f"\nBuffer: {stats['buffer']['hot_shards']}/{stats['buffer']['capacity_shards']} shards hot, "
-                f"hit rate: {stats['buffer']['hit_rate']:.1%}\n"
-                f"Prefetches: {stats['prefetcher']['prefetched']}"
-                f"\n\nNOTE: Expert routing interception requires C++ patch (Phase 4).\n"
-                f"      Current hit rate reflects tracked prefetches, not actual weight access.\n".encode('utf-8')
-            )
-            stats = model.get_stats()
-            print(f"\nBuffer hit rate: {stats['buffer']['hit_rate']:.1%}")
-            print(f"  Hits: {stats['buffer']['hits']}, "
-                  f"Misses: {stats['buffer']['misses']}")
-            print(f"  Hot shards: {stats['buffer']['hot_shards']}/"
-                  f"{stats['buffer']['capacity_shards']}")
-            if stats['prefetcher']['prefetched'] > 0:
-                print(f"  Prefetches: {stats['prefetcher']['prefetched']}")
+            _print_stats_table(stats)
+            
+            # Buffer hit rate note
+            hit = stats.get("buffer", {}).get("hit_rate", 0)
+            if hit == 0:
+                print(
+                    "  Note: Hit rate is 0% because expert routing is opaque\n"
+                    "  from Python. The buffer tracks prefetched shards, not\n"
+                    "  actual weight access. Hit rate will be meaningful with\n"
+                    "  the C++ backend patch.\n"
+                )
+    
+    except ModelError as e:
+        print(f"Model error: {e}", file=sys.stderr)
+        sys.exit(1)
     finally:
         model.close()
 
 
 def cmd_stats(args):
-    """Show model metadata and buffer configuration"""
+    """Show model metadata and buffer configuration."""
     path = Path(args.model)
     if not path.exists():
         print(f"Error: file not found: {args.model}", file=sys.stderr)
         sys.exit(1)
     
     file_size = path.stat().st_size
-    print(f"Model: {path.name}")
-    print(f"  Path: {path.absolute()}")
-    print(f"  Size: {file_size / 1024**3:.2f} GB ({file_size:,} bytes)")
-    print(f"  Shards: {(file_size + (4*1024*1024) - 1) // (4*1024*1024)} "
-          f"(at 4 MB each)")
-    print(f"Buffer: {args.buffer_mb} MB")
-    print(f"  Hot set: ~{args.buffer_mb // 4} shards")
-    print(f"  Estimated mode: ", end="")
+    shard_size = 4 * 1024 * 1024  # 4 MB
     
-    # Heuristic based on file size
-    if file_size > 100 * 1024**3:  # >100 GB
+    print(f"Model: {path.name}")
+    print(f"{'':>4}Path:       {path.absolute()}")
+    print(f"{'':>4}Size:       {file_size / 1024**3:.2f} GB ({file_size:,} bytes)")
+    print(f"{'':>4}Shards:     {(file_size + shard_size - 1) // shard_size:,} (at 4 MB each)")
+    print()
+    print(f"Buffer: {args.buffer_mb} MB")
+    print(f"{'':>4}Hot set:    ~{args.buffer_mb // 4} shards")
+    print(f"{'':>4}Mode:       ", end="")
+    
+    if file_size > 100 * 1024**3:
         print("Streaming required (file >> RAM)")
     elif file_size > args.buffer_mb * 1024**2:
         print("Partial streaming (buffer < file)")
     else:
         print("Fits in buffer (file <= buffer)")
     
-    print(f"\nTo run: python -m weight_stream run \"{path}\" --prompt \"Hello\"")
+    print()
+    n_tokens_estimate = int(file_size / 2_000_000)  # ~2 bytes/param for Q2_K
+    print(f"  Estimated tokens: ~{n_tokens_estimate:,} in file")
+    print(f"  Context window:   default 512 tokens (configurable)")
+    print()
+    print(f"  Run: python -m weight_stream run \"{path}\" --prompt \"Hello\"")
 
 
 def cmd_benchmark(args):
-    """Run throughput benchmark"""
-    logging.basicConfig(level=logging.INFO, format="%(message)s")
+    """Run throughput benchmark with optional warmup."""
+    _setup_logging(verbose=False)
     
-    # Warmup
+    model_path = Path(args.model)
+    if not model_path.exists():
+        print(f"Error: file not found: {args.model}", file=sys.stderr)
+        sys.exit(1)
+    
+    # Warmup phase
     if not args.no_warmup:
-        print("Warming up...")
+        print("Warming up (loading model into cache)...", end=" ", flush=True)
         warmup = WeightStreamModel(
-            args.model,
+            str(model_path),
             buffer_mb=args.buffer_mb,
             verbose=False,
         )
         try:
-            warmup.generate("Hello", max_tokens=5)
+            warmup.generate("Hello world", max_tokens=5)
         finally:
             warmup.close()
-        print("Warmup complete.\n")
+        print("done.")
     
-    # Benchmark
-    print(f"Benchmarking: {args.model}")
-    print(f"  Buffer: {args.buffer_mb} MB")
-    print(f"  Max tokens: {args.max_tokens}")
-    print()
+    # Benchmark phase
+    print(f"\nBenchmarking: {model_path.name}")
+    print(f"{'':>4}Buffer:     {args.buffer_mb} MB")
+    print(f"{'':>4}Max tokens: {args.max_tokens}")
     
     model = WeightStreamModel(
-        args.model,
+        str(model_path),
         buffer_mb=args.buffer_mb,
         verbose=False,
     )
     
     try:
         start_time = time.time()
-        _ = model.generate("The future of AI is", max_tokens=args.max_tokens)
+        output = model.generate(
+            "The future of AI is",
+            max_tokens=args.max_tokens,
+        )
         elapsed = time.time() - start_time
-        
         stats = model.get_stats()
-        tokens = stats['buffer']['total_accesses']
-        # We can't count actual tokens from generate, so estimate
-        # The generate method doesn't return token count easily
         
-        stats_output = model.get_stats()
-        print(f"\n{'='*60}")
-        print(f"Results:")
-        print(f"  Elapsed: {elapsed:.2f}s")
-        print(f"  Buffer hit rate: {stats_output['buffer']['hit_rate']:.1%}")
-        print(f"  Total accesses: {stats_output['buffer']['total_accesses']}")
-        print(f"  Hits: {stats_output['buffer']['hits']}")
-        print(f"  Misses: {stats_output['buffer']['misses']}")
-        print(f"  Evictions: {stats_output['buffer']['evictions']}")
-        print(f"  Prefetches: {stats_output['prefetcher']['prefetched']}")
-        print(f"{'='*60}")
+        # Estimate tokens generated
+        gen_stats = stats.get("generation", {})
+        token_count = gen_stats.get("token_count", 0)
+        tok_per_sec = token_count / elapsed if elapsed > 0 and token_count > 0 else 0
+        
+        if args.json:
+            result = {
+                "model": str(model_path),
+                "buffer_mb": args.buffer_mb,
+                "max_tokens": args.max_tokens,
+                "elapsed_seconds": round(elapsed, 3),
+                "tokens_generated": token_count,
+                "tokens_per_second": round(tok_per_sec, 2),
+                "stats": stats,
+            }
+            print(json.dumps(result, indent=2, ensure_ascii=False))
+        else:
+            print(f"\n{'=' * 60}")
+            print(f"Results:")
+            print(f"{'':>4}Elapsed:    {elapsed:.2f}s")
+            print(f"{'':>4}Tokens:     {token_count}")
+            print(f"{'':>4}Speed:      {tok_per_sec:.2f} tok/s")
+            print()
+            _print_stats_table(stats)
+            print(f"{'=' * 60}")
     
     finally:
         model.close()

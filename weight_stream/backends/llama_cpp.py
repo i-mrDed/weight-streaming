@@ -29,6 +29,8 @@ from ..core.predictor import HeuristicPredictor
 from ..core.prefetcher import Prefetcher
 from ..gguf import GGUFParser
 from ..io.win_perf import WindowsPageMonitor
+from ._base import WeightStreamBackend
+from ..core.exceptions import ModelError, GenerationError, ConfigError
 
 logger = logging.getLogger(__name__)
 
@@ -43,7 +45,7 @@ def _get_llama():
     return _llama_cpp
 
 
-class WeightStreamModel:
+class WeightStreamModel(WeightStreamBackend):
     """
     Weight-streaming model that wraps llama-cpp-python with speculative prefetch.
     
@@ -68,7 +70,14 @@ class WeightStreamModel:
         verbose: bool = False,
         **kwargs,
     ):
-        self.model_path = model_path
+        # Validate parameters
+        if buffer_mb < 1:
+            raise ConfigError("buffer_mb must be >= 1", {"buffer_mb": buffer_mb})
+        if n_ctx < 8:
+            raise ConfigError("n_ctx must be >= 8", {"n_ctx": n_ctx})
+        
+        self._model_path = model_path
+        self._initialized = False
         self.buffer_mb = buffer_mb
         self.n_ctx = n_ctx
         self.verbose = verbose
@@ -76,21 +85,42 @@ class WeightStreamModel:
         if verbose:
             logging.basicConfig(level=logging.DEBUG)
         
-        # Resolve file path
-        model_path = os.path.abspath(model_path)
-        file_size = os.path.getsize(model_path)
+        # Resolve file path — early validation
+        try:
+            resolved_path = os.path.abspath(model_path)
+            if not os.path.isfile(resolved_path):
+                raise ModelError(
+                    f"Model file not found: {model_path}",
+                    model_path=model_path,
+                )
+            file_size = os.path.getsize(resolved_path)
+        except OSError as e:
+            raise ModelError(
+                f"Cannot access model file: {e}",
+                model_path=model_path,
+                details={"os_error": str(e)},
+            )
+        
+        model_path = resolved_path
         logger.info(
             f"Loading model: {model_path} "
             f"({file_size / 1024**3:.2f} GB)"
         )
         
         # Step 1: Open the model file as mmap (independent of llama-cpp-python)
-        self._file = open(model_path, "rb")
-        self._mmap = mmap.mmap(
-            self._file.fileno(),
-            file_size,
-            access=mmap.ACCESS_READ,
-        )
+        try:
+            self._file = open(model_path, "rb")
+            self._mmap = mmap.mmap(
+                self._file.fileno(),
+                file_size,
+                access=mmap.ACCESS_READ,
+            )
+        except (OSError, ValueError) as e:
+            raise ModelError(
+                f"Failed to mmap model file: {e}",
+                model_path=model_path,
+                details={"os_error": str(e)},
+            )
         logger.info(f"File mmap'd: {file_size / 1024**3:.2f} GB")
         
         # Step 2: Create buffer + predictor + prefetcher
@@ -106,9 +136,16 @@ class WeightStreamModel:
         )
         
         # Step 3: Parse GGUF for expert-aware tensor mapping
-        self._gguf = GGUFParser(model_path)
-        self._expert_map = self._gguf.get_expert_map()
-        self._expert_tensors = self._gguf.get_expert_tensors()
+        try:
+            self._gguf = GGUFParser(model_path)
+            self._expert_map = self._gguf.get_expert_map()
+            self._expert_tensors = self._gguf.get_expert_tensors()
+        except Exception as e:
+            raise ModelError(
+                f"Failed to parse GGUF metadata: {e}",
+                model_path=model_path,
+                details={"parse_error": str(e)},
+            )
         logger.info(
             f"Expert map: {len(self._expert_map)} layers, "
             f"{sum(len(e) for e in self._expert_map.values())} experts total, "
@@ -116,15 +153,25 @@ class WeightStreamModel:
         )
         
         # Step 4: Open the model with llama-cpp-python
-        llm = _get_llama()
-        self._llm = llm.Llama(
-            model_path=model_path,
-            n_ctx=n_ctx,
-            n_threads=n_threads or os.cpu_count() or 4,
-            use_mmap=True,
-            verbose=verbose,
-            **kwargs,
-        )
+        try:
+            llm = _get_llama()
+            self._llm = llm.Llama(
+                model_path=model_path,
+                n_ctx=n_ctx,
+                n_threads=n_threads or os.cpu_count() or 4,
+                use_mmap=True,
+                verbose=verbose,
+                **kwargs,
+            )
+        except Exception as e:
+            # Clean up mmap before re-raising
+            self._mmap.close()
+            self._file.close()
+            raise ModelError(
+                f"Failed to load model with llama-cpp-python: {e}",
+                model_path=model_path,
+                details={"load_error": str(e)},
+            )
         
         # Metadata
         self._metadata = self._llm.metadata if hasattr(self._llm, 'metadata') else {}
@@ -171,6 +218,7 @@ class WeightStreamModel:
         self._warm_up_buffer()
         
         self.prefetcher.start()
+        self._initialized = True
         logger.info("WeightStreamModel ready")
     
     def generate(
@@ -187,52 +235,61 @@ class WeightStreamModel:
         During generation, the prefetcher runs in background,
         predicting and loading hot shards during compute time.
         """
+        if not self.is_loaded:
+            raise GenerationError("Model not loaded", details={"model_path": self._model_path})
+        
         output = ""
-        
-        # Track which shards are accessed during generation
         shard_access_log = []
-        
-        # Use streaming to track per-token progress
-        stream = self._llm(
-            prompt,
-            max_tokens=max_tokens,
-            temperature=temperature,
-            top_p=top_p,
-            stream=True,
-            **kwargs,
-        )
-        
         start_time = time.time()
         token_count = 0
         
-        for chunk in stream:
-            if "choices" in chunk and len(chunk["choices"]) > 0:
-                text = chunk["choices"][0].get("text", "")
-                output += text
-                token_count += 1
-                
-                # Record file access pattern for this token
-                # We can't see expert routing, but we can infer from
-                # which file regions were accessed (via buffer stats)
-                
-                        # Expert-aware prefetch: load next token's experts during compute
-                # Since expert routing is opaque from Python, we prefetch via
-                # round-robin across layers. Each token loads ~1 layer worth of experts.
-                if token_count > 0 and token_count % 3 == 0:
-                    target_layer = (token_count // 3) % max(len(self._expert_map), 1)
-                    self._prefetch_layer_experts(target_layer)
-                
-                # Sample page cache every 5 tokens
-                if token_count % 5 == 0 and self._page_monitor:
-                    self._page_monitor.sample_resident_pages()
-                
-                # Record buffer state
-                if hasattr(self.buffer, 'get_hot_set'):
-                    shard_access_log.append({
-                        'token': token_count,
-                        'hot_shards': len(self.buffer),
-                        'hit_rate': self.buffer.hit_rate,
-                    })
+        # Use streaming to track per-token progress
+        try:
+            stream = self._llm(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                stream=True,
+                **kwargs,
+            )
+        except Exception as e:
+            raise GenerationError(
+                f"Inference engine error: {e}",
+                details={"error": str(e)},
+            )
+        
+        try:
+            for chunk in stream:
+                if "choices" in chunk and len(chunk["choices"]) > 0:
+                    text = chunk["choices"][0].get("text", "")
+                    output += text
+                    token_count += 1
+                    
+                    # Expert-aware prefetch: load next token's experts during compute
+                    # Since expert routing is opaque from Python, we prefetch via
+                    # round-robin across layers. Each token loads ~1 layer worth of experts.
+                    if token_count > 0 and token_count % 3 == 0:
+                        target_layer = (token_count // 3) % max(len(self._expert_map), 1)
+                        self._prefetch_layer_experts(target_layer)
+                    
+                    # Sample page cache every 5 tokens
+                    if token_count % 5 == 0 and self._page_monitor:
+                        self._page_monitor.sample_resident_pages()
+                    
+                    # Record buffer state
+                    if hasattr(self.buffer, 'get_hot_set'):
+                        shard_access_log.append({
+                            'token': token_count,
+                            'hot_shards': len(self.buffer),
+                            'hit_rate': self.buffer.hit_rate,
+                        })
+        except Exception as e:
+            raise GenerationError(
+                f"Generation failed at token {token_count}: {e}",
+                token_count=token_count or None,
+                details={"error": str(e)},
+            )
         
         elapsed = time.time() - start_time
         tokens_per_sec = token_count / elapsed if elapsed > 0 else 0
@@ -250,30 +307,98 @@ class WeightStreamModel:
             f"{cache_info}"
         )
         
+        # Save generation stats for get_stats()
+        self._last_gen_stats = {
+            'token_count': token_count,
+            'elapsed': elapsed,
+            'tokens_per_sec': tokens_per_sec,
+            'prompt': prompt[:50] + ('...' if len(prompt) > 50 else ''),
+        }
+        
         return output
     
     def close(self):
-        """Clean up resources"""
-        self.prefetcher.stop()
-        self._llm.close()
+        """Clean up all resources. Safe to call multiple times."""
+        if not self.is_loaded:
+            return
+        
+        # Stop prefetcher first
+        if hasattr(self, 'prefetcher') and self.prefetcher:
+            self.prefetcher.stop()
+        
+        # Close inference engine
+        if hasattr(self, '_llm') and self._llm:
+            try:
+                self._llm.close()
+            except Exception:
+                pass
+            self._llm = None
+        
         # Release numpy buffer before closing mmap
         if hasattr(self, '_mmap_buf') and self._mmap_buf is not None:
             self._mmap_buf = None
-        if self._mmap:
-            self._mmap.close()
-        if self._file:
-            self._file.close()
-        if hasattr(self, '_gguf'):
-            self._gguf.close()
+        
+        # Close mmap
+        if hasattr(self, '_mmap') and self._mmap:
+            try:
+                self._mmap.close()
+            except BufferError:
+                pass  # Some references may still exist
+            self._mmap = None
+        
+        # Close file handle
+        if hasattr(self, '_file') and self._file:
+            try:
+                self._file.close()
+            except Exception:
+                pass
+            self._file = None
+        
+        # Close GGUF parser
+        if hasattr(self, '_gguf') and self._gguf:
+            try:
+                self._gguf.close()
+            except Exception:
+                pass
+            self._gguf = None
+        
+        self._initialized = False
+        logger.debug("WeightStreamModel closed")
     
     def get_stats(self) -> Dict[str, Any]:
         """Return all system statistics"""
+        buf_stats = self.buffer.get_stats()
+        buf_stats['capacity_mb'] = self.buffer_mb
+        
+        pref_stats = {
+            'prefetched': self.prefetcher.prefetched_count,
+            'useful': getattr(self.prefetcher, 'useful_prefetches', 0),
+            'queued': self.prefetcher._queue.qsize() if hasattr(self.prefetcher, '_queue') else 0,
+        }
+        
+        gen_stats = {}
+        if hasattr(self, '_last_gen_stats'):
+            gen_stats = self._last_gen_stats
+        
+        page_stats = {}
+        if self._page_monitor:
+            page_stats = {
+                'resident_ratio': self._page_monitor.get_resident_ratio(),
+                'resident_gb': (self._page_monitor.get_resident_ratio() 
+                               * self._page_monitor.mmap_size / 1024**3),
+                'total_gb': self._page_monitor.mmap_size / 1024**3,
+            }
+        
         return {
-            'buffer': self.buffer.get_stats(),
+            'buffer': buf_stats,
             'predictor': self.predictor.get_stats(),
-            'prefetcher': {
-                'prefetched': self.prefetcher.prefetched_count,
-                'useful': self.prefetcher.useful_prefetches,
+            'prefetcher': pref_stats,
+            'generation': gen_stats,
+            'page_cache': page_stats,
+            'model': {
+                'path': self._model_path,
+                'arch': self._get_arch(),
+                'n_experts': getattr(self, 'n_experts', 0),
             },
         }
     
@@ -345,8 +470,7 @@ class WeightStreamModel:
         
         logger.debug(f"Predictor warmed: {n_layers}L x {n_experts}E pattern")
     
-    def __enter__(self):
-        return self
-    
-    def __exit__(self, *args):
-        self.close()
+    @property
+    def is_loaded(self) -> bool:
+        """True if the model is loaded."""
+        return hasattr(self, '_llm') and self._llm is not None

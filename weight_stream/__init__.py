@@ -8,6 +8,14 @@ Usage:
     output = model.generate("Hello, world")
 """
 
-__version__ = "0.1.0"
+__version__ = "0.10.1"
 
 from .backends.llama_cpp import WeightStreamModel
+from .core.exceptions import (
+    WeightStreamError,
+    ModelError,
+    BufferError,
+    PrefetchError,
+    GenerationError,
+    ConfigError,
+)

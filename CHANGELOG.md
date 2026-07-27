@@ -62,6 +62,102 @@
 
 ---
 
+## [0.11.0] - 2026-07-27
+
+### 🏭 Phase 6: Production Hardening — Full End-to-End Readiness
+
+> "ปราการด่านสุดท้าย ก่อนก้าวขึ้นเป็น Product end-to-end เต็มตัว"
+
+ครอบคลุม 8 มิติของ Production Readiness:
+
+#### 1. 🔒 Security
+- **GitHub token removed** จาก remote URL (เดิมแปะ ghp_ ใน `.git/config`)
+- Scan git history: **no secrets found** in any committed file
+- **Safe mmap**: `ACCESS_READ` ตลอด (ไม่มีการเปิดเขียน)
+- **`.gitignore` อัปเดต**: เพิ่ม `credentials*`, `secrets*`, `tokens*`, `*.pem`, `*.key`, `.idea/`, `.vscode/`
+- **Path validation**: model path ถูกตรวจสอบก่อนเปิดไฟล์
+- **No eval/exec/subprocess**: zero remote code execution surface
+
+#### 2. 🏗️ Architecture
+- **New**: `backends/_base.py` — abstract base class `WeightStreamBackend`
+  - `generate()`, `close()`, `get_stats()` as abstract methods
+  - Context manager protocol (`__enter__`/`__exit__`)
+  - `model_path`, `is_loaded` properties
+- **`WeightStreamModel` inherits** from `WeightStreamBackend`
+- **`backends/__init__.py` exports**: `WeightStreamBackend`, `WeightStreamModel`
+- **`weight_stream/__init__.py` exports**: exceptions, version sync
+
+#### 3. 🛡️ Error Handling
+- **New**: `core/exceptions.py` — exception hierarchy
+  - `WeightStreamError` (base) → `ModelError`, `BufferError`, `PrefetchError`, `GenerationError`, `ConfigError`
+  - Each exception carries structured `details` dict
+- **Model loading**: wrapped with `ModelError` (file not found, mmap fail, GGUF parse fail, llama-cpp load fail)
+- **Generation**: wrapped with `GenerationError` (engine errors, stream failures)
+- **Parameter validation**: `ConfigError` for `buffer_mb < 1`, `n_ctx < 8`
+- **Close idempotent**: `close()` safe to call multiple times, guards all cleanup
+
+#### 4. 📊 Logging
+- Log format: `"%(levelname)s: %(message)s"` (clean, readable)
+- Appropriate levels: DEBUG for internals, INFO for milestones, WARNING for degradation
+- Page monitor: graceful WARNING instead of stack trace on init failure
+- `force=True` in `logging.basicConfig` for CLI compatibility
+
+#### 5. 🖥️ CLI Polish
+- **`--version`** flag added
+- **`-p`/`-n`/`-b`/`-t`/`-v`/`-j`** short aliases for all options
+- **Parameter validation**: buffer_mb ≥ 1, max_tokens ≥ 1, temperature 0-2
+- **Error display**: `ModelError` → clean "Error: ..." to stderr, exit code 1
+- **Stats table**: pretty-printed with consistent indentation
+- **Hit rate note**: explains why hit rate is 0% (opaque expert routing)
+- **Stats command enhanced**: shows shards, mode, estimated tokens, run command example
+- **Benchmark**: shows elapsed, tokens, tok/s + stats table
+- **JSON output**: all commands support `--json` for machine parsing
+
+#### 6. 🧪 Testing (43 tests, 3 test files)
+- **New**: `tests/test_backend.py` (13 tests)
+  - Interface contract: ABC cannot instantiate, properties work
+  - Error paths: file not found, empty file, invalid params
+  - Integration (Qwen model): load, generate, context manager, close-twice, generate-after-close
+  - Stats structure validation
+- **New**: `tests/test_exceptions.py` (8 tests)
+  - All exception types: base, model, generation, config
+  - Hierarchy: all subclasses of WeightStreamError
+  - String representation with details
+  - Edge cases: no model_path, no token_count, empty details
+- **All 43 tests pass** (was 22 before Phase 6)
+
+#### 7. 📖 Documentation
+- **New**: `README.md` — full product documentation
+  - How it works (5 steps)
+  - Quick start (pip install + CLI commands)
+  - Python API reference with examples
+  - CLI reference (all commands + options)
+  - Architecture diagram
+  - Requirements + supported models
+- **Inline docstrings**: all public methods documented
+
+#### 8. 📦 Packaging
+- **pyproject.toml**: version 0.10.1, classifiers (7 categories), keywords
+- **`__version__`**: synced to 0.10.1 in both `__init__.py` and `pyproject.toml`
+- **URLs**: homepage, source, documentation, issues
+- **Dependencies**: `numpy>=1.24`, optional `llama-cpp-python>=0.3.0`
+
+#### ไฟล์ที่สร้าง/แก้ไข
+- `weight_stream/backends/_base.py` — abstract base class (new)
+- `weight_stream/backends/__init__.py` — exports base + model (updated)
+- `weight_stream/core/exceptions.py` — exception hierarchy (new)
+- `weight_stream/core/llama_cpp.py` — inherits base, error handling, close idempotent (updated)
+- `weight_stream/cli/main.py` — polished CLI (rewritten)
+- `weight_stream/__init__.py` — exports + version sync (updated)
+- `tests/test_backend.py` — 13 new tests (new)
+- `tests/test_exceptions.py` — 8 new tests (new)
+- `README.md` — full documentation (new)
+- `pyproject.toml` — classifiers, keywords, version (updated)
+- `.gitignore` — security entries added (updated)
+- `CHANGELOG.md` — อัปเดต
+
+---
+
 ## [0.9.0] - 2026-07-27
 
 ### 🏗️ Phase 3c: weight-streaming Product (MVP)
