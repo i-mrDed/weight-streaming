@@ -86,6 +86,21 @@
 ### [ISSUE-008] Tab resets to Chat on page reload
 - Reported: 2026-07-27
 - Status: 🟢 Fixed
+- Symptom: Refreshing page always goes to Chat tab
+- Root Cause: Tab state not persisted across reloads
+- Fix: URL hash-based tab persistence (#chat, #stats, #models). restoreTab() on load + hashchange event.
+- Files: `static/index.html`
+
+### [ISSUE-009] SPA completely broken — JS SyntaxError (duplicate let)
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
+- Symptom: Server runs but SPA shows error / does nothing
+- Root Cause: `let scanned` and `let conversationHistory` were declared twice in the same scope (lines 468-470 + duplicate at 556 and 878). `let` cannot be redeclared → SyntaxError → entire JS script fails → no tab switching, no chat, no model loading.
+- Fix: Remove duplicate declarations. All three state variables now declared once at top of script (lines 468-470).
+- Files: `static/index.html`
+- Commit: (pending)
+- Reported: 2026-07-27
+- Status: 🟢 Fixed
 - Symptom: Refreshing page always goes to Chat tab, even when on Models
 - Root Cause: Tab state not persisted across reloads
 - Fix: URL hash-based tab persistence (#chat, #stats, #models). `restoreTab()` reads hash on load. `switchTab()` updates hash. `hashchange` event handles browser back/forward.

@@ -466,6 +466,8 @@ footer {
 const API = 'http://127.0.0.1:8765';
 let currentModel = 'default';
 let abortController = null;
+let scanned = false;
+let conversationHistory = [];
 
 /* ═══════════════════════════════════════════════════════════════
    API Helpers
@@ -550,8 +552,6 @@ const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 const stopBtn = document.getElementById('stop-btn');
 const SYSTEM_PROMPT = 'You are a helpful, respectful, and honest assistant. Answer the user directly and concisely.';
-
-let conversationHistory = [];
 
 function addMessage(role, content, isError) {
   const div = document.createElement('div');
@@ -873,9 +873,6 @@ async function unloadModel(id) {
 
 document.getElementById('load-btn').addEventListener('click', function() { loadModel(false); });
 document.getElementById('reload-btn').addEventListener('click', function() { loadModel(true); });
-
-// Flag for first-time scan
-let scanned = false;
 
 /* ═══════════════════════════════════════════════════════════════
    Theme Toggle
