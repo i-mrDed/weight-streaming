@@ -586,7 +586,7 @@ const chatMessages = document.getElementById('chat-messages');
 const chatInput = document.getElementById('chat-input');
 const sendBtn = document.getElementById('send-btn');
 const stopBtn = document.getElementById('stop-btn');
-const SYSTEM_PROMPT = 'You are a helpful, respectful, and honest assistant. Answer the user directly and concisely.';
+const SYSTEM_PROMPT = 'You are a helpful, respectful, and honest assistant. Answer the user directly and concisely. Always reply in the same language the user writes in (if the user writes Thai, reply in Thai; if English, reply in English).';
 
 function addMessage(role, content, isError) {
   const div = document.createElement('div');
@@ -803,7 +803,10 @@ async function scanModels(dir) {
     var html = '<option value="">-- Select a model (' + models.length + ' found) --</option>';
     for (var i = 0; i < models.length; i++) {
       var m = models[i];
-      html += '<option value="' + escapeHtml(m.path) + '">' + escapeHtml(m.name) + ' (' + m.size_gb + ' GB)</option>';
+      var label = m.name + ' (' + m.size_gb + ' GB)';
+      if (m.architecture && m.architecture !== 'unknown') label += ' [' + m.architecture + ']';
+      if (m.may_need_upgrade) label += ' ⚠ needs newer llama-cpp';
+      html += '<option value="' + escapeHtml(m.path) + '">' + escapeHtml(label) + '</option>';
     }
     if (models.length === 0) {
       html = '<option value="">No .gguf files found. Try scanning a different directory.</option>';

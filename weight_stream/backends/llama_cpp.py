@@ -153,6 +153,7 @@ class WeightStreamModel(WeightStreamBackend):
         )
         
         # Step 4: Open the model with llama-cpp-python
+        arch_hint = self._detect_gguf_architecture(model_path)
         try:
             llm = _get_llama()
             # Prefer ChatML format (Qwen, many instruct models) unless caller overrides
@@ -170,10 +171,32 @@ class WeightStreamModel(WeightStreamBackend):
             # Clean up mmap before re-raising
             self._mmap.close()
             self._file.close()
+            if hasattr(self, '_gguf') and self._gguf:
+                try:
+                    self._gguf.close()
+                except Exception:
+                    pass
+            err_msg = str(e)
+            # Detect unsupported architecture and give actionable guidance
+            if "unknown model architecture" in err_msg.lower() or "Failed to load model from file" in err_msg:
+                raise ModelError(
+                    f"Cannot load this model: architecture '{arch_hint or 'unknown'}' "
+                    f"is not supported by the installed llama-cpp-python. "
+                    f"Qwen3.5/Qwen3.6 models need a newer build. "
+                    f"Upgrade with: pip install -U llama-cpp-python  "
+                    f"(current may be too old). "
+                    f"Or use a supported model (e.g. Qwen1.5/Qwen2/Llama/Mistral GGUF).",
+                    model_path=model_path,
+                    details={
+                        "load_error": err_msg,
+                        "architecture": arch_hint,
+                        "hint": "pip install -U llama-cpp-python",
+                    },
+                )
             raise ModelError(
                 f"Failed to load model with llama-cpp-python: {e}",
                 model_path=model_path,
-                details={"load_error": str(e)},
+                details={"load_error": err_msg, "architecture": arch_hint},
             )
         
         # Metadata
@@ -404,6 +427,28 @@ class WeightStreamModel(WeightStreamBackend):
                 'n_experts': getattr(self, 'n_experts', 0),
             },
         }
+    
+    @staticmethod
+    def _detect_gguf_architecture(model_path: str) -> str:
+        """Read general.architecture from GGUF without full model load."""
+        try:
+            from gguf import GGUFReader
+            reader = GGUFReader(model_path)
+            field = reader.fields.get("general.architecture")
+            if field is None:
+                return "unknown"
+            # gguf field parts: last part holds the string data
+            try:
+                data = field.parts[-1]
+                if isinstance(data, (bytes, bytearray)):
+                    return bytes(data).decode("utf-8", errors="replace").strip("\x00")
+                if hasattr(data, "tobytes"):
+                    return data.tobytes().decode("utf-8", errors="replace").strip("\x00")
+                return str(data)
+            except Exception:
+                return "unknown"
+        except Exception:
+            return "unknown"
     
     def _get_arch(self) -> str:
         """Get model architecture name from metadata"""

@@ -158,68 +158,60 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
         """List all loaded models."""
         return await manager.list_models()
     
-    @app.get("/v1/browse")
-    async def browse_model():
-        """
-        Open a native file dialog on the server to let the user pick a model.
-        Runs in a subprocess to avoid blocking the asyncio event loop.
-        Returns the full path of the selected .gguf file.
-        """
+    def _run_browse_dialog(mode: str = "file") -> dict:
+        """Run native browse dialog via helper script (subprocess)."""
         import subprocess, sys, os
-        
+        helper = os.path.join(os.path.dirname(__file__), "browse_dialog.py")
         try:
-            # Run tkinter dialog in subprocess to avoid blocking asyncio
-            result = await asyncio.get_running_loop().run_in_executor(
-                None,
-                lambda: subprocess.run(
-                    [sys.executable, "-c",
-                     "import tkinter as tk; from tkinter import filedialog; "
-                     "r=tk.Tk(); r.withdraw(); r.attributes('-topmost',True); "
-                     "p=filedialog.askopenfilename(title='Select GGUF Model', "
-                     "filetypes=[('GGUF Models','*.gguf'),('All Files','*.*')]); "
-                     "r.destroy(); print(p)"],
-                    capture_output=True, text=True, timeout=60,
-                )
+            # CREATE_NEW_CONSOLE helps dialog stay visible on Windows
+            creationflags = 0
+            if sys.platform == "win32":
+                creationflags = getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
+            result = subprocess.run(
+                [sys.executable, helper, mode],
+                capture_output=True,
+                text=True,
+                timeout=120,
+                creationflags=creationflags,
             )
-            path = result.stdout.strip()
-            if path and os.path.isfile(path):
-                size = os.path.getsize(path)
-                return {
-                    "path": os.path.abspath(path),
-                    "name": os.path.basename(path),
-                    "size_gb": round(size / (1024**3), 2),
-                }
-            return {"path": None, "cancelled": True}
+            path = (result.stdout or "").strip().splitlines()
+            path = path[-1].strip() if path else ""
+            if result.returncode == 0 and path:
+                if mode == "dir" and os.path.isdir(path):
+                    return {"path": os.path.abspath(path)}
+                if mode == "file" and os.path.isfile(path):
+                    size = os.path.getsize(path)
+                    return {
+                        "path": os.path.abspath(path),
+                        "name": os.path.basename(path),
+                        "size_gb": round(size / (1024**3), 2),
+                    }
+            if result.returncode == 1:
+                return {"path": None, "cancelled": True}
+            err = (result.stderr or "").strip() or f"exit code {result.returncode}"
+            return {"path": None, "error": err}
         except subprocess.TimeoutExpired:
-            return {"path": None, "error": "Dialog timed out"}
+            return {"path": None, "error": "Dialog timed out (no selection within 2 minutes)"}
         except Exception as e:
             return {"path": None, "error": str(e)}
     
+    @app.get("/v1/browse")
+    async def browse_model():
+        """
+        Open a native file dialog on the server to pick a .gguf model.
+        Works because server and browser run on the same machine.
+        Look for the dialog in the taskbar if it doesn't appear on top.
+        """
+        return await asyncio.get_running_loop().run_in_executor(
+            None, lambda: _run_browse_dialog("file")
+        )
+    
     @app.get("/v1/browse-dir")
     async def browse_directory():
-        """Open a native directory picker in a subprocess."""
-        import subprocess, sys, os
-        
-        try:
-            result = await asyncio.get_running_loop().run_in_executor(
-                None,
-                lambda: subprocess.run(
-                    [sys.executable, "-c",
-                     "import tkinter as tk; from tkinter import filedialog; "
-                     "r=tk.Tk(); r.withdraw(); r.attributes('-topmost',True); "
-                     "p=filedialog.askdirectory(title='Select Model Directory'); "
-                     "r.destroy(); print(p)"],
-                    capture_output=True, text=True, timeout=60,
-                )
-            )
-            path = result.stdout.strip()
-            if path and os.path.isdir(path):
-                return {"path": os.path.abspath(path)}
-            return {"path": None, "cancelled": True}
-        except subprocess.TimeoutExpired:
-            return {"path": None, "error": "Dialog timed out"}
-        except Exception as e:
-            return {"path": None, "error": str(e)}
+        """Open a native directory picker to select a folder to scan."""
+        return await asyncio.get_running_loop().run_in_executor(
+            None, lambda: _run_browse_dialog("dir")
+        )
     
     @app.get("/v1/models/scan")
     async def scan_models(dir: str | None = None):
@@ -263,12 +255,34 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
                 seen.add(abspath)
                 try:
                     size = os.path.getsize(abspath)
+                    arch = "unknown"
+                    try:
+                        from gguf import GGUFReader
+                        reader = GGUFReader(abspath)
+                        field = reader.fields.get("general.architecture")
+                        if field is not None:
+                            data = field.parts[-1]
+                            if isinstance(data, (bytes, bytearray)):
+                                arch = bytes(data).decode("utf-8", errors="replace").strip("\x00")
+                            elif hasattr(data, "tobytes"):
+                                arch = data.tobytes().decode("utf-8", errors="replace").strip("\x00")
+                            else:
+                                arch = str(data)
+                    except Exception:
+                        pass
+                    # Architectures known to need newer llama-cpp
+                    needs_upgrade = arch in (
+                        "qwen35", "qwen35moe", "qwen3", "qwen3moe",
+                        "deepseek2", "deepseek3",
+                    )
                     found.append({
                         "path": abspath,
                         "name": os.path.basename(abspath),
                         "size_bytes": size,
                         "size_gb": round(size / (1024**3), 2),
                         "directory": os.path.dirname(abspath),
+                        "architecture": arch,
+                        "may_need_upgrade": needs_upgrade,
                     })
                 except OSError:
                     pass
