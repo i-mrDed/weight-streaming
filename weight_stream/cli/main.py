@@ -386,16 +386,27 @@ def cmd_server(args):
     print(f"\n  Weight Streaming API Server v0.11.0")
     print(f"  Listening on http://{args.host}:{args.port}")
     print(f"  API docs: http://{args.host}:{args.port}/docs")
+    print(f"  Web app:  http://{args.host}:{args.port}/app")
     if args.model:
         print(f"  Auto-load: {args.model} (id={args.model_id})")
     print(f"  Press Ctrl+C to stop\n")
     
+    # Create app, pass directly (not via factory string)
+    from weight_stream.server.api_server import create_app
+    from weight_stream.server.config import ServerConfig, get_config
+    config = ServerConfig(
+        host=args.host, port=args.port,
+        default_buffer_mb=args.buffer_mb,
+        default_n_ctx=args.n_ctx,
+        default_n_threads=args.n_threads or (os.cpu_count() or 4),
+    )
+    app, manager = create_app(config)
+    
     uvicorn.run(
-        "weight_stream.server.api_server:create_app",
+        app,
         host=args.host,
         port=args.port,
         log_level="debug" if args.verbose else "info",
-        factory=True,
     )
 
 

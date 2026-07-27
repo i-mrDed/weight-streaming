@@ -85,20 +85,23 @@ def main():
     logger.info(f"Weight Streaming API Server v0.11.0")
     logger.info(f"Listening on http://{args.host}:{args.port}")
     logger.info(f"API docs: http://{args.host}:{args.port}/docs")
+    logger.info(f"Web app:  http://{args.host}:{args.port}/app")
     
     if args.model:
         logger.info(f"Auto-loading model: {args.model} (id={args.model_id})")
-        # Note: model loads lazily through the API server's lifespan
-        # We'll set an environment variable so the server can load it on startup
         os.environ["WS_AUTO_MODEL_PATH"] = args.model
         os.environ["WS_AUTO_MODEL_ID"] = args.model_id
     
+    # Create app and manager, then pass app directly to uvicorn
+    from .api_server import create_app
+    from .config import get_config
+    app, manager = create_app(get_config())
+    
     uvicorn.run(
-        "weight_stream.server.api_server:create_app",
+        app,
         host=args.host,
         port=args.port,
         log_level=log_level.lower(),
-        factory=True,
     )
 
 
