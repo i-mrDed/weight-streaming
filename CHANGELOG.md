@@ -75,6 +75,35 @@
 
 ---
 
+## [0.7.0] - 2026-07-27
+
+### 💻 Phase 3b: Real Hardware Benchmark (EXP-004)
+
+- **Key Finding: SYSTEM IS I/O-BOUND (flips previous conclusions)**
+  - Qwen1.5-MoE-A2.7B benchmark: 44ms/token, 22.7 tok/s (CPU, 2.7B active params)
+  - K3 scaling: estimated 815ms/token compute vs 1786ms NVMe full load
+  - **NVMe I/O IS the bottleneck** — buffer and predictor now CRITICAL for throughput
+- **Simulator Timing Update:**
+  - compute_time_per_token_us: 350,000 → **815,000** (2.3x increase)
+  - Bottleneck: compute-bound → **I/O-bound**
+- **Design Reversal (based on real data vs simulation):**
+  - EXP-002 said predictor doesn't matter — WRONG for real hardware
+  - EXP-001/002 conclusions only valid for compute-bound regime
+  - I/O-bound regime: predictor accuracy, buffer hit rate, priority boost ALL matter
+
+#### ไฟล์ที่สร้าง/แก้ไข
+- `research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf` — downloaded model (5.88 GB)
+- `research/experiments/EXP-004-benchmark/setup.md`
+- `research/experiments/EXP-004-benchmark/results.md`
+- `research/experiments/EXP-004-benchmark/analysis.md`
+- `research/experiments/EXP-004-benchmark/results.json`
+- `research/experiments/index.md` — อัปเดต
+- `TASKS.md` — อัปเดต
+- `SESSION_LOG.md` — เพิ่ม S006
+- `CHANGELOG.md` — อัปเดต
+
+---
+
 ## [0.4.0] - 2026-07-27
 
 ### 🏗️ Phase 2: Architecture Design Complete

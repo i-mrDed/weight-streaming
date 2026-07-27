@@ -47,8 +47,10 @@
 | ✅ | EXP-003: Timing + overlap efficiency | 🔴 | 76.7% overlap, 2.74 tok/s |
 | ⬜ | Update ARCHITECTURE.md with EXP-002 findings | 🟡 | LFU default, remove priority boost, reduce prediction emphasis |
 | ⬜ | Select small MoE model for PoC | 🟡 | Mixtral? Qwen MoE? |
-| ⬜ | Estimate real compute time for K3 on consumer HW | 🔴 | Needed to validate compute-bound assumption |
-| ⬜ | Phase 3b: Fork llama.cpp + implement streaming buffer | 🟡 | |
+| ✅ | Estimate real compute time for K3 on consumer HW | 🔴 | Qwen benchmark → K3: 815ms compute, I/O-BOUND |
+| ⬜ | Update simulator with real K3 timing (815ms compute) | 🔴 | Re-run all experiments |
+| ⬜ | Phase 3b: Re-run EXP-001/002/003 with real timing | 🔴 | I/O-bound changes all conclusions |
+| ⬜ | Phase 3b: Build streaming buffer prototype | 🟡 | |
 | ⬜ | Phase 3b: Test with real MoE model on consumer HW | 🔴 | Measure actual compute vs I/O ratio |
 
 ---

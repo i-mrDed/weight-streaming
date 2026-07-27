@@ -1,0 +1,109 @@
+{
+  "baseline": {
+    "model": "Qwen1.5-MoE-A2.7B_Q2_K",
+    "hardware": "CPU (llama.cpp, n_gpu_layers=0)",
+    "prompt": "The future of artificial intelligence is",
+    "prefill_times": {
+      "16": 261.4426612854004,
+      "32": 195.47033309936523,
+      "64": 350.87037086486816,
+      "128": 678.5633563995361,
+      "256": 1298.9776134490967
+    },
+    "per_token_runs": [
+      {
+        "n_tokens": 50,
+        "total_ms": 2269.89483833313,
+        "tok_per_sec": 22.027452177792036,
+        "ms_per_token": 45.3978967666626
+      },
+      {
+        "n_tokens": 100,
+        "total_ms": 4267.151594161987,
+        "tok_per_sec": 23.434836516427698,
+        "ms_per_token": 42.67151594161987
+      }
+    ],
+    "avg_tok_per_sec": 22.73114434710987,
+    "avg_ms_per_token": 44.034706354141235
+  },
+  "k3_scaling": {
+    "qwen_measured": {
+      "ms_per_token": 44.034706354141235,
+      "tok_per_sec": 22.73114434710987,
+      "active_params": 2700000000.0,
+      "active_gb_per_token": 0.84375
+    },
+    "k3_estimated": {
+      "ms_per_token": 815.4575250766895,
+      "tok_per_sec": 1.2263054411153484,
+      "active_params": 50000000000.0,
+      "active_gb_per_token": 25.0,
+      "nvme_full_load_ms": 1785.7142857142858
+    },
+    "io_sweep": [
+      {
+        "miss_rate": 0.0,
+        "io_ms": 0.0,
+        "compute_ms": 815.4575250766895,
+        "stall_ms": 0.0,
+        "overlap_ms": 0.0,
+        "total_ms": 815.4575250766895,
+        "tps": 1.2263054411153484
+      },
+      {
+        "miss_rate": 0.1,
+        "io_ms": 178.57142857142858,
+        "compute_ms": 815.4575250766895,
+        "stall_ms": 53.57142857142858,
+        "overlap_ms": 125.0,
+        "total_ms": 869.0289536481181,
+        "tps": 1.1507096464416695
+      },
+      {
+        "miss_rate": 0.25,
+        "io_ms": 446.42857142857144,
+        "compute_ms": 815.4575250766895,
+        "stall_ms": 133.92857142857142,
+        "overlap_ms": 312.5,
+        "total_ms": 949.386096505261,
+        "tps": 1.0533122442819116
+      },
+      {
+        "miss_rate": 0.5,
+        "io_ms": 892.8571428571429,
+        "compute_ms": 815.4575250766895,
+        "stall_ms": 267.85714285714283,
+        "overlap_ms": 625.0,
+        "total_ms": 1083.3146679338324,
+        "tps": 0.9230928275966802
+      },
+      {
+        "miss_rate": 0.75,
+        "io_ms": 1339.2857142857142,
+        "compute_ms": 815.4575250766895,
+        "stall_ms": 401.7857142857143,
+        "overlap_ms": 815.4575250766895,
+        "total_ms": 1217.2432393624038,
+        "tps": 0.8215284896745891
+      },
+      {
+        "miss_rate": 1.0,
+        "io_ms": 1785.7142857142858,
+        "compute_ms": 815.4575250766895,
+        "stall_ms": 535.7142857142857,
+        "overlap_ms": 815.4575250766895,
+        "total_ms": 1505.9710463518818,
+        "tps": 0.6640233903715718
+      }
+    ],
+    "is_compute_bound": false,
+    "insight": "K3: 815ms compute vs 1786ms NVMe full load. I/O BOUND on this hardware."
+  },
+  "simulator_update": {
+    "compute_time_per_token_us": 815457,
+    "nvme_seq_bw_gbps": 14.0,
+    "previous_simulator_value_us": 350000,
+    "measured_on": "CPU (llama.cpp, n_gpu_layers=0)"
+  }
+}

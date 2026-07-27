@@ -79,6 +79,47 @@
 
 ---
 
+## [S006] — 2026-07-27 — Phase 3b: Real Hardware Benchmark
+
+**🎯 เป้าหมาย:** วัด compute time จริงของ MoE model บน consumer hardware
+
+### ✅ สิ่งที่ทำ
+- ตรวจสอบ system spec: RTX 3060 12 GB, 68.6 GB RAM, CPU-only inference
+- ติดตั้ง llama-cpp-python + ดาวน์โหลด Qwen1.5-MoE-A2.7B Q2_K GGUF (5.88 GB)
+- รัน benchmark วัด: prefill timing (16-256 ctx), per-token compute, throughput
+- สร้าง EXP-004 benchmark experiment พร้อม analysis
+
+### 🔬 Key Finding: SIMULATOR WRONG — Real System is I/O-BOUND
+
+| | Old Simulator | Real Hardware |
+|---|---|---|
+| Compute time (K3) | 350 ms/token | **815 ms/token** |
+| Bottleneck | compute-bound | **I/O-BOUND** |
+| Predictor value | None | **Critical for throughput** |
+| Buffer value | RAM reduction only | **Direct throughput improvement** |
+
+**Qwen measured:** 44ms/token, 22.7 tok/s (CPU, 2.7B active params)
+**K3 scaled:** 815ms/token, 1.23 tok/s (50B active params, MXFP4)
+**NVMe full load:** 1786ms (25 GB @ 14 GB/s)
+
+### ⚡ Design Reversal (based on real data)
+- **Predictor accuracy IS important** — I/O-bound means overlap efficiency = throughput
+- **Buffer hit rate directly affects throughput** — 76.2% → 1.06 t/s vs 0% → 0.56 t/s (+88%)
+- **Priority boost might matter** — keeping right experts in buffer reduces NVMe reads
+- **Simulator timing needs update**: compute_time 350ms → 815ms
+
+### ⏭️ ถัดไป
+- อัปเดต simulator timing model ด้วย real K3 estimate (815ms compute)
+- Re-run EXP-001/002/003 with new timing → verify I/O-bound conclusions
+- Phase 3b สร้าง streaming buffer prototype (ถ้ามี hardware เพิ่ม)
+
+### 📎 อ้างอิง
+- `EXP-004-benchmark/results.json` — raw benchmark data
+- `EXP-004-benchmark/analysis.md` — full analysis
+- `research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf` — downloaded model (5.88 GB)
+
+---
+
 ## [S001] — 2026-07-27 — Initial Concept + Phase 1 Research
 
 **🎯 เป้าหมาย:** กำหนดแนวคิดโปรเจค + ค้นคว้างานวิจัยที่เกี่ยวข้อง
