@@ -156,9 +156,9 @@ class WeightStreamModel(WeightStreamBackend):
         arch_hint = self._detect_gguf_architecture(model_path)
         try:
             llm = _get_llama()
-            # Prefer ChatML format (Qwen, many instruct models) unless caller overrides
-            if "chat_format" not in kwargs:
-                kwargs["chat_format"] = "chatml"
+            # Leave chat_format unset by default. llama-cpp-python can then use
+            # the tokenizer.chat_template embedded in the GGUF, instead of
+            # incorrectly forcing ChatML on every architecture.
             self._llm = llm.Llama(
                 model_path=model_path,
                 n_ctx=n_ctx,
@@ -343,6 +343,197 @@ class WeightStreamModel(WeightStreamBackend):
         
         return output
     
+    def stream_chat(
+        self,
+        messages: List[dict],
+        max_tokens: int = 128,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        repeat_penalty: float = 1.15,
+        **kwargs,
+    ) -> Iterator[str]:
+        """
+        Stream a chat response as text chunks through the public wrapper.
+
+        This is the server-facing chat API: server code must consume this
+        method and never touch ``_llm`` directly, so that generation stats
+        and page-cache telemetry are always recorded.
+
+        Uses the GGUF-native chat template first (``create_chat_completion``);
+        GGUFs without a usable template fall back to the architecture-aware
+        prompt formatter.
+
+        Records generation stats (``_last_gen_stats``) on completion, on
+        error, and on early close (client cancellation), and samples the OS
+        page cache periodically during generation.
+
+        No per-token prefetch is driven from here on purpose: expert routing
+        is opaque from Python, so there is no real routing evidence to base
+        prefetch decisions on.
+
+        Yields:
+            Text chunks (delta content) as strings.
+
+        Raises:
+            GenerationError: If the model is not loaded or generation fails.
+        """
+        if not self.is_loaded:
+            raise GenerationError(
+                "Model not loaded",
+                details={"model_path": self._model_path},
+            )
+
+        use_native = True
+        try:
+            stream = self._llm.create_chat_completion(
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                repeat_penalty=repeat_penalty,
+                stream=True,
+                **kwargs,
+            )
+        except Exception as ex:
+            # GGUFs without a usable template retain the legacy prompt
+            # formatter as a compatibility fallback.
+            logger.warning(
+                f"Native chat template unavailable ({ex}); using fallback prompt"
+            )
+            use_native = False
+            prompt = self._format_chat_prompt(messages, arch=self._get_arch())
+            stream = self._llm(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                repeat_penalty=repeat_penalty,
+                stop=[
+                    "\nUser:", "\nSystem:", "\n\nUser", "\n\nSystem",
+                    "<|im_end|>", "<|im_start|>", "<|eot_id|>",
+                ],
+                stream=True,
+                **kwargs,
+            )
+
+        token_count = 0
+        start_time = time.time()
+        try:
+            for chunk in stream:
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                choice = choices[0]
+                if use_native:
+                    text = (choice.get("delta") or {}).get("content", "")
+                else:
+                    text = choice.get("text", "")
+                if not text:
+                    continue
+                token_count += 1
+                yield text
+
+                # Sample the OS page cache periodically (real measurement).
+                if token_count % 5 == 0 and self._page_monitor:
+                    try:
+                        self._page_monitor.sample_resident_pages()
+                    except Exception:
+                        pass
+        except GeneratorExit:
+            # Consumer stopped early (client disconnect / cancellation).
+            # llama.cpp streams are lazy; stopping iteration also stops
+            # further token computation.
+            raise
+        except Exception as e:
+            raise GenerationError(
+                f"Chat generation failed at token {token_count}: {e}",
+                token_count=token_count or None,
+                details={"error": str(e)},
+            )
+        finally:
+            elapsed = time.time() - start_time
+            tokens_per_sec = token_count / elapsed if elapsed > 0 else 0
+            self._last_gen_stats = {
+                "token_count": token_count,
+                "elapsed": elapsed,
+                "tokens_per_sec": tokens_per_sec,
+                "prompt": self._summarize_messages(messages),
+            }
+            if self._page_monitor:
+                try:
+                    self._page_monitor.sample_resident_pages()
+                except Exception:
+                    pass
+
+    @staticmethod
+    def _format_chat_prompt(messages: List[dict], arch: str = "") -> str:
+        """
+        Format chat messages using native chat template markers
+        (ChatML, Llama-3, Instruct). Fallback path only, used when a GGUF
+        has no usable embedded chat template.
+        """
+        system = "You are a helpful assistant."
+        for msg in messages:
+            if msg.get("role") == "system" and msg.get("content"):
+                system = msg["content"].strip()
+
+        arch_lower = (arch or "").lower()
+        if "qwen" in arch_lower or "deepseek" in arch_lower:
+            prompt = f"<|im_start|>system\n{system}<|im_end|>\n"
+            for msg in messages:
+                r = msg.get("role")
+                c = (msg.get("content") or "").strip()
+                if r == "user":
+                    prompt += f"<|im_start|>user\n{c}<|im_end|>\n"
+                elif r == "assistant":
+                    prompt += f"<|im_start|>assistant\n{c}<|im_end|>\n"
+            prompt += "<|im_start|>assistant\n"
+            return prompt
+        elif "llama" in arch_lower:
+            prompt = (
+                f"<|begin_of_text|><|start_header_id|>system<|end_header_id|>"
+                f"\n\n{system}<|eot_id|>"
+            )
+            for msg in messages:
+                r = msg.get("role")
+                c = (msg.get("content") or "").strip()
+                if r == "user":
+                    prompt += (
+                        f"<|start_header_id|>user<|end_header_id|>\n\n{c}<|eot_id|>"
+                    )
+                elif r == "assistant":
+                    prompt += (
+                        f"<|start_header_id|>assistant<|end_header_id|>"
+                        f"\n\n{c}<|eot_id|>"
+                    )
+            prompt += "<|start_header_id|>assistant<|end_header_id|>\n\n"
+            return prompt
+        else:
+            parts = []
+            for msg in messages:
+                role = msg.get("role", "user")
+                content = (msg.get("content") or "").strip()
+                if role == "system" and content:
+                    system = content
+                elif role == "user":
+                    parts.append(f"User: {content}")
+                elif role == "assistant":
+                    parts.append(f"Assistant: {content}")
+            prompt = f"System: {system}\n\n" + "\n".join(parts) + "\nAssistant:"
+            return prompt
+
+    @staticmethod
+    def _summarize_messages(messages: List[dict]) -> str:
+        """Short prompt label for generation stats."""
+        last = ""
+        for msg in messages:
+            if msg.get("role") == "user" and msg.get("content"):
+                last = msg["content"]
+        if not last and messages:
+            last = messages[-1].get("content") or ""
+        last = str(last)
+        return last[:50] + ("..." if len(last) > 50 else "")
+
     def close(self):
         """Clean up all resources. Safe to call multiple times."""
         if not self.is_loaded:

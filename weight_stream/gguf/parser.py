@@ -177,6 +177,94 @@ class GGUFParser:
         
         return expert_map
     
+    def detect_architecture(self) -> Dict[str, Any]:
+        """
+        Auto-detect model architecture specs, MoE properties, and recommended chat template.
+        
+        Returns:
+            Dict containing arch_name, is_moe, total_experts, active_experts,
+            num_layers, context_length, chat_template_format, and quantization_summary.
+        """
+        arch_name = str(self.metadata.get('general.architecture', 'unknown')).lower()
+        
+        # Expert counts
+        total_experts = 1
+        for k in ['expert_count', f'{arch_name}.expert_count', 'n_expert']:
+            if k in self.metadata:
+                try:
+                    total_experts = int(self.metadata[k])
+                    break
+                except (ValueError, TypeError):
+                    pass
+
+        active_experts = 1
+        for k in ['expert_used_count', f'{arch_name}.expert_used_count', 'n_expert_used']:
+            if k in self.metadata:
+                try:
+                    active_experts = int(self.metadata[k])
+                    break
+                except (ValueError, TypeError):
+                    pass
+
+        # Layer count
+        num_layers = 0
+        for k in [f'{arch_name}.block_count', 'block_count']:
+            if k in self.metadata:
+                try:
+                    num_layers = int(self.metadata[k])
+                    break
+                except (ValueError, TypeError):
+                    pass
+
+        # Fallback layer count from tensor names
+        if num_layers == 0:
+            max_layer = -1
+            for t in self.tensors:
+                if t.layer_id > max_layer:
+                    max_layer = t.layer_id
+            num_layers = max_layer + 1 if max_layer >= 0 else 0
+
+        # Context length
+        context_length = 2048
+        for k in [f'{arch_name}.context_length', 'context_length']:
+            if k in self.metadata:
+                try:
+                    context_length = int(self.metadata[k])
+                    break
+                except (ValueError, TypeError):
+                    pass
+
+        # Chat template format recommendation based on architecture
+        if 'llama' in arch_name or 'llama-3' in arch_name:
+            template = 'llama-3'
+        elif 'qwen' in arch_name or 'chatml' in arch_name or 'deepseek' in arch_name:
+            template = 'chatml'
+        elif 'glm' in arch_name:
+            template = 'glm'
+        else:
+            template = 'generic'
+
+        # Quantization types summary
+        type_counts: Dict[str, int] = {}
+        for t in self.tensors:
+            tname = t.type_name
+            type_counts[tname] = type_counts.get(tname, 0) + 1
+
+        is_moe = len(self.get_expert_tensors()) > 0 or total_experts > 1
+
+        return {
+            "arch_name": arch_name,
+            "is_moe": is_moe,
+            "total_experts": total_experts if is_moe else 1,
+            "active_experts": active_experts if is_moe else 1,
+            "num_layers": num_layers,
+            "context_length": context_length,
+            "recommended_chat_template": template,
+            "tensor_types_summary": type_counts,
+            "file_size_gb": round(self.file_size / (1024 ** 3), 2),
+            "total_tensors": self.n_tensors,
+        }
+
     def __repr__(self) -> str:
         return (
             f"GGUFParser({self.path.name}, "

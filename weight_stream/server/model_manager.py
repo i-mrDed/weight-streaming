@@ -5,18 +5,31 @@ Manages multiple WeightStreamModel instances:
 - Load / unload / reload models by ID
 - Track idle time for automatic cleanup
 - Thread-safe generation delegation
+
+Streaming design note (item 4):
+llama-cpp-python iterators block the calling thread for the full per-token
+compute. All streaming paths in this manager therefore consume them through
+``_iter_blocking`` (worker thread + bounded queue), so the event loop stays
+free for health checks, stats, and cancellation while a response generates.
+
+Chat design note (item 5):
+Chat paths consume the model's public ``stream_chat`` wrapper instead of
+touching ``_llm`` directly, so generation stats and page-cache telemetry
+are recorded for chat runs as well.
 """
 
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import logging
+import threading
 import time
-from typing import Any, AsyncIterator, Dict, Optional
+from typing import Any, AsyncIterator, Callable, Dict, Iterator, Optional
 
 from ..backends.llama_cpp import WeightStreamModel
 from ..core.exceptions import WeightStreamError, ModelError, GenerationError
-from .config import get_config
+from .config import get_config, ServerConfig
 from .schemas import ModelStatus
 
 logger = logging.getLogger(__name__)
@@ -25,38 +38,41 @@ logger = logging.getLogger(__name__)
 class ModelManager:
     """
     Manages multiple WeightStreamModel instances.
-    
+
     Thread safety: asyncio.Lock per model_id for generate()
     Access to _models dict is protected by _dict_lock.
     """
-    
-    def __init__(self):
+
+    def __init__(self, config: Optional[ServerConfig] = None):
         self._models: Dict[str, WeightStreamModel] = {}
         self._configs: Dict[str, dict] = {}  # saved configs for reload
         self._locks: Dict[str, asyncio.Lock] = {}
         self._last_used: Dict[str, float] = {}
         self._generating: Dict[str, bool] = {}
-        
+
         self._dict_lock = asyncio.Lock()
         self._cleanup_task: Optional[asyncio.Task] = None
-        
-        self._cfg = get_config()
-    
+
+        # Keep the exact configuration supplied by the application factory.
+        # This makes --n-threads and lifecycle settings apply to models loaded
+        # later from the SPA as well as auto-loaded models.
+        self._cfg = config or get_config()
+
     # ── Model lifecycle ─────────────────────────────────────────────
-    
+
     async def load(self, model_id: str, model_path: str, **kwargs) -> dict:
         """
         Load a model into the manager.
-        
+
         Args:
             model_id: Unique identifier for this model instance
             model_path: Path to GGUF model file
             **kwargs: Forwarded to WeightStreamModel constructor
                        (buffer_mb, n_ctx, n_threads, verbose)
-            
+
         Returns:
             {"status": "loaded", "model_id": model_id}
-            
+
         Raises:
             ModelError: If model file not found or load fails
             ValueError: If model already loaded and force=False
@@ -67,13 +83,13 @@ class ModelManager:
                     f"Model '{model_id}' is already loaded. "
                     f"Use force=True to reload."
                 )
-            
+
             # Build kwargs with defaults
             buffer_mb = kwargs.pop("buffer_mb", self._cfg.default_buffer_mb)
             n_ctx = kwargs.pop("n_ctx", self._cfg.default_n_ctx)
             n_threads = kwargs.pop("n_threads", self._cfg.default_n_threads)
             verbose = kwargs.pop("verbose", False)
-            
+
             # Enforce max models
             if len(self._models) >= self._cfg.max_loaded_models:
                 # Unload oldest idle model
@@ -90,7 +106,7 @@ class ModelManager:
                         f"Max models ({self._cfg.max_loaded_models}) loaded "
                         f"and all are busy generating."
                     )
-            
+
             # Load model (CPU-bound, run in thread)
             loop = asyncio.get_running_loop()
             model = await loop.run_in_executor(
@@ -104,7 +120,7 @@ class ModelManager:
                     **kwargs,
                 )
             )
-            
+
             self._models[model_id] = model
             self._configs[model_id] = {
                 "model_path": model_path,
@@ -115,19 +131,19 @@ class ModelManager:
             self._locks[model_id] = asyncio.Lock()
             self._last_used[model_id] = time.time()
             self._generating[model_id] = False
-        
+
         logger.info(f"Model loaded: {model_id} ({model_path})")
-        
+
         # Start idle cleanup if not already running
         if self._cleanup_task is None:
             self._cleanup_task = asyncio.create_task(self._auto_cleanup())
-        
+
         return {"status": "loaded", "model_id": model_id}
-    
+
     async def unload(self, model_id: str) -> dict:
         """
         Unload a model from the manager.
-        
+
         Idempotent: does not error if model is not loaded.
         """
         async with self._dict_lock:
@@ -136,23 +152,23 @@ class ModelManager:
             self._locks.pop(model_id, None)
             self._last_used.pop(model_id, None)
             self._generating.pop(model_id, None)
-        
+
         if model:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, model.close)
             logger.info(f"Model unloaded: {model_id}")
-        
+
         return {"status": "unloaded", "model_id": model_id}
-    
+
     async def reload(self, model_id: str) -> dict:
         """Unload then reload a model with its saved config."""
         config = self._configs.get(model_id)
         if not config:
             raise ValueError(f"No saved config for model '{model_id}'")
-        
+
         await self.unload(model_id)
         return await self.load(model_id, **config)
-    
+
     async def load_or_get(self, model_id: str, model_path: str, **kwargs) -> None:
         """Load a model only if not already loaded."""
         async with self._dict_lock:
@@ -161,9 +177,80 @@ class ModelManager:
                 pass
         if model_id not in self._models:
             await self.load(model_id, model_path, **kwargs)
-    
+
     # ── Generation ──────────────────────────────────────────────────
-    
+
+    @staticmethod
+    async def _iter_blocking(
+        make_iterator: Callable[[], Iterator[Any]],
+        queue_size: int = 16,
+    ) -> AsyncIterator[Any]:
+        """
+        Adapt a blocking (synchronous) iterator to an async iterator that
+        never blocks the asyncio event loop.
+
+        llama-cpp-python returns plain generators whose ``next()`` does the
+        full per-token compute on the calling thread. Iterating them from an
+        event-loop coroutine freezes every other request (``/health``,
+        ``/v1/stats``, cancellation) for the whole generation. This bridge
+        runs the blocking iterator in a worker thread instead.
+
+        - Bounded queue with backpressure: the worker waits (in 0.25 s
+          slices) for room in the queue before producing more tokens.
+        - Cooperative cancellation: when the consumer stops (client
+          disconnect / task cancellation), the ``finally`` below sets the
+          stop flag; the worker notices within ~0.25 s and stops iterating.
+          llama.cpp streams are lazy, so stopping iteration also stops
+          further token computation.
+        - Errors raised inside the worker are re-raised in the consumer.
+        """
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue = asyncio.Queue(maxsize=queue_size)
+        sentinel = object()
+        stop = threading.Event()
+
+        def send(item: Any) -> bool:
+            """Thread-safe put with backpressure and cancellation slices."""
+            try:
+                fut = asyncio.run_coroutine_threadsafe(queue.put(item), loop)
+            except RuntimeError:
+                return False  # loop already closed
+            while True:
+                try:
+                    fut.result(timeout=0.25)
+                    return True
+                except concurrent.futures.TimeoutError:
+                    if stop.is_set():
+                        fut.cancel()
+                        return False
+                except Exception:
+                    return False  # consumer gone / loop shutting down
+
+        def worker() -> None:
+            try:
+                for item in make_iterator():
+                    if stop.is_set():
+                        break
+                    if not send(item):
+                        break
+            except Exception as ex:  # re-raised on the consumer side
+                if not stop.is_set():
+                    send(ex)
+            finally:
+                send(sentinel)
+
+        loop.run_in_executor(None, worker)
+        try:
+            while True:
+                item = await queue.get()
+                if item is sentinel:
+                    break
+                if isinstance(item, BaseException):
+                    raise item
+                yield item
+        finally:
+            stop.set()
+
     async def generate(
         self,
         model_id: str,
@@ -175,14 +262,14 @@ class ModelManager:
     ) -> dict:
         """Generate text (non-streaming)."""
         model = self._get_model(model_id)
-        
+
         async with self._locks[model_id]:
             self._generating[model_id] = True
             self._last_used[model_id] = time.time()
             try:
                 loop = asyncio.get_running_loop()
                 start = time.time()
-                
+
                 output = await loop.run_in_executor(
                     None,
                     lambda: model.generate(
@@ -193,14 +280,14 @@ class ModelManager:
                         **kwargs,
                     )
                 )
-                
+
                 elapsed = time.time() - start
                 stats = await loop.run_in_executor(None, model.get_stats)
-                
+
                 # Count tokens from stats
                 gen = stats.get("generation", {})
                 token_count = gen.get("token_count", 0)
-                
+
                 return {
                     "model": model_id,
                     "prompt": prompt,
@@ -212,7 +299,7 @@ class ModelManager:
                 }
             finally:
                 self._generating[model_id] = False
-    
+
     async def generate_stream(
         self,
         model_id: str,
@@ -224,32 +311,38 @@ class ModelManager:
     ) -> AsyncIterator[dict]:
         """
         Generate text with token-by-token streaming.
-        
+
+        The blocking llama.cpp iterator runs in a worker thread
+        (see ``_iter_blocking``), keeping the event loop responsive.
+
         Yields:
             {"token": "...", "index": 0, "done": False}
             ...
             {"token": "", "index": N, "done": True, "stats": {...}}
         """
         model = self._get_model(model_id)
-        
+
         async with self._locks[model_id]:
             self._generating[model_id] = True
             self._last_used[model_id] = time.time()
             try:
                 loop = asyncio.get_running_loop()
-                start = time.time()
-                
-                stream = model._llm(
-                    prompt,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    top_p=top_p,
-                    stream=True,
-                    **kwargs,
-                )
-                
+
+                def make_stream() -> Iterator[dict]:
+                    # Runs in the worker thread. NOTE: the plain-prompt path
+                    # still uses `_llm` directly; the public chat wrapper
+                    # (stream_chat) covers chat streaming only.
+                    return model._llm(
+                        prompt,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        stream=True,
+                        **kwargs,
+                    )
+
                 token_count = 0
-                for chunk in stream:
+                async for chunk in self._iter_blocking(make_stream):
                     if "choices" in chunk and len(chunk["choices"]) > 0:
                         text = chunk["choices"][0].get("text", "")
                         yield {
@@ -258,10 +351,9 @@ class ModelManager:
                             "done": False,
                         }
                         token_count += 1
-                
-                elapsed = time.time() - start
+
                 stats = await loop.run_in_executor(None, model.get_stats)
-                
+
                 yield {
                     "token": "",
                     "index": token_count,
@@ -270,44 +362,62 @@ class ModelManager:
                 }
             finally:
                 self._generating[model_id] = False
-    
+
     @staticmethod
-    def _format_chat_prompt(messages: list[dict]) -> str:
+    def _estimate_tokens(text: str) -> int:
+        """Estimate token count (approx 1 token ≈ 3-4 chars or word boundary)."""
+        if not text:
+            return 0
+        return max(1, len(text) // 3)
+
+    @classmethod
+    def _fit_messages_to_context(
+        cls,
+        messages: list[dict],
+        max_tokens: int,
+        n_ctx: int,
+    ) -> list[dict]:
         """
-        Format messages in a robust Q&A style that works across models,
-        including heavily quantized ones where ChatML fails.
-        
-        Empirically verified: Q&A / Instruct style produces correct answers
-        on Qwen Q2_K, while ChatML (<|im_start|>) causes echo/garbage.
+        Dynamically trim history to fit strict token budget:
+        Budget = n_ctx - max_tokens - safety_margin (64)
+        Always preserves system prompt and latest user message.
         """
-        system = "You are a helpful assistant."
-        parts = []
-        for msg in messages:
-            role = msg.get("role", "user")
-            content = (msg.get("content") or "").strip()
-            if role == "system" and content:
-                system = content
-            elif role == "user":
-                parts.append(f"User: {content}")
-            elif role == "assistant":
-                parts.append(f"Assistant: {content}")
-        
-        prompt = f"System: {system}\n\n"
-        prompt += "\n".join(parts)
-        prompt += "\nAssistant:"
-        return prompt
-    
-    @staticmethod
-    def _clean_chat_output(text: str) -> str:
-        """Strip trailing garbage from model output."""
-        text = text.strip()
-        # Stop at role markers if model continues the dialogue
-        for marker in ("\nUser:", "\nSystem:", "\nAssistant:", "\n\nUser", "\n\nSystem"):
-            idx = text.find(marker)
-            if idx > 0:
-                text = text[:idx]
-        return text.strip()
-    
+        if not messages:
+            return []
+
+        safety_margin = 64
+        budget = max(128, n_ctx - max_tokens - safety_margin)
+
+        system_msg = None
+        history_msgs = []
+        latest_msg = messages[-1]
+
+        for msg in messages[:-1]:
+            if msg.get("role") == "system" and system_msg is None:
+                system_msg = msg
+            else:
+                history_msgs.append(msg)
+
+        system_tokens = cls._estimate_tokens(system_msg.get("content", "")) if system_msg else 0
+        latest_tokens = cls._estimate_tokens(latest_msg.get("content", ""))
+        used_tokens = system_tokens + latest_tokens
+
+        packed_history = []
+        for msg in reversed(history_msgs):
+            cost = cls._estimate_tokens(msg.get("content", ""))
+            if used_tokens + cost <= budget:
+                packed_history.insert(0, msg)
+                used_tokens += cost
+            else:
+                break
+
+        result = []
+        if system_msg:
+            result.append(system_msg)
+        result.extend(packed_history)
+        result.append(latest_msg)
+        return result
+
     async def chat_completion(
         self,
         model_id: str,
@@ -317,36 +427,41 @@ class ModelManager:
         top_p: float = 0.9,
         **kwargs,
     ) -> dict:
-        """Chat completion using robust Q&A prompt format."""
+        """Chat completion (non-streaming) via the model's public wrapper."""
         model = self._get_model(model_id)
-        
+
         async with self._locks[model_id]:
             self._generating[model_id] = True
             self._last_used[model_id] = time.time()
             try:
                 loop = asyncio.get_running_loop()
                 start = time.time()
-                prompt = self._format_chat_prompt(messages)
-                
-                result = await loop.run_in_executor(
-                    None,
-                    lambda: model._llm(
-                        prompt,
-                        max_tokens=max_tokens,
-                        temperature=temperature,
-                        top_p=top_p,
-                        repeat_penalty=1.15,
-                        stop=["\nUser:", "\nSystem:", "\n\nUser", "\n\nSystem", "<|im_end|>", "<|im_start|>"],
-                        stream=False,
-                        **kwargs,
-                    )
-                )
-                
+                n_ctx = getattr(model, "n_ctx", 2048)
+                fitted = self._fit_messages_to_context(messages, max_tokens, n_ctx)
+
+                def produce() -> str:
+                    # Runs in a worker thread: consume the wrapper's
+                    # blocking chat stream and join the chunks. Native
+                    # template + fallback handling live in the wrapper.
+                    return "".join(
+                        model.stream_chat(
+                            messages=fitted,
+                            max_tokens=max_tokens,
+                            temperature=temperature,
+                            top_p=top_p,
+                            **kwargs,
+                        )
+                    ).strip()
+
+                content = await loop.run_in_executor(None, produce)
+
                 elapsed = time.time() - start
-                raw = result["choices"][0]["text"]
-                content = self._clean_chat_output(raw)
-                token_count = result.get("usage", {}).get("completion_tokens", 0) or len(content.split())
-                
+                stats = await loop.run_in_executor(None, model.get_stats)
+                token_count = (
+                    stats.get("generation", {}).get("token_count")
+                    or self._estimate_tokens(content)
+                )
+
                 return {
                     "model": model_id,
                     "output": content,
@@ -356,7 +471,7 @@ class ModelManager:
                 }
             finally:
                 self._generating[model_id] = False
-    
+
     async def chat_completion_stream(
         self,
         model_id: str,
@@ -366,37 +481,44 @@ class ModelManager:
         top_p: float = 0.9,
         **kwargs,
     ) -> AsyncIterator[dict]:
-        """Chat completion with streaming (robust Q&A format)."""
+        """
+        Chat completion streaming via the model's public wrapper.
+
+        The blocking wrapper iterator runs in a worker thread
+        (see ``_iter_blocking``): health checks, stats, and cancellation
+        stay responsive during a long response. On client disconnect the
+        async generator is closed, the stop flag halts the worker, and the
+        ``finally`` below always releases ``_generating`` and the lock.
+        """
         model = self._get_model(model_id)
-        
+
         async with self._locks[model_id]:
             self._generating[model_id] = True
             self._last_used[model_id] = time.time()
             try:
-                prompt = self._format_chat_prompt(messages)
-                stream = model._llm(
-                    prompt,
-                    max_tokens=max_tokens,
-                    temperature=temperature,
-                    top_p=top_p,
-                    repeat_penalty=1.15,
-                    stop=["\nUser:", "\nSystem:", "\n\nUser", "\n\nSystem", "<|im_end|>", "<|im_start|>"],
-                    stream=True,
-                    **kwargs,
-                )
-                
+                n_ctx = getattr(model, "n_ctx", 2048)
+                fitted = self._fit_messages_to_context(messages, max_tokens, n_ctx)
+
+                def make_stream() -> Iterator[str]:
+                    # Runs in the worker thread: native template first,
+                    # prompt-formatter fallback — both inside the wrapper.
+                    return model.stream_chat(
+                        messages=fitted,
+                        max_tokens=max_tokens,
+                        temperature=temperature,
+                        top_p=top_p,
+                        **kwargs,
+                    )
+
                 token_count = 0
-                for chunk in stream:
-                    if "choices" in chunk and len(chunk["choices"]) > 0:
-                        text = chunk["choices"][0].get("text", "")
-                        if text:
-                            yield {
-                                "token": text,
-                                "index": token_count,
-                                "done": False,
-                            }
-                            token_count += 1
-                
+                async for text in self._iter_blocking(make_stream):
+                    yield {
+                        "token": text,
+                        "index": token_count,
+                        "done": False,
+                    }
+                    token_count += 1
+
                 yield {
                     "token": "",
                     "index": token_count,
@@ -404,23 +526,23 @@ class ModelManager:
                 }
             finally:
                 self._generating[model_id] = False
-    
+
     # ── Stats ────────────────────────────────────────────────────────
-    
+
     async def get_stats(self, model_id: Optional[str] = None) -> dict:
         """Get stats for a specific model or all models."""
         if model_id:
             model = self._get_model(model_id)
             loop = asyncio.get_running_loop()
             return await loop.run_in_executor(None, model.get_stats)
-        
+
         result = {}
         async with self._dict_lock:
             for mid, model in self._models.items():
                 loop = asyncio.get_running_loop()
                 result[mid] = await loop.run_in_executor(None, model.get_stats)
         return result
-    
+
     async def list_models(self) -> list[ModelStatus]:
         """List all loaded and saved models."""
         models = []
@@ -444,7 +566,7 @@ class ModelManager:
                     ),
                 ))
         return models
-    
+
     async def get_server_status(self) -> dict:
         """Get overall server status."""
         async with self._dict_lock:
@@ -455,15 +577,15 @@ class ModelManager:
                 "host": self._cfg.host,
                 "port": self._cfg.port,
             }
-    
+
     # ── Internal ─────────────────────────────────────────────────────
-    
+
     def _get_model(self, model_id: str) -> WeightStreamModel:
         """Get a loaded model, raising if not found."""
         if model_id not in self._models:
             raise ValueError(f"Model '{model_id}' is not loaded. Use POST /v1/models/load first.")
         return self._models[model_id]
-    
+
     async def _auto_cleanup(self):
         """Background task that unloads idle models."""
         while True:
@@ -471,10 +593,10 @@ class ModelManager:
             timeout = self._cfg.idle_unload_timeout
             if timeout <= 0:
                 continue
-            
+
             now = time.time()
             to_unload = []
-            
+
             async with self._dict_lock:
                 for mid, last in self._last_used.items():
                     if (
@@ -482,15 +604,15 @@ class ModelManager:
                         and (now - last) > timeout
                     ):
                         to_unload.append(mid)
-            
+
             for mid in to_unload:
                 logger.info(f"Auto-unloading idle model: {mid}")
                 await self.unload(mid)
-            
+
             if not self._models:
                 self._cleanup_task = None
                 break
-    
+
     async def shutdown(self):
         """Shutdown the manager: unload all models."""
         if self._cleanup_task:
@@ -499,9 +621,9 @@ class ModelManager:
                 await self._cleanup_task
             except asyncio.CancelledError:
                 pass
-        
+
         ids = list(self._models.keys())
         for mid in ids:
             await self.unload(mid)
-        
+
         logger.info("ModelManager shutdown complete")

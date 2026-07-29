@@ -67,8 +67,8 @@ def main():
     bench_p.add_argument("--json", "-j", action="store_true",
                           help="Output results as JSON")
     
-    # ── server ────────────────────────────────────────────────────────
-    server_p = sub.add_parser("server", help="Start API server for frontends and IDE integration",
+    # ── server / serve ────────────────────────────────────────────────
+    server_p = sub.add_parser("server", aliases=["serve"], help="Start API server for frontends and IDE integration",
                               epilog="Example: python -m weight_stream server --model model.gguf")
     server_p.add_argument("--host", type=str, default="127.0.0.1",
                           help="Bind address (default: 127.0.0.1)")
@@ -83,9 +83,36 @@ def main():
     server_p.add_argument("--n-ctx", type=int, default=512,
                           help="Context window size (default: 512)")
     server_p.add_argument("--n-threads", type=int, default=None,
-                          help="Number of CPU threads (default: auto)")
+                          help="Number of CPU threads (default: half of logical CPU cores)")
+    server_p.add_argument("--idle-unload-timeout", type=float, default=None,
+                          help="Seconds before unloading an idle model; 0 disables it (default: 0)")
+    server_p.add_argument("--auto-tune", action="store_true",
+                          help="Auto-tune buffer & thread settings based on hardware profiler")
     server_p.add_argument("--verbose", "-v", action="store_true",
                           help="Enable debug logging")
+
+    # ── dashboard ─────────────────────────────────────────────────────
+    dash_p = sub.add_parser("dashboard", help="Start Live Streaming Web Dashboard",
+                            epilog="Example: python -m weight_stream dashboard --port 8766")
+    dash_p.add_argument("--port", type=int, default=8766,
+                        help="Web server port (default: 8766)")
+    dash_p.add_argument("--host", type=str, default="127.0.0.1",
+                        help="Host address (default: 127.0.0.1)")
+
+    # ── auto-tune ─────────────────────────────────────────────────────
+    tune_p = sub.add_parser("auto-tune", help="Hardware profiler — recommend optimal streaming config")
+    tune_p.add_argument("--model-size-gb", type=float, default=14.0, help="Model size in GB")
+    tune_p.add_argument("--json", action="store_true", help="Output raw JSON")
+
+    # ── repack ────────────────────────────────────────────────────────
+    repack_p = sub.add_parser("repack", help="Repack model weights for contiguous popularity layout")
+    repack_p.add_argument("input", help="Input GGUF model path")
+    repack_p.add_argument("output", help="Output repacked model path")
+    repack_p.add_argument("--shard-size-mb", type=float, default=4.0, help="Shard size in MB (default: 4.0)")
+
+    # ── inspect ───────────────────────────────────────────────────────
+    inspect_p = sub.add_parser("inspect", help="Inspect GGUF model metadata & detect architecture")
+    inspect_p.add_argument("model", help="Path to GGUF model file")
     
     # ── ui ────────────────────────────────────────────────────────────
     ui_p = sub.add_parser("ui", help="Launch the Gradio Web UI",
@@ -140,14 +167,22 @@ def main():
     
     # Route command
     try:
-        if args.command == "run":
+        if args.command in ("server", "serve"):
+            cmd_server(args)
+        elif args.command == "dashboard":
+            cmd_dashboard(args)
+        elif args.command == "auto-tune":
+            cmd_auto_tune(args)
+        elif args.command == "repack":
+            cmd_repack(args)
+        elif args.command == "inspect":
+            cmd_inspect(args)
+        elif args.command == "run":
             cmd_run(args)
         elif args.command == "stats":
             cmd_stats(args)
         elif args.command == "benchmark":
             cmd_benchmark(args)
-        elif args.command == "server":
-            cmd_server(args)
         elif args.command == "ui":
             cmd_ui(args)
         elif args.command == "tui":
@@ -402,17 +437,29 @@ if __name__ == "__main__":
 def cmd_server(args):
     """Start the weight-streaming API server."""
     import logging
-    
+    import os
+
+    if getattr(args, "auto_tune", False):
+        from weight_stream.tools.auto_tune import get_system_profile, recommend_config
+        profile = get_system_profile()
+        tuned = recommend_config(profile)
+        print(f"⚡ Auto-Tuned Settings: buffer={tuned['buffer_mb']}MB, threads={tuned['n_threads']}, n_ctx={tuned['n_ctx']}")
+        os.environ["WS_BUFFER_MB"] = str(tuned["buffer_mb"])
+        os.environ["WS_N_THREADS"] = str(tuned["n_threads"])
+        os.environ["WS_N_CTX"] = str(tuned["n_ctx"])
+        args.buffer_mb = tuned["buffer_mb"]
+        args.n_threads = tuned["n_threads"]
+        args.n_ctx = tuned["n_ctx"]
+
     logging.basicConfig(
-        level=logging.DEBUG if args.verbose else logging.INFO,
+        level=logging.DEBUG if getattr(args, "verbose", False) else logging.INFO,
         format="%(levelname)s: %(name)s: %(message)s",
     )
     
     import uvicorn
-    import os
     
     # Set auto-load env vars if --model specified
-    if args.model:
+    if getattr(args, "model", None):
         os.environ["WS_AUTO_MODEL_PATH"] = args.model
         os.environ["WS_AUTO_MODEL_ID"] = args.model_id
         os.environ["WS_BUFFER_MB"] = str(args.buffer_mb)
@@ -424,27 +471,67 @@ def cmd_server(args):
     print(f"  Listening on http://{args.host}:{args.port}")
     print(f"  API docs: http://{args.host}:{args.port}/docs")
     print(f"  Web app:  http://{args.host}:{args.port}/app")
-    if args.model:
+    if getattr(args, "model", None):
         print(f"  Auto-load: {args.model} (id={args.model_id})")
     print(f"  Press Ctrl+C to stop\n")
     
     # Create app, pass directly (not via factory string)
     from weight_stream.server.api_server import create_app
-    from weight_stream.server.config import ServerConfig, get_config
+    from weight_stream.server.config import ServerConfig, set_config
     config = ServerConfig(
         host=args.host, port=args.port,
         default_buffer_mb=args.buffer_mb,
         default_n_ctx=args.n_ctx,
-        default_n_threads=args.n_threads or (os.cpu_count() or 4),
+        default_n_threads=args.n_threads or max(1, (os.cpu_count() or 4) // 2),
+        idle_unload_timeout=(
+            args.idle_unload_timeout
+            if args.idle_unload_timeout is not None
+            else float(os.getenv("WS_IDLE_TIMEOUT", "0"))
+        ),
     )
+    set_config(config)
     app, manager = create_app(config)
     
     uvicorn.run(
         app,
         host=args.host,
         port=args.port,
-        log_level="debug" if args.verbose else "info",
+        log_level="debug" if getattr(args, "verbose", False) else "info",
     )
+
+
+def cmd_dashboard(args):
+    """Start Live Streaming Web Dashboard."""
+    from weight_stream.server.dashboard_server import run_dashboard_server
+    run_dashboard_server(port=args.port)
+
+
+def cmd_auto_tune(args):
+    """Run hardware profiler and recommend optimal settings."""
+    from weight_stream.tools.auto_tune import get_system_profile, recommend_config, print_recommendation
+    profile = get_system_profile()
+    config = recommend_config(profile, model_size_gb=args.model_size_gb)
+    if args.json:
+        print(json.dumps(config, indent=2))
+    else:
+        print_recommendation(config)
+
+
+def cmd_repack(args):
+    """Repack GGUF model weights for contiguous popularity layout."""
+    from weight_stream.tools.shard_repacker import ShardRepacker
+    repacker = ShardRepacker(args.input, args.output, shard_size_mb=args.shard_size_mb)
+    res = repacker.repack()
+    print("Repack Completed:", res)
+
+
+def cmd_inspect(args):
+    """Inspect GGUF model metadata & detect architecture."""
+    from weight_stream.gguf.parser import GGUFParser
+    with GGUFParser(args.model) as parser_obj:
+        arch_info = parser_obj.detect_architecture()
+        print("\n🔍 GGUF Architecture Specs:")
+        print(json.dumps(arch_info, indent=2))
 
 
 def cmd_ui(args):
@@ -567,4 +654,3 @@ def cmd_issues(args):
         md = svc.export_markdown()
         print(md)
         print(f"\n(Saved to data/issues/ISSUES_SUMMARY.md)")
-

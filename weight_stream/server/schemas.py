@@ -154,6 +154,8 @@ class ChatCompletionRequest(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     top_p: float = Field(default=1.0, ge=0.0, le=1.0)
     stream: bool = Field(default=False)
+    reasoning_effort: Optional[str] = Field(default="medium", description="Reasoning effort level: low, medium, high")
+    tools: Optional[List[Dict[str, Any]]] = Field(default=None, description="Available agent tools")
 
     model_config = {"extra": "allow"}
 

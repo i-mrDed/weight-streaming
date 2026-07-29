@@ -55,7 +55,11 @@ def main():
     )
     parser.add_argument(
         "--n-threads", type=int, default=None,
-        help="Number of CPU threads (default: CPU count)",
+        help="Number of CPU threads (default: half of logical CPU cores)",
+    )
+    parser.add_argument(
+        "--idle-unload-timeout", type=float, default=None,
+        help="Seconds before unloading an idle model; 0 disables it (default: 0)",
     )
     parser.add_argument(
         "--verbose", "-v", action="store_true",
@@ -77,7 +81,12 @@ def main():
         port=args.port,
         default_buffer_mb=args.buffer_mb,
         default_n_ctx=args.n_ctx,
-        default_n_threads=args.n_threads or (os.cpu_count() or 4),
+        default_n_threads=args.n_threads or max(1, (os.cpu_count() or 4) // 2),
+        idle_unload_timeout=(
+            args.idle_unload_timeout
+            if args.idle_unload_timeout is not None
+            else float(os.getenv("WS_IDLE_TIMEOUT", "0"))
+        ),
     )
     set_config(config)
     

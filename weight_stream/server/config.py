@@ -9,6 +9,11 @@ import os
 from dataclasses import dataclass, field
 
 
+def _default_n_threads() -> int:
+    """Leave CPU headroom for the API server, browser, and operating system."""
+    return max(1, (os.cpu_count() or 4) // 2)
+
+
 @dataclass
 class ServerConfig:
     """API server configuration."""
@@ -26,15 +31,17 @@ class ServerConfig:
         default_factory=lambda: int(os.getenv("WS_BUFFER_MB", "64"))
     )
     default_n_ctx: int = field(
-        default_factory=lambda: int(os.getenv("WS_N_CTX", "512"))
+        default_factory=lambda: int(os.getenv("WS_N_CTX", "2048"))
     )
     default_n_threads: int = field(
-        default_factory=lambda: int(os.getenv("WS_N_THREADS", str(os.cpu_count() or 4)))
+        default_factory=lambda: int(os.getenv("WS_N_THREADS", str(_default_n_threads())))
     )
     
     # Model lifecycle
     idle_unload_timeout: float = field(
-        default_factory=lambda: float(os.getenv("WS_IDLE_TIMEOUT", "300"))
+        # A local interactive chat should keep its loaded model by default.
+        # Set a positive number of seconds to enable resource reclamation.
+        default_factory=lambda: float(os.getenv("WS_IDLE_TIMEOUT", "0"))
     )
     max_loaded_models: int = field(
         default_factory=lambda: int(os.getenv("WS_MAX_MODELS", "4"))

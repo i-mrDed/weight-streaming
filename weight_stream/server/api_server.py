@@ -60,7 +60,7 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
     if config is None:
         config = get_config()
     
-    manager = ModelManager()
+    manager = ModelManager(config)
     issue_service = IssueService()
     # Ring buffer of recent log-like events for debug context
     recent_errors: list[str] = []
@@ -565,6 +565,10 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
             raise HTTPException(status_code=400, detail=str(e))
     
     return app, manager
+
+
+# ── Default Application Instance ──────────────────────────────────
+app, manager = create_app()
 
 
 # ── Helpers ──────────────────────────────────────────────────────────

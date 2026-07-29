@@ -3,1042 +3,1207 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Weight Streaming</title>
+<title>Weight Streaming | AI Workspace 2.0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-/* ═══════════════════════════════════════════════════════════════════
-   Design System — Dark-first, purple/teal palette
-   ═══════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   Design System & Modern Glassmorphism Theme
+   ═══════════════════════════════════════════════════════════════ */
 :root {
-  --bg: #0f0f1a;
-  --surface: #1a1a2e;
-  --surface2: #252540;
-  --border: #333355;
-  --text: #e0e0e0;
-  --text-dim: #8888aa;
-  --primary: #6c5ce7;
-  --primary-glow: rgba(108,92,231,0.3);
-  --secondary: #00cec9;
-  --accent: #fd79a8;
-  --success: #4ade80;
-  --error: #ef4444;
-  --warn: #f59e0b;
-  --radius: 10px;
+  --bg-dark: #0b0f19;
+  --bg-sidebar: #111827;
+  --bg-card: rgba(17, 24, 39, 0.75);
+  --bg-card-hover: rgba(31, 41, 55, 0.85);
+  --bg-input: #1f293d;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-focus: #6366f1;
+  
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --primary-glow: rgba(99, 102, 241, 0.3);
+  --accent-cyan: #06b6d4;
+  --accent-green: #10b981;
+  --accent-warn: #f59e0b;
+  --accent-error: #ef4444;
+
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+  --text-dim: #6b7280;
+
   --radius-sm: 6px;
-  --font: 'Segoe UI', system-ui, sans-serif;
-  --font-mono: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
-  --transition: 0.2s ease;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-full: 9999px;
+
+  --shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5);
+  --glass-backdrop: blur(16px);
 }
 
-[data-theme="light"] {
-  --bg: #f5f5ff;
-  --surface: #ffffff;
-  --surface2: #eeeeff;
-  --border: #ddddee;
-  --text: #1a1a2e;
-  --text-dim: #666688;
-}
+* { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+body { background-color: var(--bg-dark); color: var(--text-main); height: 100vh; overflow: hidden; display: flex; }
 
-* { margin:0; padding:0; box-sizing:border-box; }
-body {
-  font-family: var(--font);
-  background: var(--bg);
-  color: var(--text);
-  min-height: 100vh;
+/* ── Layout Framework ────────────────────────────────────────── */
+#app-container { display: flex; width: 100vw; height: 100vh; overflow: hidden; position: relative; }
+
+/* ── Sidebar Component ───────────────────────────────────────── */
+#sidebar {
+  width: 260px;
+  background: var(--bg-sidebar);
+  border-right: 1px solid var(--border);
   display: flex;
   flex-direction: column;
-  transition: background var(--transition);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 20;
+  user-select: none;
+  flex-shrink: 0;
 }
+#sidebar.collapsed { width: 0px; min-width: 0px; overflow: hidden; border-right: none; }
 
-/* ── Header ───────────────────────────────────────────────── */
-header {
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 10px 20px;
+.sidebar-header {
+  padding: 16px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  border-bottom: 1px solid var(--border);
 }
-header h1 {
-  font-size: 1.2em;
-  font-weight: 700;
-  background: linear-gradient(135deg, var(--primary), var(--secondary));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.header-right {
+.brand-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 1.05rem;
+  color: #fff;
+  letter-spacing: -0.02em;
 }
-#server-status {
+.brand-icon {
+  width: 28px;
+  height: 28px;
+  background: linear-gradient(135deg, var(--primary), var(--accent-cyan));
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  box-shadow: 0 0 12px var(--primary-glow);
+}
+.status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent-green); box-shadow: 0 0 8px var(--accent-green); }
+.status-dot.offline { background: var(--accent-error); box-shadow: 0 0 8px var(--accent-error); }
+
+.new-chat-btn {
+  margin: 14px 16px 8px;
+  padding: 10px 14px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+  color: #fff;
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  font-size: 0.88em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+.new-chat-btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+
+.history-container { flex: 1; overflow-y: auto; padding: 10px 12px; }
+.history-section-title { font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-dim); margin: 12px 8px 6px; font-weight: 600; }
+.history-item {
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  font-size: 0.85em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 2px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.history-item:hover, .history-item.active { background: rgba(255, 255, 255, 0.06); color: var(--text-main); }
+.history-item.active { border-left: 3px solid var(--primary); }
+.history-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+
+.sidebar-footer { padding: 12px 16px; border-top: 1px solid var(--border); background: rgba(0,0,0,0.2); }
+.model-badge-sidebar {
+  font-size: 0.8em;
+  color: var(--text-muted);
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.8em;
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: var(--surface2);
-}
-#server-dot {
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--error);
-  transition: background 0.3s;
-}
-#server-dot.online { background: var(--success); }
-#server-url { color: var(--text-dim); }
-
-/* ── Tabs ──────────────────────────────────────────────────── */
-nav {
-  display: flex;
-  gap: 0;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
-  padding: 0 20px;
-}
-nav button {
-  background: none; border: none; color: var(--text-dim);
-  padding: 10px 20px; font-size: 0.9em; cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: all var(--transition);
-  font-family: var(--font);
-}
-nav button:hover { color: var(--text); }
-nav button.active {
-  color: var(--primary);
-  border-bottom-color: var(--primary);
-}
-
-/* ── Main Area ─────────────────────────────────────────────── */
-main {
-  flex: 1;
-  display: flex;
-  gap: 0;
-  overflow: hidden;
-}
-
-/* ── Chat Tab ──────────────────────────────────────────────── */
-#tab-chat {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-#chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.message {
-  max-width: 80%;
-  padding: 10px 14px;
-  border-radius: var(--radius);
-  line-height: 1.5;
-  font-size: 0.9em;
-  animation: fadeIn 0.2s ease;
-}
-@keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:translateY(0); } }
-.message.user {
-  align-self: flex-end;
-  background: var(--primary);
-  color: #fff;
-  border-bottom-right-radius: 4px;
-}
-.message.assistant {
-  align-self: flex-start;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-bottom-left-radius: 4px;
-}
-.message.error {
-  background: #3a1a1a;
-  border-color: var(--error);
-  color: var(--error);
-}
-.message .role {
-  font-size: 0.7em;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  margin-bottom: 4px;
-  opacity: 0.7;
-}
-
-#chat-input-area {
-  padding: 12px 20px;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  display: flex;
-  gap: 8px;
-}
-#chat-input-area input {
-  flex: 1;
-  padding: 10px 14px;
-  border: 1px solid var(--border);
+  background: var(--bg-card);
+  padding: 8px 10px;
   border-radius: var(--radius-sm);
-  background: var(--surface2);
-  color: var(--text);
-  font-size: 0.9em;
-  font-family: var(--font);
-  outline: none;
-  transition: border var(--transition);
+  border: 1px solid var(--border);
 }
-#chat-input-area input:focus {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px var(--primary-glow);
+
+/* ── Main Canvas & Navbar ────────────────────────────────────── */
+#main-canvas { flex: 1; display: flex; flex-direction: column; height: 100vh; position: relative; background: var(--bg-dark); overflow: hidden; }
+
+.top-navbar {
+  height: 54px;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+  background: rgba(11, 15, 25, 0.85);
+  backdrop-filter: var(--glass-backdrop);
+  z-index: 10;
+  flex-shrink: 0;
 }
-button.primary {
-  background: var(--primary);
-  color: #fff;
-  border: none;
-  padding: 10px 20px;
+.nav-left { display: flex; align-items: center; gap: 14px; }
+.icon-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  width: 34px;
+  height: 34px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 0.9em;
-  font-family: var(--font);
-  transition: all var(--transition);
-}
-button.primary:hover {
-  opacity: 0.9;
-  box-shadow: 0 0 12px var(--primary-glow);
-}
-button.primary:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-/* ── Stats Tab ─────────────────────────────────────────────── */
-#tab-stats {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-}
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
-}
-.stat-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-}
-.stat-card .stat-value {
-  font-size: 1.4em;
-  font-weight: 700;
-  color: var(--primary);
-  margin-top: 4px;
-}
-.stat-card .stat-label {
-  font-size: 0.75em;
-  color: var(--text-dim);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-/* ── Models Tab ────────────────────────────────────────────── */
-#tab-models {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-}
-.model-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  margin-bottom: 10px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
 }
-.model-card .model-name {
-  font-weight: 600;
-}
-.model-card .model-meta {
-  font-size: 0.8em;
-  color: var(--text-dim);
-}
-.badge {
-  display: inline-block;
-  padding: 2px 8px;
-  border-radius: 10px;
-  font-size: 0.7em;
-  font-weight: 600;
-}
-.badge.loaded { background: #1a3a1a; color: var(--success); }
-.badge.unloaded { background: #3a3a1a; color: var(--warn); }
+.icon-btn:hover { color: #fff; border-color: var(--text-muted); background: rgba(255,255,255,0.05); }
 
-.load-form {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-top: 16px;
-}
-.load-form h3 { margin-bottom: 12px; font-size: 1em; }
-.form-row {
-  display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap;
-}
-.form-row input, .form-row select {
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: var(--surface2);
-  color: var(--text);
+.nav-tabs { display: flex; gap: 4px; background: rgba(0,0,0,0.3); padding: 3px; border-radius: var(--radius-md); border: 1px solid var(--border); }
+.tab-btn {
+  padding: 5px 14px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
   font-size: 0.85em;
-  font-family: var(--font);
+  font-weight: 500;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
 }
-.form-row label {
-  font-size: 0.8em;
-  color: var(--text-dim);
-  display: block;
+.tab-btn.active { background: var(--primary); color: #fff; font-weight: 600; box-shadow: 0 2px 8px var(--primary-glow); }
+
+.nav-right { display: flex; align-items: center; gap: 10px; }
+.model-select-pill {
+  background: var(--bg-input);
+  color: var(--text-main);
+  border: 1px solid var(--border);
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  font-size: 0.82em;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+}
+
+/* Strict Tab Panes Isolation */
+.tab-pane { display: none; width: 100%; height: calc(100vh - 54px); overflow: hidden; position: relative; }
+.tab-pane.active { display: flex; flex-direction: column; }
+
+/* ── Tab 1: Chat Pane (Cute Speech Bubble Cards) ─────────────── */
+#tab-chat { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: space-between; overflow: hidden; }
+
+.chat-messages-scroll {
+  width: 100%;
+  max-width: 860px;
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+/* Speech Bubble Cards Container */
+.message-card {
+  display: flex;
+  gap: 12px;
+  max-width: 82%;
+  animation: fadeIn 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+}
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px) scale(0.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+/* AI Assistant Speech Bubble (Left Aligned) */
+.message-card.assistant {
+  align-self: flex-start;
+  flex-direction: row;
+}
+
+/* User Speech Bubble (Right Aligned - คุณทอม) */
+.message-card.user {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9em;
+  font-weight: 700;
+  flex-shrink: 0;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+}
+.avatar.user { background: linear-gradient(135deg, #06b6d4, #3b82f6); color: #fff; }
+.avatar.assistant { background: linear-gradient(135deg, #6366f1, #a855f7); color: #fff; box-shadow: 0 0 12px var(--primary-glow); }
+
+.message-body { flex: 1; min-width: 0; }
+.message-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin-bottom: 4px;
 }
+.message-card.user .message-header { justify-content: flex-end; }
+.message-card.assistant .message-header { justify-content: flex-start; }
 
-/* ── Footer ────────────────────────────────────────────────── */
-footer {
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  padding: 8px 20px;
+.message-role { font-weight: 600; font-size: 0.82em; color: var(--text-muted); }
+.message-time { font-size: 0.7em; color: var(--text-dim); }
+
+/* Speech Bubble Card Shapes (บอลลูนคำพูดน่ารัก) */
+.message-text {
+  font-size: 0.93em;
+  line-height: 1.6;
+  color: var(--text-main);
+  padding: 12px 18px;
+  position: relative;
+  word-break: break-word;
+  white-space: pre-wrap; /* render streamed text via textContent, no per-token HTML rewrites */
+}
+
+/* Assistant Bubble Shape (Tail Bottom-Left) */
+.message-card.assistant .message-text {
+  background: rgba(31, 41, 55, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px 18px 18px 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  backdrop-filter: var(--glass-backdrop);
+}
+
+/* User Bubble Shape (Tail Bottom-Right) */
+.message-card.user .message-text {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(6, 182, 212, 0.35));
+  border: 1px solid rgba(99, 102, 241, 0.45);
+  border-radius: 18px 18px 4px 18px;
+  box-shadow: 0 4px 16px rgba(99, 102, 241, 0.2);
+  backdrop-filter: var(--glass-backdrop);
+  color: #ffffff;
+}
+
+/* Reasoning thought accordion (<think>) */
+.thought-accordion {
+  margin-bottom: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.thought-summary {
+  padding: 6px 10px;
+  font-size: 0.78em;
+  color: var(--accent-cyan);
+  cursor: pointer;
+  font-weight: 500;
+  user-select: none;
+}
+.thought-content { padding: 8px 10px; font-size: 0.82em; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; border-top: 1px solid var(--border); white-space: pre-wrap; max-height: 180px; overflow-y: auto; }
+
+/* Input Bar Box */
+.input-box-wrapper { width: 100%; max-width: 860px; padding: 0 20px 16px; flex-shrink: 0; }
+.input-card {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px 14px;
+  box-shadow: var(--shadow-lg);
+}
+textarea#chat-input {
+  width: 100%;
+  background: none;
+  border: none;
+  color: var(--text-main);
+  font-size: 0.95em;
+  resize: none;
+  outline: none;
+  min-height: 40px;
+  max-height: 160px;
+  line-height: 1.5;
+}
+.input-actions { display: flex; align-items: center; justify-content: space-between; margin-top: 6px; padding-top: 6px; border-top: 1px solid rgba(255,255,255,0.05); }
+.preset-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
   font-size: 0.75em;
-  color: var(--text-dim);
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(255,255,255,0.05);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+.chip:hover { background: var(--primary-glow); color: #fff; }
+
+.send-btn {
+  background: linear-gradient(135deg, var(--primary), var(--accent-cyan));
+  color: #fff;
+  border: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
   display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+}
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.stop-btn { background: var(--accent-error); display: none; }
+
+/* ── Tab 2: Live Stats Dashboard Pane ───────────────────────── */
+#tab-stats { padding: 20px; overflow-y: auto; }
+.stats-grid-analytics { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 14px; margin-bottom: 20px; }
+.metric-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; }
+.metric-header { display: flex; align-items: center; justify-content: space-between; color: var(--text-muted); font-size: 0.78em; font-weight: 600; margin-bottom: 8px; }
+.metric-val { font-size: 1.5rem; font-weight: 800; color: #fff; }
+.metric-bar-bg { width: 100%; height: 6px; background: rgba(255,255,255,0.08); border-radius: 4px; margin-top: 8px; overflow: hidden; }
+.metric-bar-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--accent-cyan)); width: 0%; transition: width 0.4s ease; }
+
+/* Compact MoE Expert Heatmap Grid */
+.heatmap-container { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px 16px; }
+.heatmap-title { font-weight: 700; font-size: 0.88rem; margin-bottom: 10px; color: #fff; display: flex; justify-content: space-between; }
+.expert-grid { display: grid; grid-template-columns: repeat(16, 1fr); gap: 4px; }
+.expert-cell {
+  height: 14px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  transition: all 0.3s;
+}
+.expert-cell.firing { background: var(--accent-green); box-shadow: 0 0 6px var(--accent-green); }
+
+/* ── Tab 3: Restored Models Pane ────────────────────────────── */
+#tab-models { padding: 20px; overflow-y: auto; }
+.models-section { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 16px; margin-bottom: 16px; }
+.section-head { font-weight: 700; font-size: 0.92rem; margin-bottom: 12px; color: #fff; display: flex; align-items: center; justify-content: space-between; }
+
+.model-card-item {
+  background: rgba(0,0,0,0.3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 12px 14px;
+  display: flex;
+  align-items: center;
   justify-content: space-between;
+  margin-bottom: 8px;
+}
+.btn-action {
+  padding: 6px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-input);
+  color: var(--text-main);
+  font-size: 0.8em;
+  font-weight: 600;
+  cursor: pointer;
+}
+.btn-action:hover { background: var(--primary); color: #fff; }
+.btn-action.primary { background: linear-gradient(135deg, var(--primary), var(--primary-hover)); color: #fff; border: none; }
+
+/* ── Tab 4: Issues Pane ─────────────────────────────────────── */
+#tab-issues { padding: 20px; overflow-y: auto; }
+.issue-card-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  cursor: pointer;
 }
 
-/* ── Theme Toggle ──────────────────────────────────────────── */
-#theme-toggle {
-  background: none; border: none;
-  font-size: 1.1em; cursor: pointer;
-  padding: 4px 8px; border-radius: var(--radius-sm);
+/* Modals */
+.modal-overlay {
+  position: fixed;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(8px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
 }
-#theme-toggle:hover { background: var(--surface2); }
+.modal-box {
+  background: var(--bg-sidebar);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  width: 90%; max-width: 500px;
+  padding: 20px;
+  box-shadow: var(--shadow-lg);
+}
 
-/* ── Loading ───────────────────────────────────────────────── */
-.loading {
-  display: inline-block;
-  width: 8px; height: 8px; border-radius: 50%;
-  background: var(--text-dim);
-  animation: pulse 1s ease infinite;
+/* Settings Drawer */
+#settings-drawer {
+  position: absolute;
+  top: 54px; right: -360px;
+  width: 340px; height: calc(100vh - 54px);
+  background: var(--bg-sidebar);
+  border-left: 1px solid var(--border);
+  z-index: 30;
+  transition: right 0.25s ease;
+  padding: 20px; overflow-y: auto;
 }
-@keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.3; }
-}
-
-/* ── Responsive ────────────────────────────────────────────── */
-@media (max-width: 600px) {
-  .stats-grid { grid-template-columns: 1fr 1fr; }
-  .message { max-width: 90%; }
-}
+#settings-drawer.open { right: 0; }
+.setting-group { margin-bottom: 16px; }
+.setting-label { font-size: 0.8em; font-weight: 600; color: var(--text-muted); margin-bottom: 6px; display: flex; justify-content: space-between; }
+.setting-input { width: 100%; background: var(--bg-input); border: 1px solid var(--border); border-radius: var(--radius-sm); color: var(--text-main); padding: 8px; font-size: 0.85em; outline: none; }
 </style>
 </head>
 <body>
 
-<!-- ══════════════════════════════════════════════════════════════
-     Header
-     ══════════════════════════════════════════════════════════════ -->
-<header>
-  <h1>Weight Streaming</h1>
-  <div class="header-right">
-    <div id="server-status">
-      <span id="server-dot"></span>
-      <span id="server-url">http://127.0.0.1:8765</span>
+<div id="app-container">
+
+  <!-- Left Sidebar (Collapsible) -->
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <div class="brand-logo">
+        <div class="brand-icon">⚡</div>
+        <span>Weight-Streaming</span>
+      </div>
+      <div class="status-dot" id="global-status-dot" title="Server Online"></div>
     </div>
-    <button id="btn-report" onclick="openReportModal()" style="background:var(--primary);color:#fff;border:none;padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">Report Issue</button>
-    <button id="btn-my-issues" onclick="switchTab('issues')" style="background:var(--surface2);color:var(--text);border:1px solid var(--border);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">My Issues</button>
-    <button id="theme-toggle" title="Toggle theme">🌓</button>
-  </div>
-</header>
 
-<!-- ══════════════════════════════════════════════════════════════
-     Tab Navigation
-     ══════════════════════════════════════════════════════════════ -->
-<nav>
-  <button class="active" data-tab="chat">Chat</button>
-  <button data-tab="stats">Stats</button>
-  <button data-tab="models">Models</button>
-  <button data-tab="issues">Issues</button>
-</nav>
+    <button class="new-chat-btn" onclick="startNewChat()">
+      <span>+</span> New Conversation
+    </button>
 
-<!-- ══════════════════════════════════════════════════════════════
-     Main Content
-     ══════════════════════════════════════════════════════════════ -->
-<main>
+    <div class="history-container">
+      <div class="history-section-title">Saved Conversations</div>
+      <div id="chat-history-list"></div>
+    </div>
 
-  <!-- Chat Tab -->
-  <div id="tab-chat" style="display:flex;">
-    <div id="chat-messages">
-      <div class="message assistant">
-        <div class="role">System</div>
-        Load a model to start chatting. Go to the <b>Models</b> tab or use the API server.
+    <div class="sidebar-footer">
+      <div class="model-badge-sidebar">
+        <span>🤖</span>
+        <span id="sidebar-active-model-name" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">No model</span>
       </div>
     </div>
-    <div id="chat-input-area">
-      <input type="text" id="chat-input" placeholder="Type a message... (Enter to send)" />
-      <button class="primary" id="send-btn">Send</button>
-      <button class="primary" id="stop-btn" style="background:var(--error);display:none;">Stop</button>
-      <button onclick="clearChatHistory();chatMessages.innerHTML='';" style="background:var(--surface2);border:1px solid var(--border);color:var(--text-dim);padding:10px 14px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.85em;font-family:var(--font);" title="Clear chat history">Clear</button>
-    </div>
   </div>
 
-  <!-- Stats Tab -->
-  <div id="tab-stats" style="display:none;">
-    <div class="stats-grid" id="stats-grid">
-      <div class="stat-card"><div class="stat-label">Loading...</div></div>
-    </div>
-  </div>
-
-  <!-- Models Tab -->
-    <div id="tab-models" style="display:none;">
-     <div id="models-list"></div>
-
-     <!-- Scan Directory -->
-      <div class="load-form" style="margin-bottom:16px;">
-       <h3>Scan Models</h3>
-       <p style="font-size:0.8rem;color:var(--text-dim);margin-bottom:8px;">
-         Quick-scan common directories or enter a custom path.
-       </p>
-       <div class="form-row" style="margin-bottom:8px;">
-         <button onclick="browseModel()" style="background:var(--primary);color:#fff;border:none;padding:8px 16px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.85em;font-family:var(--font);font-weight:600;">Browse Model File</button>
-         <button onclick="browseDir()" style="background:var(--secondary);color:#fff;border:none;padding:8px 16px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.85em;font-family:var(--font);font-weight:600;">Browse Folder</button>
-         <span style="font-size:0.75rem;color:var(--text-dim);align-self:center;">or scan below</span>
-       </div>
-       <div class="form-row" style="margin-bottom:8px;">
-         <button onclick="scanModels()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">Scan Default Dirs</button>
-         <button onclick="scanDirCustom()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:6px 12px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;font-family:var(--font);">Scan Custom Path</button>
-       </div>
-       <div class="form-row">
-         <div style="flex:1;">
-           <input type="text" id="scan-dir" placeholder="Or enter custom directory path..." style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);" />
-         </div>
-         <div style="display:flex;align-items:flex-end;gap:4px;">
-           <button class="primary" id="scan-dir-btn" style="font-size:0.8em;padding:8px 12px;">Scan</button>
-         </div>
-       </div>
-       <div class="form-row" style="margin-top:8px;">
-         <div style="flex:1;">
-           <select id="model-picker" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);">
-             <option value="">-- Select a model --</option>
-           </select>
-         </div>
-       </div>
-     </div>
-
-     <!-- Load Form -->
-     <div class="load-form" id="load-section">
-       <h3 id="load-header">Load Model</h3>
-       <div class="form-row">
-         <div>
-           <label>Model Path</label>
-           <input type="text" id="load-path" placeholder="path/to/model.gguf" style="width:300px;" />
-         </div>
-         <div>
-           <label>Model ID</label>
-           <input type="text" id="load-id" value="default" style="width:150px;" />
-         </div>
-       </div>
-       <div class="form-row">
-         <div>
-           <label>Buffer (MB)</label>
-           <input type="number" id="load-buffer" value="64" min="1" style="width:100px;" />
-         </div>
-         <div>
-           <label>Context</label>
-           <input type="number" id="load-ctx" value="512" min="8" style="width:100px;" />
-         </div>
-         <div style="display:flex;align-items:flex-end;gap:8px;">
-           <button class="primary" id="load-btn">Load Model</button>
-           <button id="reload-btn" style="display:none;background:var(--warn);color:#000;border:none;padding:10px 16px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.85em;font-family:var(--font);">Reload (Force)</button>
-         </div>
-       </div>
-       <p id="load-msg" style="margin-top:8px;font-size:0.8rem;"></p>
-     </div>
-   </div>
-
-  <!-- Issues Tab -->
-  <div id="tab-issues" style="display:none;flex:1;overflow-y:auto;padding:20px;">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
-      <h3 style="margin:0;">📋 Issue Tracker</h3>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <label style="font-size:0.8em;color:var(--text-dim);display:flex;align-items:center;gap:4px;cursor:pointer;">
-          <input type="checkbox" id="dev-mode-toggle" onchange="toggleDevMode()" /> 🛠️ Maintainer mode
-        </label>
-        <button class="primary" onclick="openReportModal()" style="font-size:0.85em;">+ New Report</button>
-      </div>
-    </div>
-    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;">
-      <select id="issues-filter-status" onchange="refreshIssues()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:0.8em;">
-        <option value="">All statuses</option>
-        <option value="open">🟢 open</option>
-        <option value="triaged">🔵 triaged</option>
-        <option value="in_progress">🟡 in_progress</option>
-        <option value="fixed">🟣 fixed</option>
-        <option value="verify_pending">🟠 verify_pending</option>
-        <option value="verified">✅ verified</option>
-        <option value="closed">⚫ closed</option>
-        <option value="wontfix">⚪ wontfix</option>
-        <option value="duplicate">📎 duplicate</option>
-      </select>
-      <select id="issues-filter-sev" onchange="refreshIssues()" style="padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-size:0.8em;">
-        <option value="">All severities</option>
-        <option value="critical">🔴 critical</option>
-        <option value="high">🟠 high</option>
-        <option value="medium">🟡 medium</option>
-        <option value="low">🟢 low</option>
-      </select>
-    </div>
-    <div id="issues-list"><p style="color:var(--text-dim);">Loading...</p></div>
-  </div>
-
-</main>
-
-<!-- Report Issue Modal -->
-<div id="report-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:1000;align-items:center;justify-content:center;">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:min(520px,92vw);max-height:90vh;overflow-y:auto;">
-    <h3 style="margin:0 0 12px;">Report Issue</h3>
-    <label style="font-size:0.8em;color:var(--text-dim);">Title *</label>
-    <input id="rpt-title" style="width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-family:var(--font);" />
-    <label style="font-size:0.8em;color:var(--text-dim);">What happened? *</label>
-    <textarea id="rpt-desc" rows="4" style="width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-family:var(--font);"></textarea>
-    <label style="font-size:0.8em;color:var(--text-dim);">Severity</label>
-    <select id="rpt-severity" style="width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);">
-      <option value="low">low</option>
-      <option value="medium" selected>medium</option>
-      <option value="high">high</option>
-      <option value="critical">critical</option>
-    </select>
-    <label style="font-size:0.8em;color:var(--text-dim);">Expected</label>
-    <input id="rpt-expected" style="width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-family:var(--font);" />
-    <label style="font-size:0.8em;color:var(--text-dim);">Actual</label>
-    <input id="rpt-actual" style="width:100%;margin:4px 0 10px;padding:8px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface2);color:var(--text);font-family:var(--font);" />
-    <details style="margin-bottom:12px;">
-      <summary style="cursor:pointer;font-size:0.85em;color:var(--text-dim);">Debug context (auto-attached)</summary>
-      <pre id="rpt-context" style="font-size:0.7em;max-height:120px;overflow:auto;background:var(--surface2);padding:8px;border-radius:var(--radius-sm);margin-top:6px;"></pre>
-    </details>
-    <p id="rpt-msg" style="font-size:0.8em;min-height:1.2em;"></p>
-    <div style="display:flex;gap:8px;justify-content:flex-end;">
-      <button onclick="closeReportModal()" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);padding:8px 14px;border-radius:var(--radius-sm);cursor:pointer;">Cancel</button>
-      <button class="primary" onclick="submitReport()">Submit</button>
-    </div>
-  </div>
-</div>
-
-<!-- Issue Detail Modal -->
-<div id="issue-detail-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:1001;align-items:center;justify-content:center;" onclick="if(event.target===this)closeIssueDetail()">
-  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:24px;width:min(640px,94vw);max-height:90vh;overflow-y:auto;">
-    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:12px;">
-      <div>
-        <div id="det-id" style="font-size:0.8em;color:var(--text-dim);"></div>
-        <h3 id="det-title" style="margin:4px 0 0;"></h3>
-      </div>
-      <button onclick="closeIssueDetail()" style="background:none;border:none;color:var(--text-dim);font-size:1.4em;cursor:pointer;line-height:1;">&times;</button>
-    </div>
-    <div id="det-badges" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;"></div>
-    <div id="det-body" style="font-size:0.9em;line-height:1.55;"></div>
-    <div id="det-verify" style="margin-top:14px;display:none;"></div>
-    <div id="det-maintainer" style="display:none;margin-top:16px;padding-top:14px;border-top:1px solid var(--border);">
-      <h4 style="margin:0 0 10px;">🛠️ Maintainer actions</h4>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
-        <div>
-          <label style="font-size:0.75em;color:var(--text-dim);">Status</label>
-          <select id="det-status" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:0.85em;">
-            <option value="open">open</option>
-            <option value="triaged">triaged</option>
-            <option value="in_progress">in_progress</option>
-            <option value="fixed">fixed</option>
-            <option value="verify_pending">verify_pending</option>
-            <option value="verified">verified</option>
-            <option value="wontfix">wontfix</option>
-            <option value="duplicate">duplicate</option>
-            <option value="closed">closed</option>
-          </select>
-        </div>
-        <div>
-          <label style="font-size:0.75em;color:var(--text-dim);">Severity</label>
-          <select id="det-sev" style="width:100%;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:0.85em;">
-            <option value="low">low</option>
-            <option value="medium">medium</option>
-            <option value="high">high</option>
-            <option value="critical">critical</option>
-          </select>
+  <!-- Main Canvas -->
+  <div id="main-canvas">
+    
+    <!-- Top Navbar -->
+    <div class="top-navbar">
+      <div class="nav-left">
+        <button class="icon-btn" onclick="toggleSidebar()" title="Toggle Sidebar">☰</button>
+        <div class="nav-tabs">
+          <button class="tab-btn active" data-tab="chat" onclick="switchTab('chat')">💬 Chat 2.0</button>
+          <button class="tab-btn" data-tab="stats" onclick="switchTab('stats')">📊 Live Stats</button>
+          <button class="tab-btn" data-tab="models" onclick="switchTab('models')">🤖 Models</button>
+          <button class="tab-btn" data-tab="issues" onclick="switchTab('issues')">📋 Issues</button>
         </div>
       </div>
-      <label style="font-size:0.75em;color:var(--text-dim);">Root cause</label>
-      <textarea id="det-root" rows="2" style="width:100%;margin:4px 0 8px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);"></textarea>
-      <label style="font-size:0.75em;color:var(--text-dim);">Fix summary</label>
-      <textarea id="det-fix" rows="2" style="width:100%;margin:4px 0 8px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);"></textarea>
-      <label style="font-size:0.75em;color:var(--text-dim);">Verify steps</label>
-      <textarea id="det-vsteps" rows="2" style="width:100%;margin:4px 0 8px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);"></textarea>
-      <label style="font-size:0.75em;color:var(--text-dim);">Commit</label>
-      <input id="det-commit" style="width:100%;margin:4px 0 8px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);" />
-      <label style="font-size:0.75em;color:var(--text-dim);">Note</label>
-      <input id="det-note" style="width:100%;margin:4px 0 10px;padding:6px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:0.85em;font-family:var(--font);" />
-      <p id="det-maint-msg" style="font-size:0.8em;min-height:1.1em;"></p>
-      <button class="primary" onclick="saveMaintainerUpdate()" style="font-size:0.85em;">Save update</button>
+
+      <div class="nav-right">
+        <select class="model-select-pill" id="nav-model-select" onchange="switchChatModel(this.value)">
+          <option value="">Loading models...</option>
+        </select>
+        <button class="icon-btn" onclick="toggleSettingsDrawer()" title="Settings & Tools Drawer">⚙️</button>
+      </div>
+    </div>
+
+    <!-- Tab 1: Chat Pane (Cute Speech Bubble Cards) -->
+    <div class="tab-pane active" id="tab-chat">
+      <div class="chat-messages-scroll" id="chat-messages-container"></div>
+
+      <div class="input-box-wrapper">
+        <div class="input-card">
+          <textarea id="chat-input" placeholder="Type a message... (Enter to send, Shift+Enter for new line)" rows="1"></textarea>
+          <div class="input-actions">
+            <div class="preset-chips">
+              <span class="chip" onclick="applyPromptPreset('coding')">🎯 Coding</span>
+              <span class="chip" onclick="applyPromptPreset('writing')">✍️ Writing</span>
+              <span class="chip" onclick="applyPromptPreset('analyst')">📊 Analyst</span>
+              <span class="chip" onclick="applyPromptPreset('concise')">⚡ Concise</span>
+            </div>
+            <button class="send-btn" id="send-msg-btn" onclick="sendMessage()">➔</button>
+            <button class="send-btn stop-btn" id="stop-msg-btn" onclick="stopGeneration()">🛑</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tab 2: Live Stats Dashboard Pane -->
+    <div class="tab-pane" id="tab-stats">
+      <div class="stats-grid-analytics">
+        <div class="metric-card" title="Real buffer hit rate from the streaming buffer (— until measured)">
+          <div class="metric-header"><span>BUFFER HIT RATE</span> ⚡</div>
+          <div class="metric-val" id="stat-hitrate-val">—</div>
+          <div class="metric-bar-bg"><div class="metric-bar-fill" id="stat-hitrate-bar" style="width: 0%;"></div></div>
+        </div>
+        <div class="metric-card" title="Real OS page-cache residency of the mmap'd model file (— if the page monitor is unavailable on this OS)">
+          <div class="metric-header"><span>RAM RESIDENCY</span> 🧠</div>
+          <div class="metric-val" id="stat-ram-val">—</div>
+          <div class="metric-bar-bg"><div class="metric-bar-fill" id="stat-ram-bar" style="width: 0%;"></div></div>
+        </div>
+        <div class="metric-card" title="Real generation throughput measured by the model wrapper">
+          <div class="metric-header"><span>GENERATION SPEED</span> 🚀</div>
+          <div class="metric-val" id="stat-speed-val">—</div>
+          <div class="metric-bar-bg"><div class="metric-bar-fill" id="stat-speed-bar" style="width: 0%;"></div></div>
+        </div>
+        <div class="metric-card" title="Real useful/prefetched shard ratio (n/a = no measured prefetch activity; per-expert routing is opaque in llama.cpp)">
+          <div class="metric-header"><span>PREFETCH ACCURACY</span> 🎯</div>
+          <div class="metric-val" id="stat-prefetch-val">—</div>
+          <div class="metric-bar-bg"><div class="metric-bar-fill" id="stat-prefetch-bar" style="width: 0%;"></div></div>
+        </div>
+      </div>
+
+      <!-- Compact MoE Expert Heatmap Grid -->
+      <div class="heatmap-container">
+        <div class="heatmap-title">
+          <span>🔥 MoE Expert Heatmap <span style="font-size:0.8em;color:var(--text-dim);font-weight:normal;">(per-token routing is opaque in llama.cpp — no synthetic firing is shown)</span></span>
+          <span id="heatmap-status" style="font-size:0.8em;color:var(--accent-green);font-weight:normal;">no expert data</span>
+        </div>
+        <div class="expert-grid" id="expert-heatmap-grid"></div>
+      </div>
+    </div>
+
+    <!-- Tab 3: Restored Models Pane -->
+    <div class="tab-pane" id="tab-models">
+      <div class="models-section">
+        <div class="section-head"><span>Loaded Models</span></div>
+        <div id="models-list">Loading loaded models...</div>
+      </div>
+
+      <div class="models-section">
+        <div class="section-head"><span id="load-header">Scan & Select Model</span></div>
+        
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input type="text" id="scan-dir" class="setting-input" placeholder="Scan folder (e.g. D:\models or Jan directory)..." style="flex:1;">
+          <button class="btn-action" onclick="scanDirCustom()">Scan Folder</button>
+          <button class="btn-action" onclick="browseDir()">Browse Folder...</button>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <select id="model-picker" class="setting-input">
+            <option value="">-- Scan directory or browse file below --</option>
+          </select>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:12px;">
+          <input type="text" id="load-path" class="setting-input" placeholder="Model GGUF Path..." style="flex:1;">
+          <button class="btn-action" onclick="browseModel()">Browse File...</button>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-end;">
+          <div style="flex:1;">
+            <label style="font-size:0.75rem;color:var(--text-dim);display:block;margin-bottom:2px;">Model ID</label>
+            <input type="text" id="load-id" class="setting-input" placeholder="Model ID (e.g. default)">
+          </div>
+          <div style="width:110px;">
+            <label style="font-size:0.75rem;color:var(--primary);font-weight:600;display:block;margin-bottom:2px;" title="BUF (MB): Streaming Buffer RAM size. Recommended 64-256 MB.">BUF (MB) ℹ️</label>
+            <input type="number" id="load-buffer" class="setting-input" value="64" onchange="syncModelConfigToSettings()" title="Streaming Buffer RAM Capacity in MB">
+          </div>
+          <div style="width:110px;">
+            <label style="font-size:0.75rem;color:var(--primary);font-weight:600;display:block;margin-bottom:2px;" title="CTX (Tok): Max Context Window length in tokens. Recommended 2048-4096 Tokens.">CTX (Tok) ℹ️</label>
+            <input type="number" id="load-ctx" class="setting-input" value="2048" onchange="syncModelConfigToSettings()" title="Max Context Window length in tokens">
+          </div>
+        </div>
+
+        <div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:12px;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;border:1px solid var(--border-color);">
+          💡 <b>BUF (MB)</b> = ขนาด RAM ที่กันเป็น Hot-Weight Cache (แนะนำ 64-256MB) | <b>CTX (Tok)</b> = ความยาวจำบริบทบทสนทนา (แนะนำ 2048-4096 Tokens)
+        </div>
+
+        <div style="display:flex;gap:8px;">
+          <button class="btn-action primary" id="load-btn" onclick="loadModel(false)" style="flex:1;">Load Model</button>
+          <button class="btn-action" id="reload-btn" onclick="loadModel(true)" style="flex:1;display:none;background:var(--accent-warn);color:#fff;">Reload (Force)</button>
+        </div>
+        <div id="load-msg" style="margin-top:10px;font-size:0.85em;"></div>
+      </div>
+    </div>
+
+    <!-- Tab 4: Issues Pane -->
+    <div class="tab-pane" id="tab-issues">
+      <div class="models-section">
+        <div class="section-head">
+          <span>📋 Reported Issues</span>
+          <button class="btn-action primary" onclick="openReportModal()">+ New Report</button>
+        </div>
+        <div id="issues-list">Loading issues...</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Settings Drawer -->
+  <div id="settings-drawer">
+    <div class="drawer-header" style="display:flex;justify-content:space-between;margin-bottom:16px;">
+      <b style="color:#fff;">⚙️ Chat Settings & Tools</b>
+      <button class="icon-btn" onclick="toggleSettingsDrawer()">✕</button>
+    </div>
+    <div class="setting-group">
+      <div class="setting-label"><span>SYSTEM PROMPT</span></div>
+      <textarea id="set-sysprompt" class="setting-input">You are a helpful assistant.</textarea>
+    </div>
+    <div class="setting-group">
+      <div class="setting-label"><span>REASONING EFFORT</span> <span id="set-effort-val" style="color:var(--primary);">Medium</span></div>
+      <select id="set-effort" class="setting-input">
+        <option value="low">Low (Fast)</option>
+        <option value="medium" selected>Medium (Balanced)</option>
+        <option value="high">High (Deep Reasoning)</option>
+      </select>
+    </div>
+    <div class="setting-group">
+      <div class="setting-label"><span>BUFFER SIZE (BUF)</span> <span id="set-buf-val" style="color:var(--primary);">64 MB</span></div>
+      <input type="number" id="set-buf" class="setting-input" value="64" min="16" max="1024" step="16" onchange="syncModelConfigFromSettings()">
+      <div style="font-size:0.72rem;color:var(--text-dim);margin-top:2px;">ขนาด RAM สำหรับกันเป็น Hot-Weight Cache (64-256 MB)</div>
+    </div>
+    <div class="setting-group">
+      <div class="setting-label"><span>CONTEXT WINDOW (CTX)</span> <span id="set-ctx-val" style="color:var(--primary);">2048 Tokens</span></div>
+      <input type="number" id="set-ctx" class="setting-input" value="2048" min="512" max="16384" step="512" onchange="syncModelConfigFromSettings()">
+      <div style="font-size:0.72rem;color:var(--text-dim);margin-top:2px;">ความยาวจำบริบทของบทสนทนา (2048-4096 Tokens)</div>
+    </div>
+    <div class="setting-group">
+      <div class="setting-label"><span>TEMPERATURE</span> <span id="set-temp-val" style="color:var(--primary);">0.7</span></div>
+      <input type="range" id="set-temp" min="0" max="2.0" step="0.1" value="0.7" oninput="document.getElementById('set-temp-val').textContent=this.value">
+    </div>
+    <div class="setting-group">
+      <div class="setting-label"><span>TOP P</span> <span id="set-top-p-val" style="color:var(--primary);">0.9</span></div>
+      <input type="range" id="set-top-p" min="0.1" max="1.0" step="0.05" value="0.9" oninput="document.getElementById('set-top-p-val').textContent=this.value">
+    </div>
+    <div class="setting-group">
+      <div class="setting-label"><span>MAX TOKENS</span> <span id="set-tokens-val" style="color:var(--primary);">512</span></div>
+      <input type="range" id="set-tokens" min="64" max="4096" step="64" value="512" oninput="document.getElementById('set-tokens-val').textContent=this.value">
     </div>
   </div>
-</div>
 
-<!-- ══════════════════════════════════════════════════════════════
-     Footer
-     ══════════════════════════════════════════════════════════════ -->
-<footer>
-  <span>weight-streaming v0.11.0</span>
-  <span id="stats-footer">--</span>
-</footer>
+  <!-- Report Issue Modal -->
+  <div class="modal-overlay" id="report-modal">
+    <div class="modal-box">
+      <b style="color:#fff;font-size:1.1rem;display:block;margin-bottom:12px;">Create Issue Report</b>
+      <input type="text" id="rpt-title" class="setting-input" placeholder="Title (e.g. Generation failed)" style="margin-bottom:10px;">
+      <textarea id="rpt-desc" class="setting-input" placeholder="Describe what went wrong..." style="margin-bottom:10px;height:90px;"></textarea>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn-action" onclick="closeReportModal()">Cancel</button>
+        <button class="btn-action primary" onclick="submitReport()">Submit Report</button>
+      </div>
+      <div id="rpt-msg" style="margin-top:8px;font-size:0.85em;"></div>
+    </div>
+  </div>
+
+</div>
 
 <script>
 /* ═══════════════════════════════════════════════════════════════
-   Application State
+   JS Logic - Network Error Prevention & Cute Speech Bubbles
    ═══════════════════════════════════════════════════════════════ */
-const API = 'http://127.0.0.1:8765';
-let currentModel = 'default';
+const API = 'http://' + window.location.host;
+let currentModel = '';
+let conversationHistory = [];
 let abortController = null;
 let scanned = false;
-let conversationHistory = [];
-let lastError = null;
-let lastEndpoint = null;
-let reportContext = {};
 
-// Load chat history from localStorage
-try {
-  const saved = localStorage.getItem('ws-chat-history');
-  if (saved) conversationHistory = JSON.parse(saved);
-} catch(e) {}
+const chatInput = document.getElementById('chat-input');
+const messagesContainer = document.getElementById('chat-messages-container');
 
-function saveChatHistory() {
-  try { localStorage.setItem('ws-chat-history', JSON.stringify(conversationHistory.slice(-20))); } catch(e) {}
-}
-
-function restoreChatUI() {
-  if (conversationHistory.length > 0) {
-    chatMessages.innerHTML = '';
-    for (var i = 0; i < conversationHistory.length; i++) {
-      var msg = conversationHistory[i];
-      addMessage(msg.role, msg.content, false);
-    }
-    chatMessages.scrollTop = chatMessages.scrollHeight;
+// Auto-expand Textarea
+chatInput.addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = this.scrollHeight + 'px';
+});
+chatInput.addEventListener('keydown', function(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
   }
-}
+});
 
-function clearChatHistory() {
-  conversationHistory = [];
-  localStorage.removeItem('ws-chat-history');
-}
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('collapsed'); }
+function toggleSettingsDrawer() { document.getElementById('settings-drawer').classList.toggle('open'); }
 
-/* ═══════════════════════════════════════════════════════════════
-   API Helpers
-   ═══════════════════════════════════════════════════════════════ */
-async function api(path, opts = {}) {
-  const url = API + path;
-  lastEndpoint = path;
-  const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json', ...opts.headers },
-    ...opts,
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({ detail: res.statusText }));
-    const msg = err.detail || err.error || ('HTTP ' + res.status);
-    lastError = msg;
-    throw new Error(msg);
-  }
-  return res;
-}
-
-async function apiJSON(path, body) {
-  const res = await api(path, {
-    method: body ? 'POST' : 'GET',
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  return res.json();
-}
-
-function stopGeneration() {
-  if (abortController) {
-    abortController.abort();
-    abortController = null;
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Server Health Check
-   ═══════════════════════════════════════════════════════════════ */
-async function checkHealth() {
-  const dot = document.getElementById('server-dot');
-  const url = document.getElementById('server-url');
-  try {
-    const data = await apiJSON('/health');
-    dot.classList.add('online');
-    url.textContent = `v${data.version} @ ${API}`;
-    return true;
-  } catch {
-    dot.classList.remove('online');
-    url.textContent = `Offline — ${API}`;
-    return false;
-  }
-}
-
-/* Tab Switching */
 function switchTab(tab) {
-  document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
-  const btn = document.querySelector('nav button[data-tab="' + tab + '"]');
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+
+  const btn = document.querySelector(`.tab-btn[data-tab="${tab}"]`);
+  const pane = document.getElementById(`tab-${tab}`);
   if (btn) btn.classList.add('active');
-  document.getElementById('tab-chat').style.display = tab === 'chat' ? 'flex' : 'none';
-  document.getElementById('tab-stats').style.display = tab === 'stats' ? 'block' : 'none';
-  document.getElementById('tab-models').style.display = tab === 'models' ? 'block' : 'none';
-  document.getElementById('tab-issues').style.display = tab === 'issues' ? 'block' : 'none';
+  if (pane) pane.classList.add('active');
+
+  window.location.hash = tab;
+  localStorage.setItem('ws-active-tab', tab);
+
+  if (tab === 'chat') refreshChatModelSelect();
   if (tab === 'stats') refreshStats();
   if (tab === 'models') { if (!scanned) { scanModels(); scanned = true; } refreshModels(); }
   if (tab === 'issues') refreshIssues();
-  window.location.hash = tab;
 }
 
-document.querySelectorAll('nav button').forEach(btn => {
-  btn.addEventListener('click', function() { switchTab(this.dataset.tab); });
-});
-
-// Restore tab on page load or hash change
 function restoreTab() {
-  const hash = (window.location.hash || '').replace('#', '');
-  const valid = ['chat', 'stats', 'models', 'issues'];
-  switchTab(valid.includes(hash) ? hash : 'chat');
-}
-window.addEventListener('hashchange', restoreTab);
-window.addEventListener('DOMContentLoaded', restoreTab);
-
-/* ═══════════════════════════════════════════════════════════════
-   Chat
-   ═══════════════════════════════════════════════════════════════ */
-const chatMessages = document.getElementById('chat-messages');
-const chatInput = document.getElementById('chat-input');
-const sendBtn = document.getElementById('send-btn');
-const stopBtn = document.getElementById('stop-btn');
-const SYSTEM_PROMPT = 'You are a helpful, respectful, and honest assistant. Answer the user directly and concisely. Always reply in the same language the user writes in (if the user writes Thai, reply in Thai; if English, reply in English).';
-
-function addMessage(role, content, isError) {
-  const div = document.createElement('div');
-  div.className = 'message ' + role + (isError ? ' error' : '');
-  div.innerHTML = '<div class="role">' + role + '</div>' + escapeHtml(content).replace(/\n/g, '<br>');
-  chatMessages.appendChild(div);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
+  const hash = window.location.hash.replace('#', '');
+  const saved = localStorage.getItem('ws-active-tab');
+  const target = hash || saved || 'chat';
+  switchTab(target);
 }
 
-async function sendMessage() {
-  const text = chatInput.value.trim();
-  if (!text) return;
-  
-  const online = await checkHealth();
-  if (!online) { addMessage('error', 'Server is offline', true); return; }
-  
-  chatInput.value = '';
-  addMessage('user', text);
-  
-  sendBtn.disabled = true;
-  stopBtn.style.display = 'inline-block';
-  
-  // Build messages with conversation history + system prompt
-  var messages = [{ role: 'system', content: SYSTEM_PROMPT }];
-  for (var i = 0; i < conversationHistory.length; i++) {
-    messages.push(conversationHistory[i]);
+async function apiJSON(endpoint, options = {}) {
+  const res = await fetch(API + endpoint, options);
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || err.error || 'HTTP ' + res.status);
   }
-  messages.push({ role: 'user', content: text });
-  
-  var msgDiv = document.createElement('div');
-  msgDiv.className = 'message assistant';
-  msgDiv.innerHTML = '<div class="role">assistant</div><span class="loading"></span>';
-  chatMessages.appendChild(msgDiv);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-  
-  abortController = new AbortController();
-  var fullResponse = '';
-  
+  return res.json();
+}
+
+async function checkHealth() {
   try {
-    var res = await fetch(API + '/v1/chat/completions', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: currentModel, messages: messages, max_tokens: 256, temperature: 0.3, stream: true }),
-      signal: abortController.signal,
-    });
-    
-    if (!res.ok) {
-      var err = await res.json().catch(function() { return { detail: res.statusText }; });
-      throw new Error(err.detail || err.error || 'HTTP ' + res.status);
-    }
-    
-    var reader = res.body.getReader();
-    var decoder = new TextDecoder();
-    var buffer = '';
-    
-    while (true) {
-      var result = await reader.read();
-      if (result.done) break;
-      buffer += decoder.decode(result.value, { stream: true });
-      var lines = buffer.split('\n');
-      buffer = lines.pop();
-      for (var li = 0; li < lines.length; li++) {
-        var line = lines[li];
-        if (line.startsWith('data: ')) {
-          var data = line.slice(6);
-          if (data === '[DONE]') continue;
-          try {
-            var event = JSON.parse(data);
-            var delta = (event.choices && event.choices[0] && event.choices[0].delta && event.choices[0].delta.content);
-            if (delta) {
-              fullResponse += delta;
-              msgDiv.innerHTML = '<div class="role">assistant</div>' + escapeHtml(fullResponse).replace(/\n/g, '<br>');
-              chatMessages.scrollTop = chatMessages.scrollHeight;
-            }
-          } catch(e) {}
-        }
+    await apiJSON('/health');
+    document.getElementById('global-status-dot').className = 'status-dot';
+  } catch(e) {
+    document.getElementById('global-status-dot').className = 'status-dot offline';
+  }
+}
+
+function getChatStorageKey(modelId) { return 'ws-chat-history-' + (modelId || 'default'); }
+
+function loadSavedChat(modelId) {
+  try {
+    const saved = localStorage.getItem(getChatStorageKey(modelId));
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return [];
+}
+
+function saveSavedChat(modelId) {
+  try {
+    localStorage.setItem(getChatStorageKey(modelId), JSON.stringify(conversationHistory));
+    renderHistorySidebar();
+  } catch(e) {}
+}
+
+function switchChatModel(newModelId) {
+  if (!newModelId) return;
+  if (currentModel) saveSavedChat(currentModel);
+  currentModel = newModelId;
+  document.getElementById('nav-model-select').value = newModelId;
+  document.getElementById('sidebar-active-model-name').textContent = newModelId;
+
+  conversationHistory = loadSavedChat(newModelId);
+  renderChatMessages();
+}
+
+async function refreshChatModelSelect() {
+  try {
+    const models = await apiJSON('/v1/models');
+    let html = '';
+    if (!models || models.length === 0) {
+      html = '<option value="">-- No model loaded --</option>';
+    } else {
+      models.forEach(m => {
+        html += `<option value="${escapeHtml(m.id)}" ${m.id === currentModel ? 'selected' : ''}>${escapeHtml(m.id)}</option>`;
+      });
+      if (!currentModel && models.length > 0) {
+        switchChatModel(models[0].id);
       }
     }
-    
-    if (!fullResponse) {
-      msgDiv.innerHTML = '<div class="role">assistant</div><em>(empty response)</em>';
-    }
-    
-    // Save to conversation history
-    conversationHistory.push({ role: 'user', content: text });
-    conversationHistory.push({ role: 'assistant', content: fullResponse });
-    if (conversationHistory.length > 20) conversationHistory = conversationHistory.slice(-20);
-    saveChatHistory();
-    
-  } catch (e) {
-    if (e.name === 'AbortError') {
-      msgDiv.innerHTML = '<div class="role">assistant</div>' + escapeHtml(fullResponse).replace(/\n/g, '<br>') + ' <em style="color:var(--text-dim);">[stopped]</em>';
-    } else {
-      msgDiv.className = 'message error';
-      msgDiv.innerHTML = '<div class="role">error</div>' + escapeHtml(e.message);
+    document.getElementById('nav-model-select').innerHTML = html;
+  } catch(e) {
+    document.getElementById('nav-model-select').innerHTML = '<option value="">-- Server offline --</option>';
+  }
+}
+
+function renderChatMessages() {
+  messagesContainer.innerHTML = '';
+  if (conversationHistory.length === 0) {
+    addMessageCard('assistant', 'สวัสดีครับคุณทอม! มีอะไรให้ผมช่วยเหลือวันนี้ครับ?');
+    return;
+  }
+  conversationHistory.forEach(msg => {
+    addMessageCard(msg.role, msg.content);
+  });
+}
+
+function renderHistorySidebar() {
+  const container = document.getElementById('chat-history-list');
+  let html = '';
+  if (conversationHistory.length > 0) {
+    const firstPrompt = conversationHistory.find(m => m.role === 'user')?.content || 'Conversation';
+    html = `<div class="history-item active">
+      <span class="history-title">💬 ${escapeHtml(firstPrompt.slice(0, 24))}...</span>
+    </div>`;
+  } else {
+    html = '<div style="font-size:0.8em;color:var(--text-dim);padding:6px 8px;">ยังไม่มีประวัติแชท</div>';
+  }
+  container.innerHTML = html;
+}
+
+function startNewChat() {
+  if (currentModel) saveSavedChat(currentModel);
+  conversationHistory = [];
+  renderChatMessages();
+}
+
+/* ── Scroll behavior: pin to bottom only while the user is near it ── */
+const BOTTOM_STICK_PX = 80;
+function isNearBottom() {
+  return messagesContainer.scrollHeight - messagesContainer.scrollTop
+    - messagesContainer.clientHeight < BOTTOM_STICK_PX;
+}
+function scrollIfStuck(stuck) {
+  if (stuck) messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+/* Cute Speech Bubble Card rendering (AI left, User right) */
+function addMessageCard(role, content) {
+  const stuck = isNearBottom();
+  const card = document.createElement('div');
+  card.className = `message-card ${role}`;
+  card.innerHTML = `
+    <div class="avatar ${role}">${role === 'user' ? '👤' : '🤖'}</div>
+    <div class="message-body">
+      <div class="message-header">
+        <span class="message-role">${role === 'user' ? 'คุณทอม' : 'Assistant'}</span>
+        <span class="message-time">${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+      </div>
+      <div class="message-text"></div>
+    </div>
+  `;
+  const textEl = card.querySelector('.message-text');
+  textEl.textContent = content; // textContent: no HTML parsing, XSS-safe
+  messagesContainer.appendChild(card);
+  scrollIfStuck(stuck);
+  return { card, textEl, timeEl: card.querySelector('.message-time') };
+}
+
+/* Streaming chat with batched rendering (item 4):
+   - deltas accumulate in a plain string; the DOM is touched at most once
+     per animation frame via textContent (no innerHTML re-parse per token)
+   - auto-scroll only while the user stays near the bottom
+   - Stop (AbortController) keeps the partial reply in history           */
+async function sendMessage() {
+  const text = chatInput.value.trim();
+  if (!text || !currentModel) return;
+
+  chatInput.value = '';
+  chatInput.style.height = 'auto';
+  addMessageCard('user', text);
+
+  const sendBtn = document.getElementById('send-msg-btn');
+  const stopBtn = document.getElementById('stop-msg-btn');
+  sendBtn.disabled = true;
+  stopBtn.style.display = 'flex';
+
+  abortController = new AbortController();
+  let fullResponse = '';
+  let frameScheduled = false;
+  let stickToBottom = true;
+
+  const { textEl: streamTextEl, timeEl: streamTimeEl } = addMessageCard('assistant', '...');
+
+  function flushRender() {
+    frameScheduled = false;
+    streamTextEl.textContent = fullResponse;
+    scrollIfStuck(stickToBottom);
+  }
+  function scheduleRender() {
+    // Re-evaluate stickiness right before paint: if the user scrolled up,
+    // stop pinning; if they scrolled back down, resume pinning.
+    stickToBottom = isNearBottom();
+    if (!frameScheduled) {
+      frameScheduled = true;
+      requestAnimationFrame(flushRender);
     }
   }
-  
+
+  try {
+    const res = await fetch(API + '/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: currentModel,
+        messages: [{ role: 'system', content: document.getElementById('set-sysprompt').value }, ...conversationHistory, { role: 'user', content: text }],
+        max_tokens: parseInt(document.getElementById('set-tokens').value),
+        temperature: parseFloat(document.getElementById('set-temp').value),
+        top_p: parseFloat(document.getElementById('set-top-p').value),
+        stream: true,
+      }),
+      signal: abortController.signal,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: 'HTTP ' + res.status }));
+      throw new Error(err.detail || err.error || 'Server HTTP ' + res.status);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let sseBuffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      // SSE frames can be split across reads — buffer until newline.
+      sseBuffer += decoder.decode(value, { stream: true });
+      const lines = sseBuffer.split('\n');
+      sseBuffer = lines.pop();
+      for (let line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') continue;
+        try {
+          const parsed = JSON.parse(data);
+          const delta = parsed.choices[0]?.delta?.content || '';
+          if (delta) {
+            fullResponse += delta;
+            scheduleRender();
+          }
+        } catch(e) {}
+      }
+    }
+
+    flushRender(); // guarantee the final text is painted
+    streamTimeEl.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+    conversationHistory.push({ role: 'user', content: text });
+    conversationHistory.push({ role: 'assistant', content: fullResponse });
+    saveSavedChat(currentModel);
+
+  } catch(e) {
+    if (e.name === 'AbortError') {
+      // Stopped by user: keep what was generated so far, and keep the
+      // conversation consistent between UI and history.
+      flushRender();
+      streamTimeEl.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+      if (fullResponse.trim()) {
+        conversationHistory.push({ role: 'user', content: text });
+        conversationHistory.push({ role: 'assistant', content: fullResponse });
+        saveSavedChat(currentModel);
+      }
+    } else {
+      const isNetworkErr = e.message.includes('fetch') || e.message.includes('Network');
+      const errText = isNetworkErr
+        ? 'ข้อผิดพลาดการเชื่อมต่อระบบแชท (Network/Context limit exceeded) — แนะนำกด + New Conversation เพื่อเริ่มการสนทนาใหม่'
+        : 'Error: ' + e.message;
+      streamTextEl.innerHTML = `<span style="color:var(--accent-error);">${escapeHtml(errText)}</span>`;
+    }
+  }
+
   sendBtn.disabled = false;
   stopBtn.style.display = 'none';
   abortController = null;
-  refreshStats();
+}
+
+function stopGeneration() { if (abortController) abortController.abort(); }
+
+function applyPromptPreset(type) {
+  const sys = document.getElementById('set-sysprompt');
+  if (type === 'coding') sys.value = "You are an expert developer. Write clean, efficient code.";
+  if (type === 'writing') sys.value = "You are a creative writer. Craft polished, engaging text.";
+  if (type === 'analyst') sys.value = "You are a data analyst. Provide evidence-backed insights.";
+  if (type === 'concise') sys.value = "Be extremely concise, direct, and factual.";
+  toggleSettingsDrawer();
 }
 
 function escapeHtml(text) {
   const div = document.createElement('div');
   div.textContent = text;
-  return div.innerHTML.replace(/\n/g, '<br>');
+  return div.innerHTML;
 }
 
-chatInput.addEventListener('keydown', e => {
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
-});
-sendBtn.addEventListener('click', sendMessage);
-stopBtn.addEventListener('click', stopGeneration);
+function syncModelConfigToSettings() {
+  const buf = document.getElementById('load-buffer').value;
+  const ctx = document.getElementById('load-ctx').value;
+  document.getElementById('set-buf').value = buf;
+  document.getElementById('set-buf-val').textContent = buf + ' MB';
+  document.getElementById('set-ctx').value = ctx;
+  document.getElementById('set-ctx-val').textContent = ctx + ' Tokens';
+}
 
-/* ═══════════════════════════════════════════════════════════════
-   Stats
-   ═══════════════════════════════════════════════════════════════ */
+function syncModelConfigFromSettings() {
+  const buf = document.getElementById('set-buf').value;
+  const ctx = document.getElementById('set-ctx').value;
+  document.getElementById('set-buf-val').textContent = buf + ' MB';
+  document.getElementById('set-ctx-val').textContent = ctx + ' Tokens';
+  document.getElementById('load-buffer').value = buf;
+  document.getElementById('load-ctx').value = ctx;
+}
+
 async function refreshStats() {
-  const grid = document.getElementById('stats-grid');
-  const footer = document.getElementById('stats-footer');
   try {
     const data = await apiJSON('/v1/stats');
     const models = data.models || {};
-    const server = data.server || {};
-    footer.textContent = `${server.models_loaded || 0} models loaded`;
-    
-    let html = '';
-    for (const [mid, ms] of Object.entries(models)) {
-      const buf = ms.buffer || {};
-      const pref = ms.prefetcher || {};
-      const page = ms.page_cache || {};
-      const gen = ms.generation || {};
-      
-      html += `<div style="grid-column:1/-1;font-weight:600;color:var(--primary);margin-top:8px;">${escapeHtml(mid)}</div>`;
-      html += card('Hit Rate', `${(buf.hit_rate * 100).toFixed(1)}%`);
-      html += card('Hot Shards', `${buf.hot_shards}/${buf.capacity_shards}`);
-      html += card('Prefetches', pref.prefetched || '0');
-      html += card('Resident', `${(page.resident_ratio * 100).toFixed(1)}%`);
-      html += card('Speed', `${(gen.tokens_per_sec || 0).toFixed(1)} tok/s`);
-      html += card('Tokens', gen.token_count || '0');
+    const first = Object.values(models)[0] || {};
+    const buf = first.buffer || {};
+    const gen = first.generation || {};
+    const pref = first.prefetcher || {};
+    const page = first.page_cache || {};
+
+    // 1. Buffer Hit Rate (real measurement only)
+    if (buf.hit_rate !== undefined && buf.total_accesses > 0) {
+      const hitrate = (buf.hit_rate * 100).toFixed(1);
+      document.getElementById('stat-hitrate-val').textContent = hitrate + '%';
+      document.getElementById('stat-hitrate-bar').style.width = hitrate + '%';
+    } else {
+      document.getElementById('stat-hitrate-val').textContent = 'Ready';
+      document.getElementById('stat-hitrate-bar').style.width = '0%';
     }
-    if (!html) {
-      html = '<div class="stat-card"><div class="stat-label">No models loaded</div></div>';
+
+    // 2. RAM Residency (real page-cache measurement only)
+    if (page.resident_gb !== undefined) {
+      document.getElementById('stat-ram-val').textContent = page.resident_gb.toFixed(1) + ' GB';
+      const ratio = ((page.resident_ratio || 0) * 100).toFixed(0);
+      document.getElementById('stat-ram-bar').style.width = ratio + '%';
+    } else if (page.working_set_mb !== undefined) {
+      document.getElementById('stat-ram-val').textContent = (page.working_set_mb / 1024).toFixed(1) + ' GB';
+      document.getElementById('stat-ram-bar').style.width = '50%';
+    } else {
+      // No page monitor on this OS — don't fake a number.
+      document.getElementById('stat-ram-val').textContent = 'n/a';
+      document.getElementById('stat-ram-bar').style.width = '0%';
     }
-    grid.innerHTML = html;
-  } catch (e) {
-    grid.innerHTML = `<div class="stat-card" style="color:var(--error);">Error: ${escapeHtml(e.message)}</div>`;
+
+    // 3. Generation Speed (real measurement from the model wrapper)
+    if (gen.tokens_per_sec !== undefined && gen.tokens_per_sec > 0) {
+      const speed = gen.tokens_per_sec.toFixed(1);
+      document.getElementById('stat-speed-val').textContent = speed + ' tok/s';
+      document.getElementById('stat-speed-bar').style.width = Math.min(100, (speed / 30) * 100) + '%';
+    } else {
+      document.getElementById('stat-speed-val').textContent = '0.0 tok/s';
+      document.getElementById('stat-speed-bar').style.width = '0%';
+    }
+
+    // 4. Prefetch Accuracy — real useful/prefetched ratio only.
+    //    Expert routing is opaque in llama.cpp, so there is no routing-based
+    //    accuracy to show; never fabricate one.
+    if (pref.prefetched > 0 && pref.useful !== undefined) {
+      const acc = Math.min(100, (pref.useful / pref.prefetched) * 100).toFixed(1);
+      document.getElementById('stat-prefetch-val').textContent = acc + '%';
+      document.getElementById('stat-prefetch-bar').style.width = acc + '%';
+    } else {
+      document.getElementById('stat-prefetch-val').textContent = 'n/a';
+      document.getElementById('stat-prefetch-bar').style.width = '0%';
+    }
+
+    renderHeatmap(first);
+  } catch(e) {
+    document.getElementById('stat-hitrate-val').textContent = '--';
+    document.getElementById('stat-ram-val').textContent = '--';
+    document.getElementById('stat-speed-val').textContent = '--';
+    document.getElementById('stat-prefetch-val').textContent = '--';
   }
 }
 
-function card(label, value) {
-  return `<div class="stat-card"><div class="stat-label">${label}</div><div class="stat-value">${value}</div></div>`;
+function renderHeatmap(modelStats) {
+  modelStats = modelStats || {};
+  const grid = document.getElementById('expert-heatmap-grid');
+  const status = document.getElementById('heatmap-status');
+  const model = modelStats.model || {};
+  const total = model.n_experts || 0;
+  const used = model.n_experts_used || 0;
+
+  // Only real telemetry lights cells up. The server does not (and cannot,
+  // with stock llama.cpp) report per-token expert routing, so this stays
+  // dark rather than animating fake firing.
+  const active = Array.isArray(modelStats.active_experts) ? modelStats.active_experts : null;
+  const CELLS = (total > 0 && total <= 256) ? total : 64;
+  const firingSet = new Set((active || []).map(i => ((i % CELLS) + CELLS) % CELLS));
+
+  grid.innerHTML = '';
+  for (let i = 0; i < CELLS; i++) {
+    const cell = document.createElement('div');
+    cell.className = 'expert-cell' + (firingSet.has(i) ? ' firing' : '');
+    cell.title = 'Expert #' + i;
+    grid.appendChild(cell);
+  }
+
+  if (active && active.length > 0) {
+    status.textContent = `${active.length} firing (real telemetry)`;
+    status.style.color = 'var(--accent-green)';
+  } else if (total > 0) {
+    status.textContent = used > 0
+      ? `${used} / ${total} per token · routing not observable`
+      : `${total} experts · routing not observable`;
+    status.style.color = 'var(--text-muted)';
+  } else {
+    status.textContent = 'no expert data';
+    status.style.color = 'var(--text-muted)';
+  }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   Models
-   ═══════════════════════════════════════════════════════════════ */
 async function refreshModels() {
   const list = document.getElementById('models-list');
-  const reloadBtn = document.getElementById('reload-btn');
-  const loadBtn = document.getElementById('load-btn');
-  const loadMsg = document.getElementById('load-msg');
-  const loadHeader = document.getElementById('load-header');
-  
   try {
     const models = await apiJSON('/v1/models');
     if (!models || models.length === 0) {
       list.innerHTML = '<p style="color:var(--text-dim);">No models loaded yet. Select one below and click Load Model.</p>';
-      reloadBtn.style.display = 'none';
-      loadBtn.style.display = 'inline-block';
-      loadHeader.textContent = 'Load Model';
-      loadMsg.textContent = '';
+      document.getElementById('reload-btn').style.display = 'none';
+      document.getElementById('load-btn').style.display = 'inline-block';
       return;
     }
-    
     list.innerHTML = models.map(m => `
-      <div class="model-card">
+      <div class="model-card-item">
         <div>
-          <div class="model-name">${escapeHtml(m.id)}</div>
-          <div class="model-meta">${escapeHtml(m.path || '')} · ${m.arch || 'unknown'} · ${m.n_experts} experts</div>
+          <b>${escapeHtml(m.id)}</b> · <span style="color:var(--text-dim);">${escapeHtml(m.path || '')} (${m.arch || 'unknown'})</span>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <span class="badge loaded">loaded</span>
-          <button onclick="unloadModel('${escapeHtml(m.id)}')" style="background:none;border:1px solid var(--border);color:var(--text-dim);padding:4px 8px;border-radius:var(--radius-sm);cursor:pointer;font-size:0.8em;">Unload</button>
-        </div>
+        <button class="btn-action" onclick="unloadModel('${escapeHtml(m.id)}')">Unload</button>
       </div>
     `).join('');
-    
-    // Set current model and update load form
-    const loaded = models[0];
-    currentModel = loaded.id;
-    document.getElementById('load-path').value = loaded.path || '';
-    document.getElementById('load-id').value = loaded.id;
-    
-    reloadBtn.style.display = 'inline-block';
-    loadBtn.style.display = 'none';
-    loadHeader.textContent = 'Model Loaded';
-    loadMsg.innerHTML = '<span style="color:var(--success);">Model <b>' + escapeHtml(loaded.id) + '</b> is loaded and ready.</span>';
+
+    currentModel = models[0].id;
+    document.getElementById('load-path').value = models[0].path || '';
+    document.getElementById('load-id').value = models[0].id;
+    document.getElementById('reload-btn').style.display = 'inline-block';
   } catch (e) {
-    list.innerHTML = '<p style="color:var(--error);">Error: ' + escapeHtml(e.message) + '</p>';
+    list.innerHTML = '<p style="color:var(--accent-error);">Error: ' + escapeHtml(e.message) + '</p>';
   }
 }
 
 async function scanModels(dir) {
   const picker = document.getElementById('model-picker');
-  var url = '/v1/models/scan';
+  let url = '/v1/models/scan';
   if (dir) url += '?dir=' + encodeURIComponent(dir);
-  
   try {
     const data = await apiJSON(url);
     const models = data.models || [];
-    var html = '<option value="">-- Select a model (' + models.length + ' found) --</option>';
-    for (var i = 0; i < models.length; i++) {
-      var m = models[i];
-      var label = m.name + ' (' + m.size_gb + ' GB)';
-      if (m.architecture && m.architecture !== 'unknown') label += ' [' + m.architecture + ']';
-      if (m.may_need_upgrade) label += ' ⚠ needs newer llama-cpp';
-      html += '<option value="' + escapeHtml(m.path) + '">' + escapeHtml(label) + '</option>';
-    }
-    if (models.length === 0) {
-      html = '<option value="">No .gguf files found. Try scanning a different directory.</option>';
-    }
+    let html = '<option value="">-- Select a model (' + models.length + ' found) --</option>';
+    models.forEach(m => {
+      html += `<option value="${escapeHtml(m.path)}">${escapeHtml(m.name)} (${m.size_gb} GB)</option>`;
+    });
     picker.innerHTML = html;
   } catch (e) {
     picker.innerHTML = '<option value="">Scan error: ' + escapeHtml(e.message) + '</option>';
   }
 }
 
-// Native browse: open Windows file dialog on server
-async function browseModel() {
-  const msg = document.getElementById('load-msg');
-  msg.innerHTML = '<span style="color:var(--warn);">Opening file dialog... (check taskbar if not visible)</span>';
-  try {
-    const data = await apiJSON('/v1/browse');
-    if (data.error) {
-      msg.innerHTML = '<span style="color:var(--error);">Browse error: ' + escapeHtml(data.error) + '</span>';
-      return;
-    }
-    if (data.cancelled || !data.path) {
-      msg.innerHTML = '<span style="color:var(--text-dim);">Browse cancelled.</span>';
-      return;
-    }
-    document.getElementById('load-path').value = data.path;
-    const name = data.name.replace('.gguf', '').replace(/[^a-zA-Z0-9_-]/g, '-');
-    document.getElementById('load-id').value = name || 'default';
-    pickerAddOption(data.path, data.name + ' (' + data.size_gb + ' GB)');
-    document.getElementById('load-btn').style.display = 'inline-block';
-    document.getElementById('reload-btn').style.display = 'none';
-    msg.innerHTML = '<span style="color:var(--success);">Selected: ' + escapeHtml(data.name) + ' — click Load Model</span>';
-  } catch(e) {
-    msg.innerHTML = '<span style="color:var(--error);">Browse failed: ' + escapeHtml(e.message) + '</span>';
-  }
-}
-
 async function browseDir() {
-  const msg = document.getElementById('load-msg');
-  msg.innerHTML = '<span style="color:var(--warn);">Opening folder dialog... (check taskbar if not visible)</span>';
-  try {
-    const data = await apiJSON('/v1/browse-dir');
-    if (data.error) {
-      msg.innerHTML = '<span style="color:var(--error);">Browse error: ' + escapeHtml(data.error) + '</span>';
-      return;
-    }
-    if (data.cancelled || !data.path) {
-      msg.innerHTML = '<span style="color:var(--text-dim);">Browse cancelled.</span>';
-      return;
-    }
+  const data = await apiJSON('/v1/browse-dir');
+  if (data.path) {
     document.getElementById('scan-dir').value = data.path;
-    msg.innerHTML = '<span style="color:var(--warn);">Scanning: ' + escapeHtml(data.path) + '</span>';
     await scanModels(data.path);
-    msg.innerHTML = '<span style="color:var(--success);">Scanned: ' + escapeHtml(data.path) + '</span>';
-  } catch(e) {
-    msg.innerHTML = '<span style="color:var(--error);">Browse failed: ' + escapeHtml(e.message) + '</span>';
   }
 }
 
 function scanDirCustom() {
-  var dir = document.getElementById('scan-dir').value.trim();
-  if (dir) scanModels(dir);
-  else alert('Enter a directory path first');
-}
-
-
-
-function pickerAddOption(path, label) {
-  const picker = document.getElementById('model-picker');
-  if (!picker.querySelector('option[value="' + path.replace(/"/g, '') + '"]')) {
-    const opt = document.createElement('option');
-    opt.value = path;
-    opt.textContent = label;
-    picker.appendChild(opt);
-    picker.value = path;
-  }
-}
-
-// Scan button: scan the custom directory
-document.getElementById('scan-dir-btn').addEventListener('click', function() {
-  var dir = document.getElementById('scan-dir').value.trim();
+  const dir = document.getElementById('scan-dir').value.trim();
   scanModels(dir || null);
-});
+}
 
-// Also scan on Enter in scan-dir input
-document.getElementById('scan-dir').addEventListener('keydown', function(e) {
-  if (e.key === 'Enter') {
-    scanModels(this.value.trim() || null);
+async function browseModel() {
+  const data = await apiJSON('/v1/browse');
+  if (data.path) {
+    document.getElementById('load-path').value = data.path;
+    document.getElementById('load-id').value = data.name.replace('.gguf', '');
   }
-});
+}
 
-// Dropdown selection → auto-fill path + ID
 document.getElementById('model-picker').addEventListener('change', function() {
-  const path = this.value;
-  if (path) {
-    document.getElementById('load-path').value = path;
-    const name = path.split(/[\\/]/).pop().replace('.gguf', '').replace(/[^a-zA-Z0-9_-]/g, '-');
+  if (this.value) {
+    document.getElementById('load-path').value = this.value;
+    const name = this.value.split(/[\\/]/).pop().replace('.gguf', '');
     document.getElementById('load-id').value = name || 'default';
-    document.getElementById('load-btn').style.display = 'inline-block';
-    document.getElementById('reload-btn').style.display = 'none';
   }
 });
 
@@ -1046,351 +1211,88 @@ async function loadModel(force) {
   const path = document.getElementById('load-path').value.trim();
   const id = document.getElementById('load-id').value.trim() || 'default';
   const buffer = parseInt(document.getElementById('load-buffer').value) || 64;
-  const ctx = parseInt(document.getElementById('load-ctx').value) || 512;
-  const loadMsg = document.getElementById('load-msg');
-  
-  if (!path) { loadMsg.innerHTML = '<span style="color:var(--error);">Please enter or select a model path.</span>'; return; }
-  
-  const btn = force ? document.getElementById('reload-btn') : document.getElementById('load-btn');
-  btn.disabled = true;
-  btn.textContent = force ? 'Reloading...' : 'Loading...';
-  loadMsg.innerHTML = '<span style="color:var(--warn);">Loading model... this may take a minute.</span>';
-  
+  const ctx = parseInt(document.getElementById('load-ctx').value) || 2048;
+  const msg = document.getElementById('load-msg');
+
+  if (!path) { msg.innerHTML = '<span style="color:var(--accent-error);">Select a model path first.</span>'; return; }
+  msg.innerHTML = '<span style="color:var(--accent-warn);">Loading model...</span>';
+
   try {
-    const body = { model_id: id, model_path: path, buffer_mb: buffer, n_ctx: ctx };
-    if (force) body.force = true;
-    await apiJSON('/v1/models/load', body);
-    currentModel = id;
-    loadMsg.innerHTML = '<span style="color:var(--success);">Loaded! Model <b>' + escapeHtml(id) + '</b> is ready for chat.</span>';
-    await refreshModels();
+    await apiJSON('/v1/models/load', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_id: id, model_path: path, buffer_mb: buffer, n_ctx: ctx, force: force })
+    });
+    msg.innerHTML = '<span style="color:var(--accent-green);">Loaded successfully!</span>';
+    refreshModels();
+    refreshChatModelSelect();
   } catch (e) {
-    const msg = e.message || 'Unknown error';
-    if (msg.includes('already loaded')) {
-      loadMsg.innerHTML = '<span style="color:var(--warn);">Model already loaded. Click Reload to force reload.</span>';
-      document.getElementById('reload-btn').style.display = 'inline-block';
-      document.getElementById('load-btn').style.display = 'none';
-    } else {
-      loadMsg.innerHTML = '<span style="color:var(--error);">Load failed: ' + escapeHtml(msg) +
-        '</span> <button onclick="reportLastError()" style="margin-left:8px;background:var(--primary);color:#fff;border:none;padding:4px 8px;border-radius:6px;cursor:pointer;font-size:0.75em;">Report this</button>';
-    }
+    msg.innerHTML = '<span style="color:var(--accent-error);">Load failed: ' + escapeHtml(e.message) + '</span>';
   }
-  btn.disabled = false;
-  btn.textContent = force ? 'Reload (Force)' : 'Load Model';
 }
 
 async function unloadModel(id) {
   try {
-    await apiJSON('/v1/models/unload', { model_id: id });
-    document.getElementById('load-msg').textContent = '';
-    await refreshModels();
-    if (currentModel === id) currentModel = 'default';
-  } catch (e) {
-    alert('Unload failed: ' + e.message);
-  }
-}
-
-document.getElementById('load-btn').addEventListener('click', function() { loadModel(false); });
-document.getElementById('reload-btn').addEventListener('click', function() { loadModel(true); });
-
-/* ═══════════════════════════════════════════════════════════════
-   Issue Reporting
-   ═══════════════════════════════════════════════════════════════ */
-async function openReportModal(prefill) {
-  const modal = document.getElementById('report-modal');
-  modal.style.display = 'flex';
-  document.getElementById('rpt-msg').textContent = '';
-  if (prefill) {
-    if (prefill.title) document.getElementById('rpt-title').value = prefill.title;
-    if (prefill.desc) document.getElementById('rpt-desc').value = prefill.desc;
-    if (prefill.actual) document.getElementById('rpt-actual').value = prefill.actual;
-  }
-  try {
-    const q = new URLSearchParams();
-    if (lastError) q.set('last_error', lastError);
-    if (lastEndpoint) q.set('last_endpoint', lastEndpoint);
-    const ctx = await apiJSON('/v1/debug/context?' + q.toString());
-    reportContext = ctx;
-    document.getElementById('rpt-context').textContent = JSON.stringify(ctx, null, 2);
-  } catch (e) {
-    reportContext = { last_error: lastError, last_endpoint: lastEndpoint, note: 'context fetch failed: ' + e.message };
-    document.getElementById('rpt-context').textContent = JSON.stringify(reportContext, null, 2);
-  }
-}
-
-function closeReportModal() {
-  document.getElementById('report-modal').style.display = 'none';
-}
-
-async function submitReport() {
-  const title = document.getElementById('rpt-title').value.trim();
-  const desc = document.getElementById('rpt-desc').value.trim();
-  const msg = document.getElementById('rpt-msg');
-  if (title.length < 5 || desc.length < 10) {
-    msg.innerHTML = '<span style="color:var(--error);">Title (5+) and description (10+) required.</span>';
-    return;
-  }
-  msg.innerHTML = '<span style="color:var(--warn);">Submitting...</span>';
-  try {
-    const issue = await apiJSON('/v1/issues', {
-      title: title,
-      description: desc,
-      severity: document.getElementById('rpt-severity').value,
-      expected: document.getElementById('rpt-expected').value,
-      actual: document.getElementById('rpt-actual').value || lastError || '',
-      context: reportContext,
+    await apiJSON('/v1/models/unload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model_id: id })
     });
-    msg.innerHTML = '<span style="color:var(--success);">Created <b>' + issue.id + '</b></span>';
-    setTimeout(function() {
-      closeReportModal();
-      document.getElementById('rpt-title').value = '';
-      document.getElementById('rpt-desc').value = '';
-      switchTab('issues');
-    }, 800);
-  } catch (e) {
-    msg.innerHTML = '<span style="color:var(--error);">Failed: ' + escapeHtml(e.message) + '</span>';
-  }
-}
-
-var issuesCache = {};
-var devMode = false;
-var currentDetailId = null;
-
-var STATUS_META = {
-  open:            { emoji: '🟢', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' },
-  triaged:         { emoji: '🔵', color: '#3b82f6', bg: 'rgba(59,130,246,0.15)' },
-  in_progress:     { emoji: '🟡', color: '#eab308', bg: 'rgba(234,179,8,0.18)' },
-  fixed:           { emoji: '🟣', color: '#a855f7', bg: 'rgba(168,85,247,0.18)' },
-  verify_pending:  { emoji: '🟠', color: '#f97316', bg: 'rgba(249,115,22,0.18)' },
-  verified:        { emoji: '✅', color: '#14b8a6', bg: 'rgba(20,184,166,0.18)' },
-  closed:          { emoji: '⚫', color: '#94a3b8', bg: 'rgba(148,163,184,0.15)' },
-  wontfix:         { emoji: '⚪', color: '#64748b', bg: 'rgba(100,116,139,0.15)' },
-  duplicate:       { emoji: '📎', color: '#78716c', bg: 'rgba(120,113,108,0.15)' }
-};
-var SEV_META = {
-  critical: { emoji: '🔴', color: '#ef4444', bg: 'rgba(239,68,68,0.18)' },
-  high:     { emoji: '🟠', color: '#f97316', bg: 'rgba(249,115,22,0.18)' },
-  medium:   { emoji: '🟡', color: '#eab308', bg: 'rgba(234,179,8,0.18)' },
-  low:      { emoji: '🟢', color: '#22c55e', bg: 'rgba(34,197,94,0.15)' }
-};
-
-function statusBadge(st) {
-  var m = STATUS_META[st] || { emoji: '•', color: '#888', bg: 'rgba(128,128,128,0.15)' };
-  return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:0.75em;font-weight:600;color:' + m.color + ';background:' + m.bg + ';border:1px solid ' + m.color + '33;">' + m.emoji + ' ' + escapeHtml(st) + '</span>';
-}
-function sevBadge(sev) {
-  var m = SEV_META[sev] || { emoji: '•', color: '#888', bg: 'rgba(128,128,128,0.15)' };
-  return '<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:999px;font-size:0.75em;font-weight:600;color:' + m.color + ';background:' + m.bg + ';border:1px solid ' + m.color + '33;">' + m.emoji + ' ' + escapeHtml(sev) + '</span>';
-}
-
-function toggleDevMode() {
-  devMode = document.getElementById('dev-mode-toggle').checked;
-  localStorage.setItem('ws-dev-mode', devMode ? '1' : '0');
-  if (currentDetailId) openIssueDetail(currentDetailId);
+    refreshModels();
+    refreshChatModelSelect();
+  } catch(e) { alert('Unload error: ' + e.message); }
 }
 
 async function refreshIssues() {
   const el = document.getElementById('issues-list');
   try {
-    var qs = [];
-    var st = document.getElementById('issues-filter-status').value;
-    var sev = document.getElementById('issues-filter-sev').value;
-    if (st) qs.push('status=' + encodeURIComponent(st));
-    if (sev) qs.push('severity=' + encodeURIComponent(sev));
-    var url = '/v1/issues' + (qs.length ? ('?' + qs.join('&')) : '');
-    const issues = await apiJSON(url);
-    issuesCache = {};
-    issues.forEach(function(i) { issuesCache[i.id] = i; });
-    if (!issues.length) {
-      el.innerHTML = '<p style="color:var(--text-dim);">No issues yet. Click + New Report when something goes wrong.</p>';
+    const issues = await apiJSON('/v1/issues');
+    if (!issues || issues.length === 0) {
+      el.innerHTML = '<p style="color:var(--text-dim);">No issues reported yet. Click + New Report to submit one.</p>';
       return;
     }
-    el.innerHTML = issues.map(function(i) {
-      var sm = STATUS_META[i.status] || {};
-      var preview = (i.description || '').replace(/\n/g, ' ').slice(0, 140);
-      return '<div class="issue-card model-card" data-iid="' + i.id + '" style="flex-direction:column;align-items:stretch;gap:8px;cursor:pointer;border-left:4px solid ' + (sm.color || 'var(--border)') + ';">' +
-        '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;">' +
-        '<div style="font-weight:600;font-size:0.95em;">' + (sm.emoji || '📋') + ' <span style="color:var(--text-dim);font-size:0.8em;">' + escapeHtml(i.id) + '</span> ' + escapeHtml(i.title) + '</div>' +
-        '</div>' +
-        '<div style="display:flex;gap:6px;flex-wrap:wrap;">' + statusBadge(i.status) + sevBadge(i.severity) + '</div>' +
-        '<div style="font-size:0.85em;color:var(--text-dim);">' + escapeHtml(preview) + (preview.length >= 140 ? '…' : '') + '</div>' +
-        '<div class="model-meta">🕒 ' + escapeHtml(i.created_at) + ' · click for full details</div>' +
-        '</div>';
-    }).join('');
-    el.querySelectorAll('.issue-card').forEach(function(card) {
-      card.addEventListener('click', function() {
-        openIssueDetail(card.getAttribute('data-iid'));
-      });
-    });
+    el.innerHTML = issues.map(i => `
+      <div class="issue-card-item">
+        <div style="font-weight:600;font-size:0.9em;color:var(--text-main);">📋 ${escapeHtml(i.id)} · ${escapeHtml(i.title)}</div>
+        <div style="font-size:0.8em;color:var(--text-muted);margin-top:4px;">Status: <b style="color:var(--accent-green);">${escapeHtml(i.status)}</b> · Severity: ${escapeHtml(i.severity)}</div>
+        <div style="font-size:0.82em;color:var(--text-dim);margin-top:6px;">${escapeHtml(i.description || '')}</div>
+      </div>
+    `).join('');
   } catch (e) {
-    el.innerHTML = '<p style="color:var(--error);">Error: ' + escapeHtml(e.message) + '</p>';
+    el.innerHTML = '<p style="color:var(--accent-error);">Error loading issues: ' + escapeHtml(e.message) + '</p>';
   }
 }
 
-async function openIssueDetail(id) {
-  currentDetailId = id;
-  var issue = issuesCache[id];
-  if (!issue) {
-    try { issue = await apiJSON('/v1/issues/' + id); issuesCache[id] = issue; }
-    catch (e) { alert('Load failed: ' + e.message); return; }
-  }
-  document.getElementById('issue-detail-modal').style.display = 'flex';
-  document.getElementById('det-id').textContent = issue.id + ' · created ' + issue.created_at + ' by ' + (issue.created_by || '');
-  document.getElementById('det-title').textContent = (STATUS_META[issue.status] || {}).emoji + ' ' + issue.title;
-  document.getElementById('det-badges').innerHTML = statusBadge(issue.status) + sevBadge(issue.severity);
+function openReportModal() { document.getElementById('report-modal').style.display = 'flex'; }
+function closeReportModal() { document.getElementById('report-modal').style.display = 'none'; }
 
-  var html = '';
-  html += sectionBlock('📝 Description', issue.description);
-  if (issue.expected) html += sectionBlock('✅ Expected', issue.expected);
-  if (issue.actual) html += sectionBlock('❌ Actual', issue.actual);
-  if (issue.steps_to_reproduce && issue.steps_to_reproduce.length) {
-    html += sectionBlock('🔁 Steps', issue.steps_to_reproduce.map(function(s, i) { return (i + 1) + '. ' + s; }).join('\n'));
-  }
-  if (issue.root_cause) html += sectionBlock('🔍 Root cause', issue.root_cause);
-  if (issue.fix_summary) html += sectionBlock('🔧 Fix', issue.fix_summary);
-  if (issue.verify_steps) html += sectionBlock('✔️ Verify steps', issue.verify_steps);
-  if (issue.commit) html += sectionBlock('📦 Commit', issue.commit);
-  if (issue.context && Object.keys(issue.context).length) {
-    html += '<details style="margin-top:10px;"><summary style="cursor:pointer;color:var(--text-dim);font-size:0.85em;">🧩 Debug context</summary>' +
-      '<pre style="font-size:0.72em;background:var(--surface2);padding:10px;border-radius:8px;overflow:auto;max-height:180px;">' +
-      escapeHtml(JSON.stringify(issue.context, null, 2)) + '</pre></details>';
-  }
-  if (issue.timeline && issue.timeline.length) {
-    html += '<div style="margin-top:12px;"><b style="font-size:0.85em;">📅 Timeline</b><ul style="margin:6px 0 0 18px;font-size:0.8em;color:var(--text-dim);">';
-    issue.timeline.forEach(function(ev) {
-      html += '<li>' + escapeHtml(ev.at) + ' · <b>' + escapeHtml(ev.event) + '</b> (' + escapeHtml(ev.by || '') + ')' +
-        (ev.note ? ' — ' + escapeHtml(ev.note) : '') + '</li>';
-    });
-    html += '</ul></div>';
-  }
-  document.getElementById('det-body').innerHTML = html;
-
-  // User verify actions
-  var vbox = document.getElementById('det-verify');
-  if (issue.status === 'verify_pending' || issue.status === 'fixed') {
-    vbox.style.display = 'block';
-    vbox.innerHTML = '<div style="padding:10px;background:rgba(249,115,22,0.12);border:1px solid #f97316;border-radius:8px;">' +
-      '<b>Ready to verify</b><div style="margin-top:8px;display:flex;gap:8px;">' +
-      '<button class="primary" id="btn-v-ok">✅ Verified — works now</button>' +
-      '<button id="btn-v-fail" style="background:var(--error);color:#fff;border:none;padding:10px 14px;border-radius:8px;cursor:pointer;">❌ Still broken</button>' +
-      '</div></div>';
-    document.getElementById('btn-v-ok').onclick = function() { verifyIssue(id, true); };
-    document.getElementById('btn-v-fail').onclick = function() { verifyIssue(id, false); };
-  } else {
-    vbox.style.display = 'none';
-    vbox.innerHTML = '';
-  }
-
-  // Maintainer panel
-  var mbox = document.getElementById('det-maintainer');
-  mbox.style.display = devMode ? 'block' : 'none';
-  if (devMode) {
-    document.getElementById('det-status').value = issue.status;
-    document.getElementById('det-sev').value = issue.severity;
-    document.getElementById('det-root').value = issue.root_cause || '';
-    document.getElementById('det-fix').value = issue.fix_summary || '';
-    document.getElementById('det-vsteps').value = issue.verify_steps || '';
-    document.getElementById('det-commit').value = issue.commit || '';
-    document.getElementById('det-note').value = '';
-    document.getElementById('det-maint-msg').textContent = '';
-  }
-}
-
-function sectionBlock(title, text) {
-  return '<div style="margin-bottom:12px;"><b style="font-size:0.85em;">' + title + '</b>' +
-    '<div style="margin-top:4px;white-space:pre-wrap;color:var(--text);">' + escapeHtml(text || '') + '</div></div>';
-}
-
-function closeIssueDetail() {
-  document.getElementById('issue-detail-modal').style.display = 'none';
-  currentDetailId = null;
-}
-
-async function saveMaintainerUpdate() {
-  if (!currentDetailId) return;
-  var msg = document.getElementById('det-maint-msg');
-  msg.innerHTML = '<span style="color:var(--warn);">Saving...</span>';
-  var body = {
-    status: document.getElementById('det-status').value,
-    severity: document.getElementById('det-sev').value,
-    root_cause: document.getElementById('det-root').value || null,
-    fix_summary: document.getElementById('det-fix').value || null,
-    verify_steps: document.getElementById('det-vsteps').value || null,
-    commit: document.getElementById('det-commit').value || null,
-    note: document.getElementById('det-note').value || null,
-    updated_by: 'maintainer',
-  };
+async function submitReport() {
+  const title = document.getElementById('rpt-title').value.trim();
+  const desc = document.getElementById('rpt-desc').value.trim();
+  const msg = document.getElementById('rpt-msg');
+  if (!title || !desc) { msg.innerHTML = '<span style="color:var(--accent-error);">Title and description required.</span>'; return; }
+  
   try {
-    // PATCH via fetch
-    lastEndpoint = '/v1/issues/' + currentDetailId;
-    var res = await fetch(API + '/v1/issues/' + currentDetailId, {
-      method: 'PATCH',
+    await apiJSON('/v1/issues', {
+      method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ title: title, description: desc, severity: 'medium' })
     });
-    if (!res.ok) {
-      var err = await res.json().catch(function() { return { detail: res.statusText }; });
-      throw new Error(err.detail || 'HTTP ' + res.status);
-    }
-    var updated = await res.json();
-    issuesCache[currentDetailId] = updated;
-    msg.innerHTML = '<span style="color:var(--success);">Saved · status=' + updated.status + '</span>';
-    refreshIssues();
-    openIssueDetail(currentDetailId);
-  } catch (e) {
-    msg.innerHTML = '<span style="color:var(--error);">Error: ' + escapeHtml(e.message) + '</span>';
+    msg.innerHTML = '<span style="color:var(--accent-green);">Issue created!</span>';
+    setTimeout(() => {
+      closeReportModal();
+      refreshIssues();
+    }, 800);
+  } catch(e) {
+    msg.innerHTML = '<span style="color:var(--accent-error);">Failed: ' + escapeHtml(e.message) + '</span>';
   }
 }
 
-async function verifyIssue(id, ok) {
-  try {
-    await apiJSON('/v1/issues/' + id + '/verify', {
-      verified: ok,
-      note: ok ? 'User confirmed fix' : 'Still broken',
-    });
-    refreshIssues();
-    if (currentDetailId === id) openIssueDetail(id);
-  } catch (e) {
-    alert('Verify failed: ' + e.message);
-  }
-}
-
-function reportLastError() {
-  openReportModal({
-    title: lastError ? ('Error: ' + lastError.slice(0, 60)) : 'Issue report',
-    desc: lastError ? ('An error occurred:\n' + lastError) : 'Describe what went wrong.',
-    actual: lastError || '',
-  });
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   Theme Toggle
-   ═══════════════════════════════════════════════════════════════ */
-document.getElementById('theme-toggle').addEventListener('click', () => {
-  const html = document.documentElement;
-  const current = html.getAttribute('data-theme');
-  html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
-  localStorage.setItem('ws-theme', current === 'dark' ? 'light' : 'dark');
-});
-
-// Load saved theme
-const saved = localStorage.getItem('ws-theme');
-if (saved) document.documentElement.setAttribute('data-theme', saved);
-
-/* ═══════════════════════════════════════════════════════════════
-   Init
-   ═══════════════════════════════════════════════════════════════ */
 checkHealth();
 setInterval(checkHealth, 10000);
-refreshModels();
-restoreChatUI();
-// restore maintainer mode preference
-if (localStorage.getItem('ws-dev-mode') === '1') {
-  devMode = true;
-  var tgl = document.getElementById('dev-mode-toggle');
-  if (tgl) tgl.checked = true;
-}
 restoreTab();
-document.getElementById('chat-input').focus();
+renderHeatmap();
+window.addEventListener('hashchange', restoreTab);
 </script>
 </body>
 </html>

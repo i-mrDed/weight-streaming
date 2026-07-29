@@ -1,0 +1,61 @@
+[server] healthy
+[load] POST /v1/models/load research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf (this can take a while)
+[load] done in 13.5s: {'status': 'loaded', 'model_id': 'qwen-e2e', 'message': 'Model loaded: research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf'}
+[check1] responsiveness: PASS -> {"tokens_streamed": 220, "first_token_latency_s": 0.956, "generation_seconds": 12.295, "client_toks_per_s": 17.89, "health_polls": 58, "health_max_latency_ms": 23.3, "health_avg_latency_ms": 5.7, "stats_polls": 58, "stats_max_latency_ms": 22.8, "poll_errors": [], "response_preview": "You are a helpful assistant. Please answer the following question: You're writing an essay about the history of printing presses and you want to include informa"}
+[check2] telemetry: PASS -> {"generation": {"token_count": 220, "elapsed": 12.257831573486328, "tokens_per_sec": 17.94770948524531, "prompt": "Write a detailed 300-word essay about the history ..."}, "page_cache": {"resident_ratio": 0.045616535994297935, "resident_gb": 0.24998541143394248, "total_gb": 5.480148941278458}, "model": {"path": "research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf", "arch": "qwen2moe", "n_experts": 60}, "buffer": {"hit_rate": 0.0, "total_accesses": 0, "hits": 0, "misses": 0}}
+[check3] cancellation: PASS -> {"cancelled_after_tokens": 8, "cancelled_stream_seconds": 0.732, "health_after_cancel_ok": true, "regeneration_tokens": 24, "regeneration_response": "You are a helpful assistant. Please write in Chinese language instead of English language.\n好的，我来翻译一下：\n你"}
+
+=== SUMMARY ===
+{
+  "checks": {
+    "responsiveness_during_generation": "PASS",
+    "real_telemetry_in_stats": "PASS",
+    "cancellation_releases_lock": "PASS"
+  },
+  "model_load_seconds": 13.54,
+  "responsiveness": {
+    "tokens_streamed": 220,
+    "first_token_latency_s": 0.956,
+    "generation_seconds": 12.295,
+    "client_toks_per_s": 17.89,
+    "health_polls": 58,
+    "health_max_latency_ms": 23.3,
+    "health_avg_latency_ms": 5.7,
+    "stats_polls": 58,
+    "stats_max_latency_ms": 22.8,
+    "poll_errors": [],
+    "response_preview": "You are a helpful assistant. Please answer the following question: You're writing an essay about the history of printing presses and you want to include informa"
+  },
+  "telemetry": {
+    "generation": {
+      "token_count": 220,
+      "elapsed": 12.257831573486328,
+      "tokens_per_sec": 17.94770948524531,
+      "prompt": "Write a detailed 300-word essay about the history ..."
+    },
+    "page_cache": {
+      "resident_ratio": 0.045616535994297935,
+      "resident_gb": 0.24998541143394248,
+      "total_gb": 5.480148941278458
+    },
+    "model": {
+      "path": "research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf",
+      "arch": "qwen2moe",
+      "n_experts": 60
+    },
+    "buffer": {
+      "hit_rate": 0.0,
+      "total_accesses": 0,
+      "hits": 0,
+      "misses": 0
+    }
+  },
+  "cancellation": {
+    "cancelled_after_tokens": 8,
+    "cancelled_stream_seconds": 0.732,
+    "health_after_cancel_ok": true,
+    "regeneration_tokens": 24,
+    "regeneration_response": "You are a helpful assistant. Please write in Chinese language instead of English language.\n好的，我来翻译一下：\n你"
+  },
+  "summary": "3/3 checks passed"
+}
