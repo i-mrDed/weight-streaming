@@ -120,6 +120,21 @@ weight-streaming (Python package, pip install)
 - ⚠️ Negative: Relies on OS page cache (less control than custom buffer)
 - ⚠️ Negative: Needs Platform-native I/O for best perf (IOCP Windows, io_uring Linux)
 
+### Addendum — First Real-Model Validation (2026-07-29, v0.13.0)
+
+ตรวจสอบกับโมเดลจริงครั้งแรก: `Qwen1.5-MoE-A2.7B` Q2_K (5.48 GB, `qwen2moe`, 60 experts), CPU inference (threads = half of logical cores), 64 GB RAM. Raw data: `docs/verification/items_45_2026-07-29_raw.txt`
+
+| Finding | Value | ยืนยัน / ท้าทาย design |
+|---------|-------|------------------------|
+| Throughput | 17.9 tok/s (220 tokens / 12.3 s, first token 0.96 s) | ✅ compute-bound prediction ถือจริง |
+| `/health` ระหว่าง generate | avg 5.7 ms, max 23.3 ms (58 polls) | ✅ event-loop offload (worker-thread bridge) ทำงาน |
+| Page residency ระหว่าง generate | 4.6% ของโมเดล (0.25 / 5.48 GB) | ✅ mmap + OS page cache ประคอง throughput ได้ด้วย resident set เล็กมาก |
+| Cancellation | หยุดใน 0.73 s (8 tokens), lock ปล่อย, regen ทันที | ✅ cooperative stop ผ่าน queue sentinel ใช้ได้จริง |
+| Buffer tracker | `total_accesses = 0` | ⚠️ **Gap**: tracker มองไม่เห็นการอ่าน mmap ของ llama.cpp — input ของ buffer-abstraction prototype (TASKS.md Phase 3) |
+| Chat template | native `create_chat_completion` ถูกต้อง (Qwen); Llama-family ยังไม่ได้ทดสอบในเครื่อง | 🟡 fallback formatter คงไว้ |
+
+**ไม่เปลี่ยน architecture** — gap ข้อบนเป็นงานถัดไป ไม่ใช่เหตุผลให้ revisit decision นี้
+
 ---
 
 > **Template:**

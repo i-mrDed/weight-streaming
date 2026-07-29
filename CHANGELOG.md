@@ -24,6 +24,11 @@
 - **Tests**: 19 focused regression tests in `tests/test_server_config_and_chat.py` (event-loop responsiveness, cancellation/error cleanup, wrapper native/fallback/telemetry contract); full suite 92 passed / 7 skipped.
 - **Verification artifacts**: `scripts/verify_items_45.py` (rerunnable end-to-end check) and raw results + SPA screenshots in `docs/verification/`.
 
+### 📚 Documentation sync (2026-07-30)
+- `ARCHITECTURE.md`: new §0 "As-Built Summary" mapping the Phase 2 research design to the shipped product per ADR-003 (64 MB plain-LRU tracking, heuristic predictor, mmap + OS prefetch hints, llama-cpp-python adapter, honest telemetry) plus inline annotations on the diverged sections; sections 1–9 preserved as design history.
+- `DECISIONS.md`: ADR-003 addendum with the first real-model validation metrics (Qwen1.5-MoE-A2.7B Q2_K: 17.9 tok/s, `/health` ≤ 23.3 ms during generation, 4.6% page residency, clean cancellation in 0.73 s) and the open buffer-tracking gap (`total_accesses = 0`).
+- `ROADMAP.md` / `TASKS.md`: SPA streaming reliability marked validated on a real model; Phase 3 documentation tasks closed (stale "LFU default" note corrected).
+
 ## [0.13.0] - 2026-07-28
 
 ### 🎨 SPA Chat 2.0 & Live Stats Dashboard Redesign

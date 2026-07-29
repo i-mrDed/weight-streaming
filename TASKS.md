@@ -58,12 +58,12 @@
 | ✅ | EXP-001: Buffer size + eviction policy | 🔴 | LFU 512 MB → 78.2% hit rate (confirmed) |
 | ✅ | EXP-002: Predictor accuracy impact | 🟡 | LFU flat (76.2%), LRU+P clogging, compute-bound |
 | ✅ | EXP-003: Timing + overlap efficiency | 🔴 | 76.7% overlap, 2.74 tok/s |
-| ⬜ | Update ARCHITECTURE.md with EXP-002 findings | 🟡 | LFU default, remove priority boost, reduce prediction emphasis |
+| ✅ | Update ARCHITECTURE.md with EXP-002 findings | 🟡 | Note เดิม stale (LFU default เป็นผลก่อน real-timing) — สรุปสุดท้ายคือ plain LRU (Phase 3b + ADR-003); เพิ่ม §0 As-Built summary + inline annotations ใน ARCHITECTURE.md แล้ว (2026-07-30) |
 | ⬜ | Select small MoE model for PoC | 🟡 | Mixtral? Qwen MoE? |
 | ✅ | Estimate real compute time for K3 on consumer HW | 🔴 | Qwen benchmark → K3: 815ms compute, ~92% compute-bound |
 | ✅ | Update simulator with real K3 timing (815ms compute) | 🔴 | Done (config.py timing) |
 | ✅ | Phase 3b: Re-run EXP-001/002/003 with real timing | 🔴 | LRU wins, predictor not critical |
-| ⬜ | Update ARCHITECTURE.md with real HW findings | 🟡 | ADR-003 needed |
+| ✅ | Update ARCHITECTURE.md with real HW findings | 🟡 | ADR-003 มีอยู่แล้ว (2026-07-27) — เพิ่ม addendum ผล real-model validation (Qwen1.5-MoE 2026-07-29: 17.9 tok/s, health ≤ 23.3 ms, residency 4.6%, buffer gap total_accesses=0) + ARCHITECTURE.md §0 (2026-07-30) |
 | ⬜ | Build streaming buffer abstraction prototype | 🔴 | Abstraction-first, llama.cpp as backend |
 | ⬜ | Validate: real throughput matches simulator | 🟡 | |
 | ⬜ | Phase 3b: Test with real MoE model on consumer HW | 🔴 | Measure actual compute vs I/O ratio |

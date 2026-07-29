@@ -543,6 +543,44 @@
 
 ---
 
+## [S018] — 2026-07-30 — จัดกลุ่ม commit งานค้าง + sync เอกสารให้ตรงกับผลจริง (ARCHITECTURE §0 As-Built, ADR-003 addendum)
+
+**🎯 เป้าหมาย:** เคลียร์ worktree ที่งานลอยอยู่เป็น commits (risk management) + sync เอกสาร Phase 2 ให้ตรงกับ product ที่ ship จริงตาม ADR-003
+
+### ✅ สิ่งที่ทำ
+- แยกงานค้างทั้งหมดเป็น 3 logical commits (local อย่างเดียว ยังไม่ push):
+  - `7a5d2f7` chore — gitignore machine-local tooling (.mcp.json, .agents/, .agentsroom/) + **แก้ data/issues/.gitignore ที่ pattern พัง** (เขียน prefix path ใน nested gitignore จึงไม่เคย match อะไรเลย)
+  - `a98a885` feat — v0.13.0: งาน reliability S016+S017 ทั้งชุด + core tooling modules (31 files, +4685/−1315); สองรอบแตะไฟล์ชุดเดียวกันและไม่มี intermediate state จึงรวมเป็น commit เดียว
+  - `2beac1c` docs — session records, roadmap, redesign plans, issue reports (15 files)
+- ยืนยัน test suite เขียวก่อน commit: 92 passed / 7 skipped (ตัวเลขเดียวกับที่ validate ตอน S017)
+- ARCHITECTURE.md: เพิ่ม §0 "As-Built Summary (ADR-003 → v0.13.0)" — ตาราง research design → shipped product + ผล validation โมเดลจริงครั้งแรก + inline "As-built" annotations 5 จุด (§3.2 predictor, §5.1/§5.5 buffer, §6.4 integration, §9 roadmap)
+- DECISIONS.md: ADR-003 addendum — metrics จริงจากการ validate 2026-07-29 (17.9 tok/s, /health avg 5.7/max 23.3 ms, residency 4.6%, cancel 0.73 s) + บันทึก buffer gap (`total_accesses = 0`) เป็น input ของงานถัดไป
+- ROADMAP.md: ตาราง reliability post-Phase 6 ⬜ → ✅ ทั้ง 3 แถว + อัปเดต status line; TASKS.md: ปิด 2 tasks เอกสาร Phase 3 ค้าง (+แก้ note "LFU default" ที่ stale)
+
+### ⚡ การตัดสินใจ
+- **ไม่ rewrite ARCHITECTURE.md ส่วน 1–9** — เก็บเป็น design history ของ Phase 2 แล้วเพิ่ม §0 As-Built + annotations แทน (โปรเจควิจัยควรเก็บรอยการออกแบบ)
+- **แก้ความเข้าใจเดิม:** ADR-003 มีอยู่แล้วตั้งแต่ 2026-07-27 — งานจริงที่เหลือคือ sync ตัวเอกสาร ARCHITECTURE.md; note "ADR-003 needed" ใน TASKS.md เป็นข้อมูล stale
+- ใช้ raw metrics จาก `docs/verification/items_45_2026-07-29_raw.txt` เป็นต้นทางอ้างอิง (17.9 tok/s; ตัว "14–15 tok/s" ใน handoff doc เป็นคนละ run ในวันเดียวกัน)
+- โฟลเดอร์นอกโปรเจค (Office-Care, System Care, โฟลเดอร์ส่วนตัว) ปล่อย untracked — ไม่ใช่งานของโปรเจคนี้
+
+### 🐛 ปัญหา / อุปสรรค
+- repo root คือ `D:/.opencode` (โฟลเดอร์ workspace) โปรเจคเป็น subdirectory `.Weight-Streaming/` — commit ต้อง scope เฉพาะ path ของโปรเจค
+- cli/main.py ผสม hunk ของ reliability round + tools round ในไฟล์เดียว → แยก commit ราย hunk ไม่คุ้ม รวมใน feature commit เดียว
+
+### ⏭️ ถัดไป
+- [ ] Item 3: สำรวจช่องว่าง StreamingBuffer (total_accesses = 0) + เสนอทิศทาง prototype
+- [ ] ทดสอบ native template กับ Llama-family GGUF เมื่อมีโมเดล (ค้างจาก S017)
+- [ ] Public streaming wrapper สำหรับ plain-prompt path (ค้างจาก S017)
+- [ ] MyPy strict pass (ค้างจาก S014)
+- [ ] Push 39 commits ขึ้น origin/main เมื่อผู้ใช้สั่ง
+
+### 📎 อ้างอิง
+- `docs/ARCHITECTURE.md` §0 — As-Built Summary (ADR-003 → v0.13.0)
+- `docs/DECISIONS.md` — ADR-003 + Addendum (2026-07-29)
+- `docs/verification/items_45_2026-07-29_raw.txt` — ต้นทาง metrics ทั้งหมดที่อ้างอิง
+
+---
+
 > ```markdown
 > ## [S000] — YYYY-MM-DD — [หัวข้อสั้น]
 >

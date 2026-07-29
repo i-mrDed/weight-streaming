@@ -4,12 +4,42 @@
 > เอกสารนี้ครอบคลุมทุก component ของระบบ: Data Layout → Predictor → Scheduler → Buffer → Execution  
 > *Based on Phase 1 Research Review (EAGLE-3, PreScope, flash-moe, K3 architecture)*
 >
-> **Current implementation note (2026-07-28):** This is the original research architecture, not a statement of shipped behavior. The product follows ADR-003's mmap + LRU + heuristic-prefetch direction; current SPA streaming reliability work is tracked in `docs/HANDOFF_STREAMING_RELIABILITY.md`.
+> **Current implementation note (updated 2026-07-30):** This is the original research architecture, not a statement of shipped behavior. See **[§0 As-Built Summary](#0-as-built-summary-adr-003--v0130)** below for the research-design → shipped-product mapping (per ADR-003 in `docs/DECISIONS.md`). The SPA streaming reliability round is COMPLETED and validated on a real model (2026-07-29) — see `docs/HANDOFF_STREAMING_RELIABILITY.md`.
+
+---
+
+## 0. As-Built Summary (ADR-003 → v0.13.0)
+
+> **Sections 1–9 document the Phase 2 research design and are preserved as-is** (design history). The shipped product diverged after empirical results (EXP-001–004, Phase 3b re-runs with real hardware timing). Authoritative decisions: `docs/DECISIONS.md` → **ADR-003**. This section summarizes what was actually built.
+
+### Research design → shipped product
+
+| Component | Research design (section) | Shipped (ADR-003) | Why |
+|-----------|---------------------------|-------------------|-----|
+| Weight predictor | MLP ~2M params, primary (§3) | **Heuristic only** (frequency + temporal); MLP/EAGLE kept as research code (`core/eagle_dual_predictor.py`) | Phase 3b: LRU alone = 93.8% hit @ 64 MB; predictor not throughput-critical; expert routing is opaque from stock llama.cpp (no Python-visible routing events) |
+| Streaming buffer | 256 MB–1 GB, LRU + priority (§5) | **64 MB LRU tracking**, no priority boost; real caching done by the OS page cache over mmap | 93.8% @ 64 MB adequate; priority boost caused clogging (EXP-002); ~92% compute-bound ⇒ buffer is RAM reduction, not a throughput accelerator |
+| Weight access | Custom buffer read, mmap fallback (§6) | **mmap primary** (llama.cpp) + `PrefetchVirtualMemory` (Win) / `madvise` (Linux) hints | mmap = free zero-copy streaming; the OS is already the optimal page manager |
+| I/O engine | io_uring/IOCP dispatch, core path (§4) | OS-managed; native io_uring/IOCP/SIMD kernels kept as research prototypes (`core/native/`) | Not needed while compute-bound on consumer hardware |
+| Integration | Fork llama.cpp (§6.4) | **llama-cpp-python adapter** (`backends/llama_cpp.py` → `WeightStreamModel`) with public `stream_chat()` wrapper | No C++ build dependency; works with any GGUF model |
+| Telemetry | Confidence/prediction metrics | **Honest telemetry**: real generation stats, OS page-residency sampling, prefetch accuracy only from real evidence (else `n/a`) | Synthetic values mislead product decisions |
+
+### First real-model validation (2026-07-29)
+
+Model: `Qwen1.5-MoE-A2.7B` Q2_K — 5.48 GB, `qwen2moe`, 60 experts; CPU inference (threads = half of logical cores), 64 GB RAM. Raw data: `docs/verification/items_45_2026-07-29_raw.txt`.
+
+| Metric | Result |
+|--------|--------|
+| Throughput | 17.9 tok/s (220 tokens / 12.3 s), first token 0.96 s |
+| Responsiveness during generation | `/health` avg 5.7 ms / max 23.3 ms, `/v1/stats` max 22.8 ms (58 polls each) |
+| OS page residency during generation | 4.6% of the model (0.25 / 5.48 GB) resident — throughput unaffected |
+| Cancellation | halted within 0.73 s (8 tokens), model lock released, regeneration immediate |
+| **Open gap** | `StreamingBuffer.total_accesses = 0` during real inference — the tracker observes nothing because llama.cpp reads the mmap opaquely (next: buffer-abstraction prototype, TASKS.md Phase 3) |
 
 ---
 
 ## 📋 สารบัญ
 
+0. [As-Built Summary (ADR-003 → v0.13.0)](#0-as-built-summary-adr-003--v0130)
 1. [System Overview](#1-system-overview)
 2. [NVMe Data Layout](#2-nvme-data-layout)
 3. [Weight Predictor](#3-weight-predictor)
@@ -227,6 +257,8 @@ Benefit: sequential reads สำหรับ hot experts บ่อยขึ้�
 | **B: MLP** (PreScope-style) | >90% accuracy, lightweight | ต้อง train data, ~5 ms | ✅ **Primary** |
 | **C: Extend EAGLE-3 head** | Novel contribution, reuse features | ยังไม่เคยมีใครทำ, เสี่ยง | 🟡 **Future** |
 
+> **As-built (ADR-003):** ตัวเลือก A (heuristic) ถูกเลือกสำหรับ product — Phase 3b (real timing) พบว่า LRU อย่างเดียวได้ 93.8% hit @ 64 MB และ predictor ไม่กระทบ throughput; ตัวเลือก B/C คงไว้เป็น research code ใน `weight_stream/core/`
+
 ### 3.3 Selected: MLP Predictor (PreScope-inspired)
 
 ```
@@ -410,6 +442,8 @@ Miss handler:
 | **Eviction** | LRU + priority-based |
 | **Concurrent access** | Thread-safe (read from executor, write from I/O) |
 
+> **As-built (ADR-003):** ค่าจริงที่ ship คือ **64 MB, plain LRU** (ไม่มี priority) — priority eviction ทำให้ cache clogging ใน EXP-002; buffer เป็น tracker/hint layer บน OS page cache ไม่ใช่ private data cache
+
 ### 5.2 Buffer Architecture
 
 ```
@@ -498,6 +532,8 @@ Eviction candidate selection:
 | 2 GB | 512 | ~95% |
 
 **Default: 256 MB** — sweet spot for RAM usage vs hit rate
+
+> **As-built (ADR-003):** default ที่ ship คือ **64 MB** (93.8% simulated hit ด้วย real timing; ยืนยันแล้วว่าเพียงพอด้วย Qwen1.5-MoE Q2_K — ดู §0)
 
 ### 5.6 Cold Start Strategy
 
@@ -613,6 +649,8 @@ class WeightStreamingEngine:
 | **SGLang extension** | กลาง | ดีมาก | Production |
 
 **สำหรับ Phase 3 (Prototype):** fork llama.cpp — มี MoE support, mmap, CPU/GPU hybrid
+
+> **As-built (ADR-003):** ไม่ fork — ship เป็น **llama-cpp-python adapter** (`weight_stream/backends/llama_cpp.py`, `WeightStreamModel` + public `stream_chat()`); native C/C++ kernels อยู่ใน `weight_stream/core/native/` ในฐานะ research prototype
 
 ---
 
@@ -748,6 +786,8 @@ class BufferAccess:
 
 ## 9. Implementation Roadmap
 
+> **Status (2026-07-30):** Phase 3a เสร็จแล้ว (EXP-001–003) — Phase 3b เบี่ยงเบนจากแผนนี้ตาม ADR-003: adapter แทน fork, Qwen1.5-MoE แทน Mixtral, I/O ปล่อย OS จัดการ; แผนปัจจุบันอยู่ที่ `docs/ROADMAP.md`
+
 ### Phase 3a: Simulator (Pure Python)
 
 ```
@@ -801,4 +841,4 @@ Deliverable: working prototype + real measurements
 > - EAGLE-3 (arXiv 2503.01840) — draft head architecture
 > - flash-moe / llama-cpp-moe-flash — SSD streaming PoC
 > - K3 architecture — MXFP4, KDA, Quantile Balancing
-> - ADR-001, ADR-002 in docs/DECISIONS.md
+> - ADR-001, ADR-002, ADR-003 in docs/DECISIONS.md
