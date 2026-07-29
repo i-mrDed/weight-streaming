@@ -14,6 +14,8 @@ import contextlib
 import os
 import time
 
+import pytest
+
 from weight_stream.backends.llama_cpp import WeightStreamModel
 from weight_stream.server.api_server import create_app
 from weight_stream.server.config import ServerConfig
@@ -304,6 +306,25 @@ def test_stream_chat_native_template_yields_deltas_and_records_stats():
     assert stats["token_count"] == 2
     assert stats["tokens_per_sec"] > 0
     assert "Hi" in stats["prompt"]
+
+
+def test_stream_chat_records_os_paging_demand():
+    """stream_chat must attach real OS paging-demand telemetry (ADR-003 gap)."""
+    from weight_stream.io.page_faults import page_fault_count
+
+    if page_fault_count() is None:
+        pytest.skip("no page-fault counter on this platform")
+
+    engine = _FakeLlamaEngine(native_chunks=["a", "b", "c"])
+    model = _bare_weight_stream_model(engine)
+
+    assert list(model.stream_chat([{"role": "user", "content": "Hi"}])) == ["a", "b", "c"]
+
+    paging = model._last_gen_stats["paging"]
+    assert paging["faults"] >= 0
+    assert paging["faults_per_token"] >= 0
+    assert paging["fault_mb_per_token"] >= 0
+    assert "note" in paging
 
 
 def test_stream_chat_falls_back_to_prompt_formatter_when_native_fails():

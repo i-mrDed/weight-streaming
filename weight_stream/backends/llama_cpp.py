@@ -27,6 +27,7 @@ from typing import Any, Dict, Iterator, List, Optional
 from ..core.buffer import StreamingBuffer, SHARD_SIZE
 from ..core.predictor import HeuristicPredictor
 from ..core.prefetcher import Prefetcher
+from ..io.page_faults import page_fault_count, paging_demand
 from ..gguf import GGUFParser
 from ..io.win_perf import WindowsPageMonitor
 from ._base import WeightStreamBackend
@@ -268,6 +269,7 @@ class WeightStreamModel(WeightStreamBackend):
         shard_access_log = []
         start_time = time.time()
         token_count = 0
+        faults_before = page_fault_count()  # None if platform unsupported
         
         # Use streaming to track per-token progress
         try:
@@ -340,6 +342,9 @@ class WeightStreamModel(WeightStreamBackend):
             'tokens_per_sec': tokens_per_sec,
             'prompt': prompt[:50] + ('...' if len(prompt) > 50 else ''),
         }
+        paging = paging_demand(faults_before, page_fault_count(), token_count)
+        if paging is not None:
+            self._last_gen_stats['paging'] = paging
         
         return output
     
@@ -418,6 +423,7 @@ class WeightStreamModel(WeightStreamBackend):
 
         token_count = 0
         start_time = time.time()
+        faults_before = page_fault_count()  # None if platform unsupported
         try:
             for chunk in stream:
                 choices = chunk.get("choices") or []
@@ -459,6 +465,9 @@ class WeightStreamModel(WeightStreamBackend):
                 "tokens_per_sec": tokens_per_sec,
                 "prompt": self._summarize_messages(messages),
             }
+            paging = paging_demand(faults_before, page_fault_count(), token_count)
+            if paging is not None:
+                self._last_gen_stats["paging"] = paging
             if self._page_monitor:
                 try:
                     self._page_monitor.sample_resident_pages()

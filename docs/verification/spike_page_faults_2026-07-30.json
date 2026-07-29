@@ -1,0 +1,33 @@
+{
+  "model": "research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf",
+  "idle_faults_3s": 0,
+  "runs": [
+    {
+      "label": "run1-cold",
+      "tokens": 17,
+      "seconds": 1.65,
+      "tok_s": 10.32,
+      "faults": 725171,
+      "faults_per_token": 42657.1,
+      "fault_bytes_per_token_MB": 174.72,
+      "residency_before": 0.016,
+      "residency_after": 0.016,
+      "wrapper_tok_s": 10.38,
+      "buffer_total_accesses": 0
+    },
+    {
+      "label": "run2-warm",
+      "tokens": 17,
+      "seconds": 0.78,
+      "tok_s": 21.88,
+      "faults": 2292,
+      "faults_per_token": 134.8,
+      "fault_bytes_per_token_MB": 0.55,
+      "residency_before": 0.016,
+      "residency_after": 0.016,
+      "wrapper_tok_s": 22.21,
+      "buffer_total_accesses": 0
+    }
+  ],
+  "verdict": "ACTIVE PAGING: warm generation still faults heavily \u2014 working set exceeds what the OS keeps resident; prefetch hints may have real value."
+}
