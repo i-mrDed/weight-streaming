@@ -1,0 +1,18 @@
+# Machine-local agent / tooling configuration (AgentsRoom, MCP)
+.mcp.json
+.agents/
+.agentsroom/
+
+# Python build / runtime artifacts
+__pycache__/
+*.pyc
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+
+# Test / coverage artifacts
+.pytest_cache/
+.coverage
+htmlcov/
