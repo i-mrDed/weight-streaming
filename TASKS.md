@@ -6,6 +6,19 @@
 
 ---
 
+## ✅ Current Operational Reliability — SPA Chat (2026-07-28 → 2026-07-29)
+
+| สถานะ | Task | Priority | Notes |
+|-------|------|----------|-------|
+| ✅ | Propagate server configuration to SPA-loaded models | 🔴 | `ModelManager` receives the factory config; default threads = half logical cores |
+| ✅ | Keep local chat model loaded by default | 🔴 | `idle_unload_timeout = 0`; positive timeout opts in to reclamation |
+| ✅ | Use native GGUF chat template + expose `top_p` | 🔴 | `create_chat_completion()` first; manual formatter is fallback only |
+| ✅ | Move blocking token iterator off the asyncio event loop; batch SPA token rendering | 🔴 | Worker-thread bridge (`ModelManager._iter_blocking`: bounded queue + cooperative cancel); SPA renders via `requestAnimationFrame` + `textContent`; verified `/health` ≤ 28 ms during generation (Qwen1.5-MoE Q2_K, 14–15 tok/s) |
+| ✅ | Route SPA chat through public `WeightStreamModel` streaming wrapper and real telemetry | 🔴 | `WeightStreamModel.stream_chat()` public wrapper (native template → fallback, real stats incl. cancelled runs, page-cache sampling, no synthetic prefetch); server no longer touches `model._llm` for chat; SPA stats panel de-faked (n/a instead of fabricated values, heatmap without random firing) |
+| ✅ | Validate CPU, cancellation, template quality, and telemetry with a real GGUF + SPA | 🔴 | Real end-to-end with `Qwen1.5-MoE-A2.7B_Q2_k.gguf` + live SPA in Chrome: 3/3 checks passed; cancellation releases lock (regen 540 ms after abort); raw results in `docs/verification/`. Llama-family GGUF not available locally — native-template check covers Qwen only |
+
+---
+
 ## 📋 Phase 1: Research Review
 
 | สถานะ | Task | Priority | Notes |

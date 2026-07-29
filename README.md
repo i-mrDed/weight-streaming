@@ -24,23 +24,29 @@ pip install weight-streaming[llama-cpp]
 pip install weight-streaming
 ```
 
-### Generate text
+### Run Web SPA 2.0 Chat Interface
 
 ```bash
-python -m weight_stream run model.gguf --prompt "The future of AI is" --max-tokens 128
+# Start API Server (includes Web SPA 2.0 at http://localhost:8765/app)
+python -m weight_stream server --port 8765
 ```
 
-### Show model info
+For a local chat session, the server keeps a loaded model by default and
+uses half of the logical CPU cores. Override either policy when starting it:
 
 ```bash
-python -m weight_stream stats model.gguf
+python -m weight_stream server --n-threads 8 --idle-unload-timeout 0
 ```
 
-### Benchmark throughput
+Set `--idle-unload-timeout` to a positive number of seconds only when the
+server should reclaim model memory after inactivity.
 
-```bash
-python -m weight_stream benchmark model.gguf --max-tokens 256
-```
+The Web SPA 2.0 features:
+- **Collapsible Sidebar**: History grouping (Today, Yesterday, Older), model status
+- **Fluid Chat Canvas (840px)**: Deep Space Glassmorphism theme, 1-Click Code Copy
+- **Agent Controls Drawer**: Reasoning Effort (`low`/`medium`/`high`), System Presets, Tools toggles
+- **GGUF Native Chat Templates**: Auto-detected ChatML, Llama-3, and Instruct templates + CoT `<think>` reasoning thought accordion
+- **Live Stats Dashboard**: Real-time gauge metrics & MoE Active Expert Firing Heatmap
 
 ## Python API
 

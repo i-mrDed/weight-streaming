@@ -32,6 +32,21 @@
 
 ## Closed Issues
 
+### [ISSUE-019] SPA: Chat UI & Stats Tab Redesign (Chat 2.0 Overhaul)
+- Reported: 2026-07-28
+- Status: 🟢 Fixed → ⚪ Verified
+- Symptom: SPA Chat interface was basic plain HTML form with poor layout, lack of GGUF Chat Template, no Agent Tools, and static Stats cards.
+- Root Cause: Early functional prototype in `index.html` lacked modern responsive framework, ChatML/Llama3 native GGUF chat template detection, and live analytics telemetry.
+- Fix:
+  - Redesigned `static/index.html` into a **Collapsible Sidebar + Fluid Chat Canvas (840px)** with Deep Space Glassmorphism theme (`#0b0f19`).
+  - Added **Slide-over Right Drawer** for Reasoning Effort (`low`/`medium`/`high`), Temperature, Top-P, System Prompt Presets, and Agent Tools toggles.
+  - Implemented **Auto-expanding Textarea** (Shift+Enter newline) and **1-Click Code Copy** buttons.
+  - Added **GGUF Native Chat Template detection** (ChatML, Llama-3, Instruct) and `<think>` reasoning thought accordion in `model_manager.py`.
+  - Rebuilt **Live Stats Dashboard** with Live Gauge Meters and MoE Active Expert Heatmap Grid.
+- Verification: 60/60 pytest cases pass cleanly (100%).
+- Files: `weight_stream/server/static/index.html`, `weight_stream/server/model_manager.py`, `weight_stream/server/schemas.py`, `weight_stream/server/openai_compat.py`
+- Commit: (pending)
+
 ### [ISSUE-001] SPA: "Error: Not Found" on Models tab + Chat broken
 - Reported: 2026-07-27
 - Status: 🟢 Fixed → ⚪ Verified

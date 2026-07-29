@@ -3,7 +3,7 @@
 > **Based on:** v0.10.1 codebase — `WeightStreamModel` class, CLI, 43 passing tests  
 > **Date:** 2026-07-27  
 > **Scope:** API Server + 4 Frontends + Agentic IDE Vision + Marketing Site  
-> **Status:** Planning phase — pending user approval before implementation
+> **Status:** Historical architecture plan. The API server, SPA, Gradio, TUI, compatibility endpoints, and marketing site were implemented in v0.11.0–v0.13.0; remaining operational streaming work is tracked in `docs/HANDOFF_STREAMING_RELIABILITY.md`.
 
 ---
 
@@ -694,5 +694,5 @@ all = [
 
 ---
 
-> **Status:** Pending user approval before implementation begins.  
+> **Status:** Historical plan; implementation status is maintained in `TASKS.md`, `docs/ROADMAP.md`, and `docs/HANDOFF_STREAMING_RELIABILITY.md`.
 > **Last updated:** 2026-07-27

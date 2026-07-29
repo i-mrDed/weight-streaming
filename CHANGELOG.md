@@ -5,6 +5,43 @@
 
 ---
 
+## [Unreleased]
+
+### 🛠️ Local Server Reliability
+- Server CLI configuration now reaches `ModelManager`, so `--n-threads` applies to models loaded later from the SPA.
+- Default inference threads use half of logical CPU cores, preserving headroom for the API server, browser, and operating system.
+- Auto-unload is disabled by default for local chat sessions; opt in with `--idle-unload-timeout <seconds>` or `WS_IDLE_TIMEOUT`.
+- Chat completions use the GGUF-native llama.cpp chat template when available, with the legacy prompt formatter retained only as a fallback.
+- SPA exposes and sends `top_p` with each chat completion request.
+- Added `docs/HANDOFF_STREAMING_RELIABILITY.md` and aligned task/roadmap/SPA-plan status with the remaining streaming work.
+
+### ⚡ Streaming Reliability — Items 4–5 (2026-07-29)
+- **Event loop no longer blocks during generation** (`model_manager.py`): all streaming paths consume llama.cpp's blocking iterators through a worker-thread bridge (`_iter_blocking` — bounded queue, backpressure, cooperative cancellation). While a long response generates, `/health`, `/v1/stats`, and other requests stay responsive (measured: ≤ 28 ms health latency during a 220-token / 14 tok/s generation on Qwen1.5-MoE-A2.7B Q2_K).
+- **Cancellation is clean end-to-end**: client disconnect / Stop sets a stop flag the worker honors within ~0.25 s (halting llama.cpp compute), always resets `_generating`, and releases the per-model lock; the next request succeeds immediately (measured: 540 ms after abort).
+- **New public chat API `WeightStreamModel.stream_chat()`** (`backends/llama_cpp.py`): native `create_chat_completion` streaming first, architecture-aware prompt-formatter fallback inside the backend, generation stats recorded on completion, error, AND early cancel, periodic OS page-cache sampling, and deliberately no synthetic prefetch (expert routing is opaque from Python). Server code no longer accesses `model._llm` for chat.
+- **SPA streaming render batched** (`static/index.html`): deltas accumulate and paint at most once per animation frame via `textContent` + `white-space: pre-wrap` (no per-token `innerHTML` re-parse), SSE lines are buffered across reads, auto-scroll only pins while the user stays near the bottom, and Stop keeps the partial reply in history.
+- **Honest telemetry in the Live Stats panel**: fabricated placeholder values removed (hit-rate 94.2%, prefetch 98.1%, residency 12.4 GB, "8/256 Active", random heatmap firing); metrics now show real measurements or `n/a`, and the heatmap reports the model's real expert count with an explicit "routing not observable" note.
+- **Tests**: 19 focused regression tests in `tests/test_server_config_and_chat.py` (event-loop responsiveness, cancellation/error cleanup, wrapper native/fallback/telemetry contract); full suite 92 passed / 7 skipped.
+- **Verification artifacts**: `scripts/verify_items_45.py` (rerunnable end-to-end check) and raw results + SPA screenshots in `docs/verification/`.
+
+## [0.13.0] - 2026-07-28
+
+### 🎨 SPA Chat 2.0 & Live Stats Dashboard Redesign
+- **SPA Frontend Overhaul (`static/index.html`)**:
+  - **Collapsible Sidebar**: + New Chat button, grouped conversation history (Today, Yesterday, Older), model active badge, and status dot
+  - **Fluid Chat Canvas**: 840px max-width centered canvas with Deep Space Glassmorphism styling (`#0b0f19`), 1-Click Code Copy button, and auto-expanding textarea
+  - **Slide-over Right Drawer**: Settings for Reasoning Effort (`low`/`medium`/`high`), Temperature, Top-P, System Prompt Presets (`Coding Expert`, `Creative Writer`, `Data Analyst`, `Concise`), and Agent Tools toggles
+- **Native GGUF Chat Template & Reasoning Thought Parser (`model_manager.py`)**:
+  - Native template detection for ChatML (Qwen/DeepSeek), Llama-3 (`<|start_header_id|>`), and Instruct fallback formats
+  - `<think>...</think>` CoT reasoning parser rendering clean thought accordions in chat UI
+- **Live Stats Dashboard (`static/index.html`)**:
+  - Live metric gauges for Buffer Hit Rate %, RAM Residency, Generation Speed (tok/s), and Prefetch Accuracy
+  - Interactive MoE Active Expert Firing Heatmap Grid
+- **Native C/C++ Acceleration & Tools**:
+  - Integrated Native C-Core (`weight_stream_core.cpp`), IOCP Windows I/O (`win_iocp_stream.cpp`), SIMD INT4 kernels (`simd_kernels.cpp`), Shard Repacker tool (`shard_repacker.py`), and EAGLE-3 Dual Predictor (`eagle_dual_predictor.py`)
+
+---
+
 ## [0.12.0] - 2026-07-27
 
 ### Issue Tracking System (full product loop)

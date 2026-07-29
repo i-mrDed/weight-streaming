@@ -276,7 +276,7 @@ pre code {
   align-items: center;
   justify-content: center;
   font-size: 1.5rem;
-  margin-bottom: 16px;
+  margin: 0 auto 16px;
 }
 .card-icon.purple { background: rgba(108, 92, 231, 0.15); color: var(--color-primary); }
 .card-icon.teal { background: rgba(0, 206, 201, 0.15); color: var(--color-secondary); }

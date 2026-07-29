@@ -119,7 +119,24 @@ Gap: <1% throughput loss for 99.5% RAM savings
 ✅ Port 8765 verified conflict-free
 ```
 
-**Status: ✅ COMPLETE (2026-07-27)**
+**Status: 🟡 Feature scope delivered; operational validation remains (updated 2026-07-28)**
+
+The platform endpoints and frontends exist, but real SPA use exposed reliability gaps: default CPU saturation, destructive idle unloading, template fidelity, event-loop blocking during stream, and incomplete wrapper telemetry. The first three are addressed in the current worktree; the next two are documented below and require real-model validation.
+
+---
+
+## Post-Phase 6: SPA Streaming Reliability
+
+| Status | Work | Validation required |
+|--------|------|---------------------|
+| ✅ | Propagate `ServerConfig` to `ModelManager`; cap default threads at half logical cores | SPA-loaded model receives requested thread count |
+| ✅ | Disable local idle unloading by default; add explicit timeout option | Model remains loaded during an idle SPA session |
+| ✅ | Use native GGUF chat templates and forward `top_p` from SPA | Qwen/Llama responses contain no leaked template tokens |
+| ⬜ | Move blocking generation iterator to a worker thread and batch browser token rendering | Health/stats responsive during generation; lower browser CPU |
+| ⬜ | Route SPA streaming through a public `WeightStreamModel` wrapper | Real prefetch/page-cache telemetry changes during generation |
+| ⬜ | Run before/after performance and quality tests on a real GGUF | Record CPU, tok/s, page residency, cancellation behavior, output quality |
+
+Implementation contract and acceptance criteria: `docs/HANDOFF_STREAMING_RELIABILITY.md`.
 
 ---
 

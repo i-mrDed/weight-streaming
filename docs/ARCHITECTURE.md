@@ -1,8 +1,10 @@
 # Architecture Design — Speculative Weight Streaming
 
-> **Phase 2 Complete — 2026-07-27**  
+> **Phase 2 research design — 2026-07-27**
 > เอกสารนี้ครอบคลุมทุก component ของระบบ: Data Layout → Predictor → Scheduler → Buffer → Execution  
 > *Based on Phase 1 Research Review (EAGLE-3, PreScope, flash-moe, K3 architecture)*
+>
+> **Current implementation note (2026-07-28):** This is the original research architecture, not a statement of shipped behavior. The product follows ADR-003's mmap + LRU + heuristic-prefetch direction; current SPA streaming reliability work is tracked in `docs/HANDOFF_STREAMING_RELIABILITY.md`.
 
 ---
 

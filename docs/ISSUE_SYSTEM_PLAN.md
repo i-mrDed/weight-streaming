@@ -1,6 +1,6 @@
 # Issue Tracking System — Full Product Plan
 
-> **Status:** Planning (pending approval before implementation)  
+> **Status:** Historical plan; implemented in v0.12.0. Current reported issues are stored under `data/issues/` and summarized in `ISSUES.md`.
 > **Date:** 2026-07-27  
 > **Goal:** Zero-gap feedback loop for end users and maintainers  
 > **Related:** `ISSUES.md` (current lightweight tracker)
