@@ -135,6 +135,8 @@ weight-streaming (Python package, pip install)
 
 **ไม่เปลี่ยน architecture** — gap ข้อบนเป็นงานถัดไป ไม่ใช่เหตุผลให้ revisit decision นี้
 
+**อัปเดต (2026-07-30):** spike `scripts/spike_page_faults.py` ยืนยันช่อง telemetry ระดับ OS — page-fault demand ระหว่าง generate จริง: cold ≈ 175 MB/token → warm ≈ 0.55 MB/token (ลด 300×) ⇒ OS working set ถือ hot set ไว้ได้จริง (หลักฐานจริงเพิ่มให้ข้อสรุป "predictor ไม่ critical"); `generation.paging` (faults, faults/token, MB/token) ถูกบันทึกใน `stream_chat()`/`generate()` และออกทาง `/v1/stats` แล้ว — gap ปิดในระดับ telemetry; การ track ระดับ shard ยังเป็นงานของ native core ในอนาคต
+
 ---
 
 > **Template:**

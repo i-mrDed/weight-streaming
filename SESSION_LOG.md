@@ -556,6 +556,10 @@
 - ARCHITECTURE.md: เพิ่ม §0 "As-Built Summary (ADR-003 → v0.13.0)" — ตาราง research design → shipped product + ผล validation โมเดลจริงครั้งแรก + inline "As-built" annotations 5 จุด (§3.2 predictor, §5.1/§5.5 buffer, §6.4 integration, §9 roadmap)
 - DECISIONS.md: ADR-003 addendum — metrics จริงจากการ validate 2026-07-29 (17.9 tok/s, /health avg 5.7/max 23.3 ms, residency 4.6%, cancel 0.73 s) + บันทึก buffer gap (`total_accesses = 0`) เป็น input ของงานถัดไป
 - ROADMAP.md: ตาราง reliability post-Phase 6 ⬜ → ✅ ทั้ง 3 แถว + อัปเดต status line; TASKS.md: ปิด 2 tasks เอกสาร Phase 3 ค้าง (+แก้ note "LFU default" ที่ stale)
+- **Item 3 — ช่องว่าง StreamingBuffer (total_accesses = 0):**
+  - วิเคราะห์ root cause: llama.cpp อ่าน GGUF ผ่าน mmap ภายในของตัวเอง ไม่เคยเรียก `buffer.access()` → tracker เป็นศูนย์โดย design
+  - Spike `scripts/spike_page_faults.py` วัด OS page faults แบบ in-process: cold ≈ 42,657 faults/token (≈ 175 MB/token) vs warm ≈ 135 faults/token (≈ 0.55 MB/token) — ลด 300× ⇒ OS working set ถือ hot set ไว้ได้จริง (หลักฐานจริงยืนยันทิศทาง "predictor ไม่ critical" ของ ADR-003); raw: `docs/verification/spike_page_faults_2026-07-30.json`
+  - Ship telemetry: `weight_stream/io/page_faults.py` (Win psapi / POSIX rusage) + บล็อก `generation.paging` ใน stats ของ `stream_chat()`/`generate()` → `/v1/stats` รายงาน paging demand จริง (ยืนยัน live: 0.129 MB/token steady-state, e2e 3/3 ยังผ่าน); เพิ่ม 1 regression test → suite 93 passed / 7 skipped
 
 ### ⚡ การตัดสินใจ
 - **ไม่ rewrite ARCHITECTURE.md ส่วน 1–9** — เก็บเป็น design history ของ Phase 2 แล้วเพิ่ม §0 As-Built + annotations แทน (โปรเจควิจัยควรเก็บรอยการออกแบบ)
@@ -568,7 +572,9 @@
 - cli/main.py ผสม hunk ของ reliability round + tools round ในไฟล์เดียว → แยก commit ราย hunk ไม่คุ้ม รวมใน feature commit เดียว
 
 ### ⏭️ ถัดไป
-- [ ] Item 3: สำรวจช่องว่าง StreamingBuffer (total_accesses = 0) + เสนอทิศทาง prototype
+- [ ] แสดง paging demand ใน SPA stats panel (backend มีข้อมูลพร้อมแล้ว)
+- [ ] แยก hard faults / soft faults (disk I/O demand vs RAM remap)
+- [ ] Shard-level tracking ผ่าน native core (ระยะยาว)
 - [ ] ทดสอบ native template กับ Llama-family GGUF เมื่อมีโมเดล (ค้างจาก S017)
 - [ ] Public streaming wrapper สำหรับ plain-prompt path (ค้างจาก S017)
 - [ ] MyPy strict pass (ค้างจาก S014)

@@ -64,7 +64,9 @@
 | ✅ | Update simulator with real K3 timing (815ms compute) | 🔴 | Done (config.py timing) |
 | ✅ | Phase 3b: Re-run EXP-001/002/003 with real timing | 🔴 | LRU wins, predictor not critical |
 | ✅ | Update ARCHITECTURE.md with real HW findings | 🟡 | ADR-003 มีอยู่แล้ว (2026-07-27) — เพิ่ม addendum ผล real-model validation (Qwen1.5-MoE 2026-07-29: 17.9 tok/s, health ≤ 23.3 ms, residency 4.6%, buffer gap total_accesses=0) + ARCHITECTURE.md §0 (2026-07-30) |
-| ⬜ | Build streaming buffer abstraction prototype | 🔴 | Abstraction-first, llama.cpp as backend |
+| 🔄 | Build streaming buffer abstraction prototype | 🔴 | ทิศทางจาก spike 2026-07-30: ไม่ intercept การอ่านของ llama.cpp (ADR-003 no-fork) — StreamingBuffer เป็น tracker ของ simulator + native core อนาคต (`core/native/`); telemetry production = สัญญาณ OS (residency + page faults) ซึ่ง ship แล้ว |
+| ✅ | Measure OS paging demand during real generation (spike) | 🔴 | `scripts/spike_page_faults.py`: cold ≈ 175 MB/token → warm ≈ 0.55 MB/token (300× drop) — OS working set ถือ hot set จริง; raw: `docs/verification/spike_page_faults_2026-07-30.json` |
+| ✅ | Ship paging-demand telemetry in `/v1/stats` | 🟡 | `weight_stream/io/page_faults.py` (Win psapi / POSIX rusage) + `generation.paging` ใน stats ของ `stream_chat()`/`generate()`; ยืนยัน live กับ Qwen (0.129 MB/token steady-state); ค้าง: แสดงผลใน SPA + แยก hard/soft faults |
 | ⬜ | Validate: real throughput matches simulator | 🟡 | |
 | ⬜ | Phase 3b: Test with real MoE model on consumer HW | 🔴 | Measure actual compute vs I/O ratio |
 

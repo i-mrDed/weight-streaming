@@ -24,6 +24,12 @@
 - **Tests**: 19 focused regression tests in `tests/test_server_config_and_chat.py` (event-loop responsiveness, cancellation/error cleanup, wrapper native/fallback/telemetry contract); full suite 92 passed / 7 skipped.
 - **Verification artifacts**: `scripts/verify_items_45.py` (rerunnable end-to-end check) and raw results + SPA screenshots in `docs/verification/`.
 
+### 🔬 Paging-demand telemetry (2026-07-30)
+- New `weight_stream/io/page_faults.py`: cross-platform process page-fault counters (Windows `GetProcessMemoryInfo().PageFaultCount`, POSIX `getrusage()` minor+major) with a `paging_demand()` stats helper.
+- `stream_chat()` and `generate()` now attach a `paging` block to generation stats (`faults`, `faults_per_token`, `fault_mb_per_token`), surfaced through `/v1/stats` — an honest telemetry channel for the `StreamingBuffer.total_accesses = 0` gap (llama.cpp reads its own mmap opaquely; verified live on Qwen1.5-MoE Q2_K at 0.129 MB/token steady-state).
+- Spike `scripts/spike_page_faults.py` + raw results (`docs/verification/spike_page_faults_2026-07-30.json`): cold generation demands ~175 MB/token of paging vs ~0.55 MB/token warm (300x drop) — real-OS-data confirmation that the page cache's own LRU holds the working set (ADR-003 direction).
+- Regression test added (`test_stream_chat_records_os_paging_demand`); full suite 93 passed / 7 skipped.
+
 ### 📚 Documentation sync (2026-07-30)
 - `ARCHITECTURE.md`: new §0 "As-Built Summary" mapping the Phase 2 research design to the shipped product per ADR-003 (64 MB plain-LRU tracking, heuristic predictor, mmap + OS prefetch hints, llama-cpp-python adapter, honest telemetry) plus inline annotations on the diverged sections; sections 1–9 preserved as design history.
 - `DECISIONS.md`: ADR-003 addendum with the first real-model validation metrics (Qwen1.5-MoE-A2.7B Q2_K: 17.9 tok/s, `/health` ≤ 23.3 ms during generation, 4.6% page residency, clean cancellation in 0.73 s) and the open buffer-tracking gap (`total_accesses = 0`).
