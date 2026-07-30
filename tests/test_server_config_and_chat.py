@@ -431,3 +431,74 @@ def test_stream_chat_records_partial_stats_on_early_close():
     assert stats["token_count"] == 1
     assert stats["elapsed"] >= 0
 
+
+# -- CPU etiquette: threads plumbing + process priority ---------------------
+
+
+def test_lower_process_priority_default_on_and_env_override(monkeypatch):
+    monkeypatch.delenv("WS_LOWER_PRIORITY", raising=False)
+    assert ServerConfig().lower_process_priority is True
+    monkeypatch.setenv("WS_LOWER_PRIORITY", "0")
+    assert ServerConfig().lower_process_priority is False
+    monkeypatch.setenv("WS_LOWER_PRIORITY", "false")
+    assert ServerConfig().lower_process_priority is False
+
+
+def test_load_coalesces_none_n_threads_to_configured_default(monkeypatch):
+    """Regression: ModelLoadRequest.n_threads is optional (None). It must
+    fall back to the configured default — never to os.cpu_count() (every
+    logical core), which saturated user machines during generation."""
+    captured = {}
+
+    class _FakeModel:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "weight_stream.server.model_manager.WeightStreamModel", _FakeModel
+    )
+    manager = ModelManager(ServerConfig(default_n_threads=7))
+
+    asyncio.run(
+        manager.load("m", "fake.gguf", buffer_mb=64, n_ctx=512, n_threads=None)
+    )
+
+    assert captured["n_threads"] == 7
+
+
+def test_load_lowers_process_priority_once_and_unload_restores_once(monkeypatch):
+    events = []
+    monkeypatch.setattr(
+        "weight_stream.server.model_manager.lower_process_priority",
+        lambda: events.append("lower") or True,
+    )
+    monkeypatch.setattr(
+        "weight_stream.server.model_manager.restore_process_priority",
+        lambda: events.append("restore") or True,
+    )
+
+    class _FakeModel:
+        def __init__(self, **kwargs):
+            pass
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "weight_stream.server.model_manager.WeightStreamModel", _FakeModel
+    )
+    manager = ModelManager(ServerConfig(lower_process_priority=True))
+
+    async def scenario():
+        await manager.load("m", "fake.gguf", n_threads=2)
+        await manager.load("m2", "fake.gguf", n_threads=2)
+        await manager.unload("m")       # still one model left
+        await manager.unload("m2")      # last one out restores priority
+
+    asyncio.run(scenario())
+
+    assert events == ["lower", "restore"]
+

@@ -46,6 +46,16 @@ class ServerConfig:
     max_loaded_models: int = field(
         default_factory=lambda: int(os.getenv("WS_MAX_MODELS", "4"))
     )
+
+    # CPU etiquette: run the server one priority class below normal while a
+    # model is loaded, so the desktop/browser/IDE stay responsive during
+    # generation (near-zero throughput cost on an idle machine).
+    # Set WS_LOWER_PRIORITY=0/false to disable.
+    lower_process_priority: bool = field(
+        default_factory=lambda: os.getenv(
+            "WS_LOWER_PRIORITY", "1"
+        ).strip().lower() not in ("0", "false", "no", "off")
+    )
     
     # Request limits
     max_concurrent_requests: int = field(

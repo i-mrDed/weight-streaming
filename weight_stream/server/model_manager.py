@@ -30,6 +30,11 @@ from typing import Any, AsyncIterator, Callable, Dict, Iterator, Optional
 
 from ..backends.llama_cpp import WeightStreamModel
 from ..core.exceptions import WeightStreamError, ModelError, GenerationError
+from ..io.process_priority import (
+    describe_process_priority,
+    lower_process_priority,
+    restore_process_priority,
+)
 from .config import get_config, ServerConfig
 from .schemas import ModelStatus
 
@@ -85,10 +90,14 @@ class ModelManager:
                     f"Use force=True to reload."
                 )
 
-            # Build kwargs with defaults
+            # Build kwargs with defaults.
+            # NOTE: n_threads may arrive as an explicit None (the API schema
+            # marks it optional), so `pop(..., default)` alone would forward
+            # None and the backend would fall back to os.cpu_count() — every
+            # logical core. Coalesce to the configured default instead.
             buffer_mb = kwargs.pop("buffer_mb", self._cfg.default_buffer_mb)
             n_ctx = kwargs.pop("n_ctx", self._cfg.default_n_ctx)
-            n_threads = kwargs.pop("n_threads", self._cfg.default_n_threads)
+            n_threads = kwargs.pop("n_threads", None) or self._cfg.default_n_threads
             verbose = kwargs.pop("verbose", False)
 
             # Enforce max models
@@ -132,8 +141,14 @@ class ModelManager:
             self._locks[model_id] = asyncio.Lock()
             self._last_used[model_id] = time.time()
             self._generating[model_id] = False
+            first_model = len(self._models) == 1
 
         logger.info(f"Model loaded: {model_id} ({model_path})")
+
+        # CPU etiquette: while a model is loaded, yield to normal-priority
+        # processes so the machine stays usable during generation.
+        if first_model and self._cfg.lower_process_priority:
+            lower_process_priority()
 
         # Start idle cleanup if not already running
         if self._cleanup_task is None:
@@ -153,11 +168,14 @@ class ModelManager:
             self._locks.pop(model_id, None)
             self._last_used.pop(model_id, None)
             self._generating.pop(model_id, None)
+            no_models_left = not self._models
 
         if model:
             loop = asyncio.get_running_loop()
             await loop.run_in_executor(None, model.close)
             logger.info(f"Model unloaded: {model_id}")
+            if no_models_left:
+                restore_process_priority()
 
         return {"status": "unloaded", "model_id": model_id}
 
@@ -575,6 +593,7 @@ class ModelManager:
                 "queue_depth": self._cfg.request_queue_depth,
                 "host": self._cfg.host,
                 "port": self._cfg.port,
+                "priority": describe_process_priority(),
             }
 
     # ── Internal ─────────────────────────────────────────────────────
