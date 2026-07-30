@@ -107,7 +107,7 @@ class ServerStatus(Static):
 
 class StatsPanel(Static):
     """Live stats display showing buffer, prefetcher, page cache info."""
-    data = reactive({})
+    data: reactive[dict] = reactive({})
 
     def render(self) -> Text:
         if not self.data:
@@ -316,7 +316,7 @@ class WeightStreamTUI(App):
     def on_button_pressed(self, event: Button.Pressed):
         """Handle Send button click."""
         if event.button.id == "send-btn":
-            self._send_message(self.query_one("#msg-input").value)
+            self._send_message(self.query_one("#msg-input", Input).value)
 
     def _send_message(self, text: str):
         """Send a message and generate response."""
@@ -324,6 +324,6 @@ class WeightStreamTUI(App):
         if not text:
             return
 
-        input_widget = self.query_one("#msg-input")
+        input_widget = self.query_one("#msg-input", Input)
         input_widget.value = ""
         self._generate(text)

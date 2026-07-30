@@ -90,8 +90,8 @@ class HeuristicPredictor:
                     candidates[peer] += weight
         
         # Strategy 3: Frequency bias
-        recent = set(self._access_history)
-        for sid in recent:
+        recent_set = set(self._access_history)
+        for sid in recent_set:
             freq = self._frequency.get(sid, 0)
             if sid not in candidates and freq > 0:
                 candidates[sid] = 0.1 * freq

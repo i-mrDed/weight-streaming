@@ -61,7 +61,11 @@ class WeightStreamModel(WeightStreamBackend):
         verbose: enable detailed logging (default: False)
         **kwargs: additional args passed to llama_cpp.Llama
     """
-    
+
+    # Stats of the last generation (set after the first run; read via
+    # hasattr in get_stats). Annotation-only: no runtime class attribute.
+    _last_gen_stats: Dict[str, Any]
+
     def __init__(
         self,
         model_path: str,

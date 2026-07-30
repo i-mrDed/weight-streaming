@@ -32,7 +32,7 @@ class EagleDualPredictor:
             # Fallback to temporal frequency heuristic
             if self.history_routing:
                 recent_flat = [item for sublist in self.history_routing[-3:] for item in sublist]
-                unique_counts = {}
+                unique_counts: Dict[Any, int] = {}
                 for item in recent_flat:
                     unique_counts[item] = unique_counts.get(item, 0) + 1
                 sorted_experts = sorted(unique_counts.keys(), key=lambda x: unique_counts[x], reverse=True)

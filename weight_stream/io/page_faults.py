@@ -14,7 +14,7 @@ of paging, warm generation ~0.55 MB/token (300x drop — the OS working set
 holds the hot set). Raw: docs/verification/spike_page_faults_2026-07-30.json
 """
 import sys
-from typing import Optional
+from typing import Any, Dict, Optional
 
 # Common page size on Windows/Linux x86-64 (used only for the MB estimate).
 ASSUMED_PAGE_SIZE = 4096
@@ -107,7 +107,8 @@ def paging_demand(before: Optional[int], after: Optional[int],
                   hard_before: Optional[int] = None,
                   hard_after: Optional[int] = None,
                   residency_before_bytes: Optional[int] = None,
-                  residency_after_bytes: Optional[int] = None) -> Optional[dict]:
+                  residency_after_bytes: Optional[int] = None
+                  ) -> Optional[Dict[str, Any]]:
     """Build a paging-demand stats block from counter samples.
 
     Returns None if the total-fault samples are unavailable. Total counts
@@ -125,7 +126,7 @@ def paging_demand(before: Optional[int], after: Optional[int],
     if before is None or after is None:
         return None
     faults = max(0, after - before)
-    stats = {
+    stats: Dict[str, Any] = {
         "faults": faults,
         "faults_per_token": round(faults / token_count, 1) if token_count else 0.0,
         "fault_mb_per_token": round(

@@ -59,3 +59,10 @@ include = ["weight_stream*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.mypy]
+# Default (non-strict) run is clean as of 2026-07-30 (0 errors / 43 files).
+# --strict is the long-term goal: baseline 225 errors (mostly missing
+# function annotations in legacy modules) — to be reduced incrementally.
+ignore_missing_imports = true
+files = ["weight_stream"]

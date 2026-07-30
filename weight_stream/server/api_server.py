@@ -20,7 +20,7 @@ import json
 import logging
 import time
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator
+from typing import Any, AsyncIterator, Optional
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -55,7 +55,7 @@ logger = logging.getLogger(__name__)
 # ── Application factory ─────────────────────────────────────────────
 
 
-def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
+def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelManager]:
     """Create and configure the FastAPI application with ModelManager."""
     if config is None:
         config = get_config()
@@ -159,7 +159,7 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
             raise HTTPException(status_code=500, detail=str(e))
     
     @app.get("/v1/stats")
-    async def stats(model: str = None):
+    async def stats(model: Optional[str] = None):
         """
         Get performance statistics.
         
@@ -197,8 +197,8 @@ def create_app(config: ServerConfig = None) -> tuple[FastAPI, ModelManager]:
                 timeout=120,
                 creationflags=creationflags,
             )
-            path = (result.stdout or "").strip().splitlines()
-            path = path[-1].strip() if path else ""
+            lines = (result.stdout or "").strip().splitlines()
+            path = lines[-1].strip() if lines else ""
             if result.returncode == 0 and path:
                 if mode == "dir" and os.path.isdir(path):
                     return {"path": os.path.abspath(path)}

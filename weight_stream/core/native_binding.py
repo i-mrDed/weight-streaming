@@ -100,6 +100,7 @@ class NativeCore:
     def get_memory_stats(cls) -> Dict[str, Any]:
         if cls._lib is None and not cls.load_library():
             return {"working_set_mb": 0, "resident_ratio": 0.0, "native_available": False}
+        assert cls._lib is not None  # load_library() succeeded above
         stats = WSMemoryStats()
         if cls._lib.ws_get_memory_stats(ctypes.byref(stats)):
             return {

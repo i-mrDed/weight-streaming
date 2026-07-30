@@ -401,7 +401,7 @@ class ModelManager:
         latest_tokens = cls._estimate_tokens(latest_msg.get("content", ""))
         used_tokens = system_tokens + latest_tokens
 
-        packed_history = []
+        packed_history: list[dict] = []
         for msg in reversed(history_msgs):
             cost = cls._estimate_tokens(msg.get("content", ""))
             if used_tokens + cost <= budget:
