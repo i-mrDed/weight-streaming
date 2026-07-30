@@ -1,0 +1,39 @@
+{
+  "timestamp_utc": "2026-07-30T04:47:57.531848+00:00",
+  "model_id": "model",
+  "machine": {
+    "logical_cpus": 16,
+    "processor": "Intel64 Family 6 Model 158 Stepping 13, GenuineIntel"
+  },
+  "pids": {
+    "server": 54980,
+    "extra": [
+      7344,
+      2284
+    ]
+  },
+  "idle": {
+    "system_busy_pct": 3.27,
+    "procs_pct": {
+      "54980": 0.0,
+      "7344": 0.0,
+      "2284": 0.0
+    }
+  },
+  "generating": {
+    "system_busy_pct": 80.06,
+    "procs_pct": {
+      "54980": 56.19,
+      "7344": 0.0,
+      "2284": 0.0
+    }
+  },
+  "cooldown": {
+    "system_busy_pct": 5.72,
+    "procs_pct": {
+      "54980": 1.72,
+      "7344": 0.0,
+      "2284": 0.0
+    }
+  }
+}

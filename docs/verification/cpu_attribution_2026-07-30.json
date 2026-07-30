@@ -1,0 +1,30 @@
+{
+  "timestamp_utc": "2026-07-30T05:04:28.265023+00:00",
+  "model_id": "kimi",
+  "machine": {
+    "logical_cpus": 16,
+    "processor": "Intel64 Family 6 Model 158 Stepping 13, GenuineIntel"
+  },
+  "pids": {
+    "server": 23900,
+    "extra": []
+  },
+  "idle": {
+    "system_busy_pct": 3.17,
+    "procs_pct": {
+      "23900": 0.0
+    }
+  },
+  "generating": {
+    "system_busy_pct": 26.46,
+    "procs_pct": {
+      "23900": 15.96
+    }
+  },
+  "cooldown": {
+    "system_busy_pct": 3.94,
+    "procs_pct": {
+      "23900": 0.07
+    }
+  }
+}
