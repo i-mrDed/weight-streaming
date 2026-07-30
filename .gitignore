@@ -16,3 +16,9 @@ venv/
 .pytest_cache/
 .coverage
 htmlcov/
+
+# Node / frontend toolchain (built assets in static/console/ ARE committed)
+node_modules/
+*.tsbuildinfo
+npm-debug.log*
+frontend/.vite/
