@@ -1,0 +1,25 @@
+{
+  "title": "Settings",
+  "appearance": {
+    "title": "Appearance",
+    "theme": "Theme",
+    "themeHint": "Switch between the original look and new designs. More themes can be added later.",
+    "auto": "Auto (follow system)",
+    "autoHint": "Aurora follows your OS light/dark preference.",
+    "particles": "Particle background",
+    "particlesHint": "Animated constellation behind the interface. Turns off automatically for reduced motion."
+  },
+  "language": {
+    "title": "Language",
+    "displayName": "Display name",
+    "displayNameHint": "Shown instead of “You” in chats and issue reports."
+  },
+  "theme": {
+    "classicDark": "Classic Dark",
+    "classicDarkDesc": "The original Deep Space Glassmorphism look.",
+    "auroraDark": "Aurora Dark",
+    "auroraDarkDesc": "Signature spectrum with a living constellation.",
+    "auroraLight": "Aurora Light",
+    "auroraLightDesc": "Daylight Aurora — bright, soft, diffuse."
+  }
+}

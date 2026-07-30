@@ -1,0 +1,20 @@
+{
+  "overview": "ภาพรวม",
+  "chat": "แชท",
+  "stats": "สถิติแบบสด",
+  "models": "โมเดล",
+  "issues": "ปัญหา",
+  "hub": "ฮับ",
+  "docs": "เอกสาร API",
+  "settings": "การตั้งค่า",
+  "activeModel": "โมเดลที่ใช้งาน",
+  "noModelLoaded": "ยังไม่ได้โหลดโมเดล",
+  "modelsLoaded_one": "โหลด {{count}} โมเดล",
+  "modelsLoaded_other": "โหลด {{count}} โมเดล",
+  "openIssues_one": "{{count}} รายการเปิดอยู่",
+  "openIssues_other": "{{count}} รายการเปิดอยู่",
+  "section": {
+    "main": "พื้นที่ทำงาน",
+    "system": "ระบบ"
+  }
+}

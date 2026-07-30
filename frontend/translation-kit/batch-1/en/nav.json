@@ -1,0 +1,20 @@
+{
+  "overview": "Overview",
+  "chat": "Chat",
+  "stats": "Live Stats",
+  "models": "Models",
+  "issues": "Issues",
+  "hub": "Hub",
+  "docs": "API Docs",
+  "settings": "Settings",
+  "activeModel": "Active model",
+  "noModelLoaded": "No model loaded",
+  "modelsLoaded_one": "{{count}} model loaded",
+  "modelsLoaded_other": "{{count}} models loaded",
+  "openIssues_one": "{{count}} open",
+  "openIssues_other": "{{count}} open",
+  "section": {
+    "main": "Workspace",
+    "system": "System"
+  }
+}

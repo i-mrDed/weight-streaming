@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="ws-flow" x1="6" y1="14" x2="58" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="0.38" stop-color="#6366f1"/>
+      <stop offset="0.72" stop-color="#06b6d4"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+    <linearGradient id="ws-back" x1="6" y1="14" x2="58" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+    <linearGradient id="ws-front" x1="6" y1="14" x2="58" y2="52" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#06b6d4"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
+  <path d="M8 16 C11 32 14.5 44 19 50 C23.5 43 28 33 32 26 C36 33 40.5 43 45 50 C49.5 44 53 32 56 16" transform="translate(0 -3.4)" stroke="url(#ws-back)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.48"/>
+  <path d="M8 16 C11 32 14.5 44 19 50 C23.5 43 28 33 32 26 C36 33 40.5 43 45 50 C49.5 44 53 32 56 16" stroke="url(#ws-flow)" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M8 16 C11 32 14.5 44 19 50 C23.5 43 28 33 32 26 C36 33 40.5 43 45 50 C49.5 44 53 32 56 16" transform="translate(0 3.4)" stroke="url(#ws-front)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+  <circle cx="58.6" cy="16.4" r="1.5" fill="#14b8a6" opacity="0.65"/>
+  <circle cx="61.4" cy="12.6" r="1.15" fill="#14b8a6" opacity="0.45"/>
+  <circle cx="63.4" cy="8.6" r="0.85" fill="#14b8a6" opacity="0.3"/>
+</svg>

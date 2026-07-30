@@ -1,0 +1,14 @@
+{
+  "network": {
+    "title": "Connection lost",
+    "body": "The server did not respond. It may be restarting or stopped."
+  },
+  "http": {
+    "title": "Request failed",
+    "body": "The server returned status {{status}}."
+  },
+  "notFound": "Not found",
+  "reportThis": "Report this issue",
+  "copyDebug": "Copy debug context",
+  "tryAgain": "Try again"
+}

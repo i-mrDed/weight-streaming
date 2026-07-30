@@ -1,0 +1,25 @@
+{
+  "title": "การตั้งค่า",
+  "appearance": {
+    "title": "รูปลักษณ์",
+    "theme": "ธีม",
+    "themeHint": "สลับระหว่างหน้าตาเดิมกับแบบใหม่ สามารถเพิ่มธีมได้ภายหลัง",
+    "auto": "อัตโนมัติ (ตามระบบ)",
+    "autoHint": "Aurora จะตามการตั้งค่าสีสว่าง/มืดของระบบปฏิบัติการ",
+    "particles": "พื้นหลังอนุภาค",
+    "particlesHint": "กลุ่มดาวเคลื่อนไหวอยู่หลังหน้าจอ จะปิดเองเมื่อเปิดโหมดลดการเคลื่อนไหว"
+  },
+  "language": {
+    "title": "ภาษา",
+    "displayName": "ชื่อที่แสดง",
+    "displayNameHint": "แสดงแทน “คุณ” ในแชทและรายงานปัญหา"
+  },
+  "theme": {
+    "classicDark": "Classic Dark",
+    "classicDarkDesc": "หน้าตา Deep Space Glassmorphism แบบดั้งเดิม",
+    "auroraDark": "Aurora Dark",
+    "auroraDarkDesc": "สเปกตรัมเอกลักษณ์พร้อมกลุ่มดาวที่มีชีวิตชีวา",
+    "auroraLight": "Aurora Light",
+    "auroraLightDesc": "Aurora แบบกลางวัน — สว่าง นุ่ม กระจายแสง"
+  }
+}

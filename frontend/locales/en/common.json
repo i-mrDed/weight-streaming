@@ -1,0 +1,64 @@
+{
+  "appName": "Weight Streaming Console",
+  "loading": "Loading…",
+  "retry": "Retry",
+  "cancel": "Cancel",
+  "close": "Close",
+  "confirm": "Confirm",
+  "save": "Save",
+  "copy": "Copy",
+  "copied": "Copied ✓",
+  "search": "Search",
+  "notAvailable": "n/a",
+  "comingSoon": "Coming soon",
+  "on": "On",
+  "off": "Off",
+  "splash": {
+    "checking": "Checking server connection…",
+    "connected": "Connected to {{host}}",
+    "failed": "Cannot reach the server",
+    "failedHint": "Start it with: python -m weight_stream server",
+    "version": "Server v{{version}}"
+  },
+  "palette": {
+    "title": "Command palette",
+    "placeholder": "Search pages, themes, actions…",
+    "pages": "Pages",
+    "themes": "Themes",
+    "language": "Language",
+    "actions": "Actions",
+    "noResults": "No matches",
+    "hint": "Ctrl+K anywhere · ↑↓ to move · Enter to run",
+    "toggleParticles": "Toggle particle background",
+    "reload": "Reload console"
+  },
+  "health": {
+    "online": "Server online",
+    "offline": "Server offline",
+    "checking": "Checking…"
+  },
+  "toast": {
+    "themeChanged": "Theme: {{name}}",
+    "languageChanged": "Language: {{name}}",
+    "particlesOn": "Particle background on",
+    "particlesOff": "Particle background off",
+    "dismiss": "Dismiss"
+  },
+  "a11y": {
+    "mainNav": "Main navigation",
+    "statusDot": "Server status",
+    "openPalette": "Open command palette",
+    "themeMenu": "Theme menu",
+    "languageMenu": "Language menu",
+    "userMenu": "Profile",
+    "closeDialog": "Close dialog",
+    "generating": "Assistant is responding",
+    "generationDone": "Response complete"
+  },
+  "placeholder": {
+    "title": "{{page}} is under construction",
+    "body": "This page ships in the next build phase. The foundation you see now — themes, language, navigation — is live.",
+    "phase": "Planned phase: {{phase}}",
+    "backHome": "Back to Overview"
+  }
+}

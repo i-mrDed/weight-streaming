@@ -1,0 +1,64 @@
+{
+  "appName": "Weight Streaming Console",
+  "loading": "กำลังโหลด…",
+  "retry": "ลองใหม่",
+  "cancel": "ยกเลิก",
+  "close": "ปิด",
+  "confirm": "ยืนยัน",
+  "save": "บันทึก",
+  "copy": "คัดลอก",
+  "copied": "คัดลอกแล้ว ✓",
+  "search": "ค้นหา",
+  "notAvailable": "n/a",
+  "comingSoon": "เร็วๆ นี้",
+  "on": "เปิด",
+  "off": "ปิด",
+  "splash": {
+    "checking": "กำลังตรวจสอบการเชื่อมต่อเซิร์ฟเวอร์…",
+    "connected": "เชื่อมต่อกับ {{host}} แล้ว",
+    "failed": "ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้",
+    "failedHint": "เริ่มด้วย: python -m weight_stream server",
+    "version": "Server v{{version}}"
+  },
+  "palette": {
+    "title": "คำสั่งด่วน",
+    "placeholder": "ค้นหาหน้า ธีม คำสั่ง…",
+    "pages": "หน้า",
+    "themes": "ธีม",
+    "language": "ภาษา",
+    "actions": "คำสั่ง",
+    "noResults": "ไม่พบผลลัพธ์",
+    "hint": "Ctrl+K ที่ใดก็ได้ · ↑↓ เพื่อเลื่อน · Enter เพื่อเรียก",
+    "toggleParticles": "เปิด/ปิดพื้นหลังอนุภาค",
+    "reload": "โหลด Console ใหม่"
+  },
+  "health": {
+    "online": "เซิร์ฟเวอร์ออนไลน์",
+    "offline": "เซิร์ฟเวอร์ออฟไลน์",
+    "checking": "กำลังตรวจสอบ…"
+  },
+  "toast": {
+    "themeChanged": "ธีม: {{name}}",
+    "languageChanged": "ภาษา: {{name}}",
+    "particlesOn": "เปิดพื้นหลังอนุภาค",
+    "particlesOff": "ปิดพื้นหลังอนุภาค",
+    "dismiss": "ปิด"
+  },
+  "a11y": {
+    "mainNav": "เมนูนำทางหลัก",
+    "statusDot": "สถานะเซิร์ฟเวอร์",
+    "openPalette": "เปิดคำสั่งด่วน",
+    "themeMenu": "เมนูธีม",
+    "languageMenu": "เมนูภาษา",
+    "userMenu": "โปรไฟล์",
+    "closeDialog": "ปิดกล่องโต้ตอบ",
+    "generating": "ผู้ช่วยกำลังตอบ",
+    "generationDone": "การตอบกลับเสร็จสิ้น"
+  },
+  "placeholder": {
+    "title": "{{page}} อยู่ระหว่างพัฒนา",
+    "body": "หน้านี้จะเปิดให้ใช้ในเฟสการสร้างถัดไป สิ่งที่เห็นตอนนี้ — ธีม ภาษา การนำทาง — ใช้งานได้แล้ว",
+    "phase": "เฟสที่กำหนด: {{phase}}",
+    "backHome": "กลับสู่ภาพรวม"
+  }
+}

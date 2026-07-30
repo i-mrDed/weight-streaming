@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="classic-dark" data-mode="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>Weight Streaming Console</title>
+    <meta name="description" content="Full-circle dashboard for the Weight Streaming local LLM server" />
+    <link rel="icon" type="image/svg+xml" href="/console/favicon.svg" />
+    <link rel="apple-touch-icon" href="/console/icon-180.png" />
+    <script>
+      // Pre-paint theme bootstrap — prevents flash-of-wrong-theme.
+      // Reads persisted choice; falls back to classic-dark (spec §4.2: preserve
+      // the original experience on first run).
+      try {
+        var stored = localStorage.getItem('ws-theme') || 'classic-dark'
+        var known = ['classic-dark', 'aurora-dark', 'aurora-light']
+        var theme = known.indexOf(stored) >= 0 ? stored : 'classic-dark'
+        var mode = theme === 'aurora-light' ? 'light' : 'dark'
+        if (localStorage.getItem('ws-theme-auto') === '1' && window.matchMedia) {
+          mode = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark'
+          theme = mode === 'light' ? 'aurora-light' : 'aurora-dark'
+        }
+        var el = document.documentElement
+        el.setAttribute('data-theme', theme)
+        el.setAttribute('data-mode', mode)
+        el.style.backgroundColor = mode === 'light' ? '#f6f7fb' : theme === 'aurora-dark' ? '#06090f' : '#0b0f19'
+      } catch (e) { /* private mode — defaults apply */ }
+    </script>
+    <style>
+      /* Critical pre-bundle paint: boot splash backdrop so first frame is branded, not white */
+      html, body { margin: 0; min-height: 100% }
+      #boot-root { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; }
+    </style>
+  </head>
+  <body>
+    <div id="app">
+      <div id="boot-root" aria-busy="true"></div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
