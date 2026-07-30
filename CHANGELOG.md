@@ -24,6 +24,13 @@
 - **Tests**: 19 focused regression tests in `tests/test_server_config_and_chat.py` (event-loop responsiveness, cancellation/error cleanup, wrapper native/fallback/telemetry contract); full suite 92 passed / 7 skipped.
 - **Verification artifacts**: `scripts/verify_items_45.py` (rerunnable end-to-end check) and raw results + SPA screenshots in `docs/verification/`.
 
+### ✅ Follow-ups completed (2026-07-30)
+- **SPA PAGING DEMAND card**: fifth Live Stats metric (`generation.paging`, MB/token + fault tooltip); verified in Chrome cold 103.19 → warm 11.72 MB/tok.
+- **Hard/soft fault split**: `disk_demand_mb` + `disk_demand_source` in paging stats — POSIX major faults directly, Windows estimated from model-file residency growth; real data: cold generation 237.5 MB/tok total faults but only 7.86 MB/tok disk, warm 0.0 MB disk.
+- **Llama-family native template verified**: Llama-3.2-1B-Instruct Q2_K (downloaded 554 MB, gitignored) — embedded template, native path, zero leaked markers (`scripts/verify_llama_template.py`).
+- **`stream_prompt()` public wrapper**: plain-prompt completions (`/v1/generate` SSE, Anthropic-compat) now stream through the wrapper with full telemetry; server code has zero direct `_llm` accesses.
+- **MyPy clean**: 21 → 0 errors in default mode (43 files); `[tool.mypy]` config added; `--strict` baseline 225 recorded for incremental reduction.
+
 ### 🔬 Paging-demand telemetry (2026-07-30)
 - New `weight_stream/io/page_faults.py`: cross-platform process page-fault counters (Windows `GetProcessMemoryInfo().PageFaultCount`, POSIX `getrusage()` minor+major) with a `paging_demand()` stats helper.
 - `stream_chat()` and `generate()` now attach a `paging` block to generation stats (`faults`, `faults_per_token`, `fault_mb_per_token`), surfaced through `/v1/stats` — an honest telemetry channel for the `StreamingBuffer.total_accesses = 0` gap (llama.cpp reads its own mmap opaquely; verified live on Qwen1.5-MoE Q2_K at 0.129 MB/token steady-state).
