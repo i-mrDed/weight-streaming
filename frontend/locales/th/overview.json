@@ -1,60 +1,60 @@
 {
   "hero": {
-    "online": "Server online",
-    "offline": "Server offline",
-    "uptime": "up {{duration}}",
-    "uptimeTip": "Measured by this console session since it first reached the server. The server does not expose an uptime endpoint.",
-    "priorityLow": "Lower priority",
-    "priorityNormal": "Normal priority"
+    "online": "เซิร์ฟเวอร์ออนไลน์",
+    "offline": "เซิร์ฟเวอร์ออฟไลน์",
+    "uptime": "เดินเครื่อง {{duration}}",
+    "uptimeTip": "วัดโดยเซสชัน Console นี้ตั้งแต่เชื่อมติดเซิร์ฟเวอร์ครั้งแรก เซิร์ฟเวอร์ไม่เปิด endpoint uptime",
+    "priorityLow": "ความสำคัญต่ำ",
+    "priorityNormal": "ความสำคัญปกติ"
   },
   "quick": {
-    "scan": "Scan models",
-    "load": "Load model",
-    "chat": "Open chat",
-    "report": "Report issue"
+    "scan": "สแกนโมเดล",
+    "load": "โหลดโมเดล",
+    "chat": "เปิดแชท",
+    "report": "รายงานปัญหา"
   },
   "models": {
-    "title": "Loaded models",
-    "loadMore": "Load more",
-    "buffer": "Buffer {{mb}} MB",
-    "lastUsed": "Used {{when}}",
-    "neverUsed": "Never used",
-    "unload": "Unload",
-    "unloadTitle": "Unload model?",
-    "unloadBody": "\"{{id}}\" will be released from memory. Its buffer is freed immediately; the file stays on disk.",
-    "unloaded": "Unloaded {{id}}",
-    "unloadFailed": "Unload failed",
-    "emptyTitle": "No models loaded",
-    "emptyBody": "Scan a folder for GGUF files and load a model to start generating.",
-    "emptyScan": "Scan & load",
-    "emptyHub": "Browse the Hub"
+    "title": "โมเดลที่โหลดแล้ว",
+    "loadMore": "โหลดเพิ่ม",
+    "buffer": "บัฟเฟอร์ {{mb}} MB",
+    "lastUsed": "ใช้ล่าสุด {{when}}",
+    "neverUsed": "ไม่เคยใช้",
+    "unload": "ปลดโหลด",
+    "unloadTitle": "ปลดโหลดโมเดล?",
+    "unloadBody": "\"{{id}}\" จะถูกปล่อยจากหน่วยความจำ บัฟเฟอร์ถูกคืนทันที ไฟล์ยังคงอยู่บนดิสก์",
+    "unloaded": "ปลดโหลด {{id}} แล้ว",
+    "unloadFailed": "ปลดโหลดล้มเหลว",
+    "emptyTitle": "ยังไม่มีโมเดลที่โหลด",
+    "emptyBody": "สแกนโฟลเดอร์หาไฟล์ GGUF แล้วโหลดโมเดลเพื่อเริ่ม generate",
+    "emptyScan": "สแกนและโหลด",
+    "emptyHub": "สำรวจฮับ"
   },
   "widgets": {
-    "title": "Health",
+    "title": "สถานะระบบ",
     "paging": {
-      "title": "Paging demand",
-      "tip": "OS page faults per generated token from the last generation. Lower means the model stays warmer in RAM/page cache.",
-      "unit": "faults/token",
-      "disk": "+{{mb}} MB/token from disk",
-      "idle": "No generation yet"
+      "title": "ความต้องการ paging",
+      "tip": "page fault ของ OS ต่อโทเคนที่ generate จากการ generate ล่าสุด ต่ำกว่าหมายความว่าโมเดลอยู่ใน RAM/page cache มากกว่า",
+      "unit": "ฟอลต์/โทเคน",
+      "disk": "+{{mb}} MB/โทเคน จากดิสก์",
+      "idle": "ยังไม่มี generate"
     },
     "residency": {
       "title": "Page-cache residency",
-      "tip": "Share of the model file resident in the OS page cache (Windows only).",
-      "noModel": "No model loaded",
-      "unavailable": "n/a on this platform"
+      "tip": "สัดส่วนของไฟล์โมเดลที่อยู่ใน page cache ของ OS (เฉพาะ Windows)",
+      "noModel": "ยังไม่มีโมเดลที่โหลด",
+      "unavailable": "n/a บนแพลตฟอร์มนี้"
     },
     "issues": {
-      "title": "Open issues",
-      "tip": "Reports currently in the open state.",
-      "open": "open",
-      "viewAll": "View all"
+      "title": "ปัญหาที่เปิดอยู่",
+      "tip": "รายงานที่อยู่ในสถานะเปิด",
+      "open": "เปิด",
+      "viewAll": "ดูทั้งหมด"
     }
   },
   "activity": {
-    "title": "Activity",
-    "tip": "Recent generations will appear here. Usage history needs a server endpoint that ships in a later phase (P4) — nothing is recorded yet.",
-    "emptyTitle": "Recording starts after your next generation",
-    "emptyBody": "The console does not store generation history locally. A server-side usage history arrives in phase 4 — until then this panel stays honestly empty."
+    "title": "กิจกรรม",
+    "tip": "การ generate ล่าสุดจะปรากฏที่นี่ ประวัติการใช้งานต้องรอ endpoint จากเซิร์ฟเวอร์ที่มาในเฟสถัดไป (P4) — ยังไม่มีอะไรถูกบันทึก",
+    "emptyTitle": "การบันทึกจะเริ่มหลัง generate ครั้งถัดไป",
+    "emptyBody": "Console ไม่เก็บประวัติการ generate ไว้ในเครื่อง ประวัติการใช้งานฝั่งเซิร์ฟเวอร์จะมาในเฟส 4 — จนกว่าจะถึง แผงนี้จะว่างเปล่าตามความจริง"
   }
 }

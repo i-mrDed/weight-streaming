@@ -1,105 +1,105 @@
 {
-  "new": "New chat",
-  "newTitle": "New chat",
-  "noModel": "no model",
-  "stopped": "stopped",
-  "thinking": "Thinking",
-  "thinkingLive": "Thinking…",
-  "genFailed": "Generation failed",
-  "copyFailed": "Copy failed",
+  "new": "แชทใหม่",
+  "newTitle": "แชทใหม่",
+  "noModel": "ไม่มีโมเดล",
+  "stopped": "หยุดแล้ว",
+  "thinking": "กำลังคิด",
+  "thinkingLive": "กำลังคิด…",
+  "genFailed": "generate ล้มเหลว",
+  "copyFailed": "คัดลอกล้มเหลว",
   "notif": {
-    "title": "Response finished",
-    "body": "The model finished while this tab was in the background."
+    "title": "การตอบกลับเสร็จสิ้น",
+    "body": "โมเดลทำเสร็จขณะที่แท็บนี้อยู่เบื้องหลัง"
   },
   "side": {
-    "title": "Conversations",
-    "aria": "Conversation list",
-    "empty": "No conversations yet — start one below.",
-    "count": "{{count}} conversations",
-    "rename": "Rename",
-    "export": "Export as Markdown",
-    "exported": "Exported .md",
-    "delete": "Delete",
-    "deleteTitle": "Delete conversation?",
-    "deleteBody": "\"{{title}}\" and all of its messages will be removed from this browser.",
-    "deleted": "Conversation deleted",
-    "show": "Show conversations",
-    "hide": "Hide conversations"
+    "title": "บทสนทนา",
+    "aria": "รายการบทสนทนา",
+    "empty": "ยังไม่มีบทสนทนา — เริ่มด้านล่าง",
+    "count": "{{count}} บทสนทนา",
+    "rename": "เปลี่ยนชื่อ",
+    "export": "ส่งออกเป็น Markdown",
+    "exported": "ส่งออก .md แล้ว",
+    "delete": "ลบ",
+    "deleteTitle": "ลบบทสนทนา?",
+    "deleteBody": "\"{{title}}\" และข้อความทั้งหมดจะถูกลบออกจากเบราว์เซอร์นี้",
+    "deleted": "ลบบทสนทนาแล้ว",
+    "show": "แสดงบทสนทนา",
+    "hide": "ซ่อนบทสนทนา"
   },
   "group": {
-    "today": "Today",
-    "yesterday": "Yesterday",
-    "older": "Older"
+    "today": "วันนี้",
+    "yesterday": "เมื่อวาน",
+    "older": "เก่ากว่า"
   },
   "model": {
-    "label": "Model",
-    "manage": "Manage models",
-    "hub": "Find more in the Hub",
-    "none": "Load a model first"
+    "label": "โมเดล",
+    "manage": "จัดการโมเดล",
+    "hub": "ค้นหาเพิ่มเติมในฮับ",
+    "none": "โหลดโมเดลก่อน"
   },
   "agent": {
-    "label": "Mode",
-    "default": "Default",
+    "label": "โหมด",
+    "default": "ค่าเริ่มต้น",
     "agent": "Agent",
-    "tip": "Honest note: Agent mode only wires a tool-oriented system prompt. The server does not execute tools yet — no actions will actually run.",
-    "suffix": "You are operating in agent mode: reason step by step and describe any tool calls you would make as plain text. Note: this server cannot execute tools yet, so describe intended actions only."
+    "tip": "หมายเหตุตรงๆ: โหมด agent แค่ตั้งค่า system prompt ที่เน้นการใช้ tool เซิร์ฟเวอร์ยังเรียกใช้ tool ไม่ได้ — ไม่มีการกระทำใดทำงานจริง",
+    "suffix": "คุณกำลังทำงานในโหมด agent: ให้ให้เหตุผลเป็นขั้นตอนและอธิบายการเรียกใช้ tool ใดๆ ที่จะทำเป็นข้อความธรรมดา หมายเหตุ: เซิร์ฟเวอร์นี้ยังเรียกใช้ tool ไม่ได้ จึงอธิบายเฉพาะการกระทำที่ตั้งใจ"
   },
   "effort": {
-    "label": "Reasoning effort",
-    "low": "Low",
-    "med": "Med",
-    "high": "High",
-    "tip": "Sent to the server as reasoning_effort, but the server does not act on it yet — it has no effect on generation."
+    "label": "ระดับการให้เหตุผล",
+    "low": "ต่ำ",
+    "med": "ปานกลาง",
+    "high": "สูง",
+    "tip": "ถูกส่งไปยังเซิร์ฟเวอร์เป็น reasoning_effort แต่เซิร์ฟเวอร์ยังไม่นำไปใช้ — ไม่มีผลต่อการ generate"
   },
   "composer": {
-    "placeholder": "Message… (Enter to send, Shift+Enter for a new line)",
-    "send": "Send",
-    "stop": "Stop",
-    "estimate": "{{chars}} chars · ~{{tokens}} tokens",
-    "noModel": "Load a model to start chatting."
+    "placeholder": "ข้อความ… (Enter เพื่อส่ง, Shift+Enter เพื่อขึ้นบรรทัดใหม่)",
+    "send": "ส่ง",
+    "stop": "หยุด",
+    "estimate": "{{chars}} ตัวอักษร · ~{{tokens}} โทเคน",
+    "noModel": "โหลดโมเดลเพื่อเริ่มแชท"
   },
   "empty": {
-    "title": "Start the conversation",
-    "body": "Messages are stored in this browser only. Nothing leaves your machine.",
-    "noModelTitle": "No model loaded",
-    "noModelBody": "Chat needs a loaded model. Scan and load one first.",
-    "goModels": "Go to Models"
+    "title": "เริ่มบทสนทนา",
+    "body": "ข้อความถูกเก็บในเบราว์เซอร์นี้เท่านั้น ไม่มีอะไรออกจากเครื่องของคุณ",
+    "noModelTitle": "ยังไม่มีโมเดลที่โหลด",
+    "noModelBody": "แชทต้องใช้โมเดลที่โหลดแล้ว สแกนและโหลดโมเดลก่อน",
+    "goModels": "ไปที่โมเดล"
   },
   "drawer": {
-    "title": "Parameters",
-    "perConv": "Use these values for this conversation only",
+    "title": "พารามิเตอร์",
+    "perConv": "ใช้ค่าเหล่านี้กับบทสนทนานี้เท่านั้น",
     "temperature": "Temperature",
     "topP": "Top-p",
-    "maxTokens": "Max tokens",
+    "maxTokens": "จำนวนโทเคนสูงสุด",
     "preset": {
-      "precise": "Precise",
-      "balanced": "Balanced",
-      "creative": "Creative"
+      "precise": "แม่นยำ",
+      "balanced": "สมดุล",
+      "creative": "สร้างสรรค์"
     },
     "system": "System prompt",
-    "systemPlaceholder": "Optional instructions that steer every reply…",
-    "presetName": "Preset name",
-    "presetSave": "Save preset",
-    "presetSaved": "Preset saved",
-    "presetDelete": "Delete preset",
-    "storedLocal": "Stored in this browser (localStorage)"
+    "systemPlaceholder": "คำแนะนำเสริมเพื่อทิศทางทุกการตอบกลับ…",
+    "presetName": "ชื่อพรีเซ็ต",
+    "presetSave": "บันทึกพรีเซ็ต",
+    "presetSaved": "บันทึกพรีเซ็ตแล้ว",
+    "presetDelete": "ลบพรีเซ็ต",
+    "storedLocal": "เก็บในเบราว์เซอร์นี้ (localStorage)"
   },
   "presets": {
     "coding": {
-      "name": "Coding",
-      "text": "You are an expert developer. Write clean, efficient code with brief explanations."
+      "name": "เขียนโค้ด",
+      "text": "คุณคือนักพัฒนาผู้เชี่ยวชาญ เขียนโค้ดที่สะอาดและมีประสิทธิภาพพร้อมคำอธิบายสั้นๆ"
     },
     "writing": {
-      "name": "Writing",
-      "text": "You are a careful writer. Produce clear, well-structured prose and offer edits with reasons."
+      "name": "งานเขียน",
+      "text": "คุณเป็นนักเขียนที่รอบคอบ เขียนข้อความที่ชัดเจนและมีโครงสร้างดี พร้อมเสนอการแก้ไขและเหตุผล"
     },
     "analyst": {
-      "name": "Analyst",
-      "text": "You are a rigorous analyst. Reason step by step, state assumptions, and separate facts from inference."
+      "name": "นักวิเคราะห์",
+      "text": "คุณเป็นนักวิเคราะห์ที่เข้มงวด ให้เหตุผลเป็นขั้นตอน ระบุสมมติฐาน และแยกข้อเท็จจริงจากการอนุมาน"
     },
     "concise": {
-      "name": "Concise",
-      "text": "Answer as concisely as possible. No filler, no preamble — the essential information only."
+      "name": "กระชับ",
+      "text": "ตอบให้กระชับที่สุด ไม่มีเนื้อหาเติม ไม่เกริ่นนำ — เฉพาะข้อมูลที่สำคัญเท่านั้น"
     }
   }
 }
