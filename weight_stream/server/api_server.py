@@ -98,6 +98,13 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     static_dir = os.path.join(os.path.dirname(__file__), "static")
     if os.path.isdir(static_dir):
         app.mount("/app", StaticFiles(directory=static_dir, html=True), name="static")
+
+    # Console — new dashboard (frontend/ built with Vite, prebuilt assets
+    # committed so the server needs no Node toolchain). ADDITIVE mount:
+    # the legacy /app SPA above stays byte-untouched until approved swap.
+    console_dir = os.path.join(static_dir, "console")
+    if os.path.isdir(console_dir):
+        app.mount("/console", StaticFiles(directory=console_dir, html=True), name="console")
     
     # Health check
     @app.get("/health")
@@ -118,6 +125,7 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             "message": f"Weight Streaming API v{__version__}",
             "docs": "/docs",
             "app": "/app",
+            "console": "/console",
             "health": "/health",
             "issues": "/v1/issues",
         }
