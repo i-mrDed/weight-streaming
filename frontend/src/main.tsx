@@ -10,6 +10,7 @@ import { render } from 'preact'
 // Structural styles (reference semantic tokens only)
 import './styles/components.css'
 import './styles/shell.css'
+import './styles/pages.css'
 
 const root = document.getElementById('app')!
 root.innerHTML = '' // clear boot-root placeholder

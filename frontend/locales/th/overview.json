@@ -1,0 +1,60 @@
+{
+  "hero": {
+    "online": "Server online",
+    "offline": "Server offline",
+    "uptime": "up {{duration}}",
+    "uptimeTip": "Measured by this console session since it first reached the server. The server does not expose an uptime endpoint.",
+    "priorityLow": "Lower priority",
+    "priorityNormal": "Normal priority"
+  },
+  "quick": {
+    "scan": "Scan models",
+    "load": "Load model",
+    "chat": "Open chat",
+    "report": "Report issue"
+  },
+  "models": {
+    "title": "Loaded models",
+    "loadMore": "Load more",
+    "buffer": "Buffer {{mb}} MB",
+    "lastUsed": "Used {{when}}",
+    "neverUsed": "Never used",
+    "unload": "Unload",
+    "unloadTitle": "Unload model?",
+    "unloadBody": "\"{{id}}\" will be released from memory. Its buffer is freed immediately; the file stays on disk.",
+    "unloaded": "Unloaded {{id}}",
+    "unloadFailed": "Unload failed",
+    "emptyTitle": "No models loaded",
+    "emptyBody": "Scan a folder for GGUF files and load a model to start generating.",
+    "emptyScan": "Scan & load",
+    "emptyHub": "Browse the Hub"
+  },
+  "widgets": {
+    "title": "Health",
+    "paging": {
+      "title": "Paging demand",
+      "tip": "OS page faults per generated token from the last generation. Lower means the model stays warmer in RAM/page cache.",
+      "unit": "faults/token",
+      "disk": "+{{mb}} MB/token from disk",
+      "idle": "No generation yet"
+    },
+    "residency": {
+      "title": "Page-cache residency",
+      "tip": "Share of the model file resident in the OS page cache (Windows only).",
+      "noModel": "No model loaded",
+      "unavailable": "n/a on this platform"
+    },
+    "issues": {
+      "title": "Open issues",
+      "tip": "Reports currently in the open state.",
+      "open": "open",
+      "viewAll": "View all"
+    }
+  },
+  "activity": {
+    "title": "Activity",
+    "tip": "Recent generations will appear here. Usage history needs a server endpoint that ships in a later phase (P4) — nothing is recorded yet.",
+    "emptyTitle": "Recording starts after your next generation",
+    "emptyBody": "The console does not store generation history locally. A server-side usage history arrives in phase 4 — until then this panel stays honestly empty."
+  }
+}

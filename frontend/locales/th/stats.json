@@ -1,0 +1,70 @@
+{
+  "pickModel": "Model",
+  "empty": {
+    "title": "No models loaded",
+    "body": "Load a model to start collecting live telemetry.",
+    "goModels": "Go to Models"
+  },
+  "idle": {
+    "title": "No generation yet",
+    "body": "Statistics appear after the first run — buffer, speed and paging counters start at zero.",
+    "goChat": "Start a chat"
+  },
+  "gauge": {
+    "hitRate": "Buffer hit rate",
+    "hitRateTip": "Shard reads served from the streaming buffer vs total accesses.",
+    "hitRateCaveat": "Real value — always 0% in practice: llama.cpp reads its own mmap, so the tracker never sees those reads (ADR-003). Use Paging Demand as the main signal.",
+    "residency": "RAM residency",
+    "residencyTip": "Share of the model file held in the OS page cache.",
+    "residencyNa": "n/a · non-Windows",
+    "speed": "Generation speed",
+    "speedTip": "Tokens per second of the most recent generation on this model.",
+    "prefetch": "Prefetch accuracy",
+    "prefetchTip": "Useful prefetches divided by all prefetches. n/a when no prefetch activity was measured.",
+    "prefetchNa": "n/a · no prefetch",
+    "paging": "Paging demand",
+    "pagingTip": "Process-wide page faults per token during the last generation (dominated by the model mmap).",
+    "pagingUnit": "faults/tok",
+    "noGeneration": "No generation yet"
+  },
+  "chart": {
+    "tokTitle": "Generation speed",
+    "faultTitle": "Faults per token",
+    "diskTitle": "Disk demand per token",
+    "window": "session window · since opening this page",
+    "current": "Now",
+    "min": "Min",
+    "max": "Max",
+    "points": "{{count}} pts",
+    "waiting": "Waiting for the first generation…"
+  },
+  "paging": {
+    "title": "Paging demand detail",
+    "tip": "From the last generation: process-wide soft+hard faults; disk demand is measured from major faults (POSIX) or estimated from model-file residency growth (Windows).",
+    "faults": "Faults",
+    "perToken": "Per token",
+    "hard": "Hard faults",
+    "hardNa": "n/a · estimated via residency",
+    "disk": "Disk demand",
+    "srcFaults": "POSIX major faults",
+    "srcResidency": "Windows residency estimate",
+    "idle": "No generation yet — paging counters start after the first run.",
+    "unavailable": "Not measured on this platform (page cache tracking is Windows-only)."
+  },
+  "heatmap": {
+    "title": "MoE expert activity",
+    "tip": "Cells light up only from real telemetry. Stock llama.cpp does not expose per-token expert routing, so the grid stays dark — never animated with fake firing.",
+    "aria": "Expert heatmap with {{count}} cells",
+    "firing": "{{count}} firing (real telemetry)",
+    "total": "{{count}} experts · routing not observable",
+    "notMoe": "This model is not MoE",
+    "notMoeBody": "Dense model — there is no expert routing to display."
+  },
+  "server": {
+    "title": "Server",
+    "models": "Models loaded",
+    "host": "Host",
+    "priority": "Priority",
+    "queue": "Queue depth"
+  }
+}

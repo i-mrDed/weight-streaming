@@ -17,7 +17,10 @@
     "@fontsource-variable/jetbrains-mono": "^5.2.0",
     "@fontsource-variable/noto-sans-thai": "^5.2.0",
     "@preact/signals": "^2.0.0",
+    "dompurify": "^3.4.12",
+    "highlight.js": "^11.11.1",
     "lucide-preact": "^0.525.0",
+    "marked": "^18.0.7",
     "preact": "^10.27.0"
   },
   "devDependencies": {

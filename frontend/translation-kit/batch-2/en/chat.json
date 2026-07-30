@@ -1,0 +1,105 @@
+{
+  "new": "New chat",
+  "newTitle": "New chat",
+  "noModel": "no model",
+  "stopped": "stopped",
+  "thinking": "Thinking",
+  "thinkingLive": "Thinking…",
+  "genFailed": "Generation failed",
+  "copyFailed": "Copy failed",
+  "notif": {
+    "title": "Response finished",
+    "body": "The model finished while this tab was in the background."
+  },
+  "side": {
+    "title": "Conversations",
+    "aria": "Conversation list",
+    "empty": "No conversations yet — start one below.",
+    "count": "{{count}} conversations",
+    "rename": "Rename",
+    "export": "Export as Markdown",
+    "exported": "Exported .md",
+    "delete": "Delete",
+    "deleteTitle": "Delete conversation?",
+    "deleteBody": "\"{{title}}\" and all of its messages will be removed from this browser.",
+    "deleted": "Conversation deleted",
+    "show": "Show conversations",
+    "hide": "Hide conversations"
+  },
+  "group": {
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "older": "Older"
+  },
+  "model": {
+    "label": "Model",
+    "manage": "Manage models",
+    "hub": "Find more in the Hub",
+    "none": "Load a model first"
+  },
+  "agent": {
+    "label": "Mode",
+    "default": "Default",
+    "agent": "Agent",
+    "tip": "Honest note: Agent mode only wires a tool-oriented system prompt. The server does not execute tools yet — no actions will actually run.",
+    "suffix": "You are operating in agent mode: reason step by step and describe any tool calls you would make as plain text. Note: this server cannot execute tools yet, so describe intended actions only."
+  },
+  "effort": {
+    "label": "Reasoning effort",
+    "low": "Low",
+    "med": "Med",
+    "high": "High",
+    "tip": "Sent to the server as reasoning_effort, but the server does not act on it yet — it has no effect on generation."
+  },
+  "composer": {
+    "placeholder": "Message… (Enter to send, Shift+Enter for a new line)",
+    "send": "Send",
+    "stop": "Stop",
+    "estimate": "{{chars}} chars · ~{{tokens}} tokens",
+    "noModel": "Load a model to start chatting."
+  },
+  "empty": {
+    "title": "Start the conversation",
+    "body": "Messages are stored in this browser only. Nothing leaves your machine.",
+    "noModelTitle": "No model loaded",
+    "noModelBody": "Chat needs a loaded model. Scan and load one first.",
+    "goModels": "Go to Models"
+  },
+  "drawer": {
+    "title": "Parameters",
+    "perConv": "Use these values for this conversation only",
+    "temperature": "Temperature",
+    "topP": "Top-p",
+    "maxTokens": "Max tokens",
+    "preset": {
+      "precise": "Precise",
+      "balanced": "Balanced",
+      "creative": "Creative"
+    },
+    "system": "System prompt",
+    "systemPlaceholder": "Optional instructions that steer every reply…",
+    "presetName": "Preset name",
+    "presetSave": "Save preset",
+    "presetSaved": "Preset saved",
+    "presetDelete": "Delete preset",
+    "storedLocal": "Stored in this browser (localStorage)"
+  },
+  "presets": {
+    "coding": {
+      "name": "Coding",
+      "text": "You are an expert developer. Write clean, efficient code with brief explanations."
+    },
+    "writing": {
+      "name": "Writing",
+      "text": "You are a careful writer. Produce clear, well-structured prose and offer edits with reasons."
+    },
+    "analyst": {
+      "name": "Analyst",
+      "text": "You are a rigorous analyst. Reason step by step, state assumptions, and separate facts from inference."
+    },
+    "concise": {
+      "name": "Concise",
+      "text": "Answer as concisely as possible. No filler, no preamble — the essential information only."
+    }
+  }
+}
