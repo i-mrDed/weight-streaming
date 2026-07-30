@@ -27,7 +27,7 @@ from typing import Any, Dict, Iterator, List, Optional
 from ..core.buffer import StreamingBuffer, SHARD_SIZE
 from ..core.predictor import HeuristicPredictor
 from ..core.prefetcher import Prefetcher
-from ..io.page_faults import page_fault_count, paging_demand
+from ..io.page_faults import page_fault_count, paging_demand, hard_fault_count
 from ..gguf import GGUFParser
 from ..io.win_perf import WindowsPageMonitor
 from ._base import WeightStreamBackend
@@ -270,6 +270,10 @@ class WeightStreamModel(WeightStreamBackend):
         start_time = time.time()
         token_count = 0
         faults_before = page_fault_count()  # None if platform unsupported
+        hard_before = hard_fault_count()    # POSIX only (None on Windows)
+        # Cached residency sample (free — no new QueryWorkingSetEx call).
+        res_before = (self._page_monitor.get_resident_bytes()
+                      if self._page_monitor else None)
         
         # Use streaming to track per-token progress
         try:
@@ -342,7 +346,13 @@ class WeightStreamModel(WeightStreamBackend):
             'tokens_per_sec': tokens_per_sec,
             'prompt': prompt[:50] + ('...' if len(prompt) > 50 else ''),
         }
-        paging = paging_demand(faults_before, page_fault_count(), token_count)
+        paging = paging_demand(
+            faults_before, page_fault_count(), token_count,
+            hard_before=hard_before, hard_after=hard_fault_count(),
+            residency_before_bytes=res_before,
+            residency_after_bytes=(self._page_monitor.get_resident_bytes()
+                                   if self._page_monitor else None),
+        )
         if paging is not None:
             self._last_gen_stats['paging'] = paging
         
@@ -424,6 +434,10 @@ class WeightStreamModel(WeightStreamBackend):
         token_count = 0
         start_time = time.time()
         faults_before = page_fault_count()  # None if platform unsupported
+        hard_before = hard_fault_count()    # POSIX only (None on Windows)
+        # Cached residency sample (free — no new QueryWorkingSetEx call).
+        res_before = (self._page_monitor.get_resident_bytes()
+                      if self._page_monitor else None)
         try:
             for chunk in stream:
                 choices = chunk.get("choices") or []
@@ -465,7 +479,13 @@ class WeightStreamModel(WeightStreamBackend):
                 "tokens_per_sec": tokens_per_sec,
                 "prompt": self._summarize_messages(messages),
             }
-            paging = paging_demand(faults_before, page_fault_count(), token_count)
+            paging = paging_demand(
+                faults_before, page_fault_count(), token_count,
+                hard_before=hard_before, hard_after=hard_fault_count(),
+                residency_before_bytes=res_before,
+                residency_after_bytes=(self._page_monitor.get_resident_bytes()
+                                       if self._page_monitor else None),
+            )
             if paging is not None:
                 self._last_gen_stats["paging"] = paging
             if self._page_monitor:

@@ -47,6 +47,22 @@ def page_fault_count() -> Optional[int]:
         return None
 
 
+def hard_fault_count() -> Optional[int]:
+    """Cumulative *hard* (major) faults — faults that hit the disk.
+
+    POSIX only (``ru_majflt``). Windows exposes no per-process hard-fault
+    counter without ETW/PDH; there callers estimate disk demand from the
+    model file's residency growth instead (see ``paging_demand``).
+    """
+    if sys.platform == "win32":
+        return None
+    try:
+        import resource
+        return int(resource.getrusage(resource.RUSAGE_SELF).ru_majflt)
+    except (ImportError, AttributeError):
+        return None
+
+
 def _windows_page_fault_count() -> Optional[int]:
     import ctypes
     from ctypes import wintypes
@@ -87,16 +103,29 @@ def _windows_page_fault_count() -> Optional[int]:
 
 
 def paging_demand(before: Optional[int], after: Optional[int],
-                  token_count: int) -> Optional[dict]:
-    """Build a paging-demand stats block from two counter samples.
+                  token_count: int,
+                  hard_before: Optional[int] = None,
+                  hard_after: Optional[int] = None,
+                  residency_before_bytes: Optional[int] = None,
+                  residency_after_bytes: Optional[int] = None) -> Optional[dict]:
+    """Build a paging-demand stats block from counter samples.
 
-    Returns None if either sample is unavailable. Counts are process-wide
-    (hard + soft); during generation they are dominated by the model mmap.
+    Returns None if the total-fault samples are unavailable. Total counts
+    are process-wide (hard + soft); during generation they are dominated
+    by the model mmap.
+
+    Disk demand (hard faults — bytes actually read from disk) is reported
+    when measurable:
+    - POSIX: directly from major-fault deltas (``hard_before/hard_after``)
+    - Windows: estimated from the model file's residency growth
+      (``residency_*_bytes``) — newly resident bytes ≈ bytes the OS had
+      to fault in from disk; the pre-sample may be cached/stale, so this
+      is a conservative lower-ish estimate, labeled as such.
     """
     if before is None or after is None:
         return None
     faults = max(0, after - before)
-    return {
+    stats = {
         "faults": faults,
         "faults_per_token": round(faults / token_count, 1) if token_count else 0.0,
         "fault_mb_per_token": round(
@@ -105,3 +134,19 @@ def paging_demand(before: Optional[int], after: Optional[int],
         "note": "process-wide soft+hard faults; dominated by model mmap "
                 "during generation",
     }
+
+    if hard_before is not None and hard_after is not None:
+        hard = max(0, hard_after - hard_before)
+        stats["hard_faults"] = hard
+        stats["disk_demand_mb"] = round(hard * ASSUMED_PAGE_SIZE / 1e6, 3)
+        stats["disk_demand_source"] = "major_faults"
+    elif residency_before_bytes is not None and residency_after_bytes is not None:
+        delta = max(0, residency_after_bytes - residency_before_bytes)
+        stats["disk_demand_mb"] = round(delta / 1e6, 3)
+        stats["disk_demand_source"] = "residency_growth_estimate"
+        stats["note"] += "; disk_demand estimated from model-file residency " \
+                         "growth (newly resident bytes)"
+
+    if token_count and "disk_demand_mb" in stats:
+        stats["disk_mb_per_token"] = round(stats["disk_demand_mb"] / token_count, 3)
+    return stats

@@ -54,6 +54,13 @@ class _FakePageMonitor:
     def sample_resident_pages(self):
         self.samples += 1
 
+    def get_resident_bytes(self):
+        # Grows with each sample so residency-delta estimates are testable.
+        return self.samples * 1024 * 1024
+
+    def get_resident_ratio(self):
+        return 0.0
+
 
 def _bare_weight_stream_model(engine, arch="qwen2", page_monitor=None):
     """Build a WeightStreamModel without running the heavy __init__."""
@@ -325,6 +332,13 @@ def test_stream_chat_records_os_paging_demand():
     assert paging["faults_per_token"] >= 0
     assert paging["fault_mb_per_token"] >= 0
     assert "note" in paging
+    # Disk demand: present on POSIX (major faults) or when a page monitor
+    # provides residency samples; absent on Windows without a monitor.
+    if "disk_demand_mb" in paging:
+        assert paging["disk_demand_mb"] >= 0
+        assert paging["disk_demand_source"] in (
+            "major_faults", "residency_growth_estimate")
+        assert paging["disk_mb_per_token"] >= 0
 
 
 def test_stream_chat_falls_back_to_prompt_formatter_when_native_fails():

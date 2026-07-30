@@ -1100,7 +1100,10 @@ async function refreshStats() {
       const mbpt = paging.fault_mb_per_token;
       const el = document.getElementById('stat-paging-val');
       el.textContent = mbpt.toFixed(2) + ' MB/tok';
-      el.title = `${paging.faults.toLocaleString()} faults · ${paging.faults_per_token}/tok — ${paging.note || ''}`;
+      const disk = (typeof paging.disk_mb_per_token === 'number')
+        ? ` · disk ≈ ${paging.disk_mb_per_token.toFixed(2)} MB/tok (${paging.disk_demand_source})`
+        : '';
+      el.title = `${paging.faults.toLocaleString()} faults · ${paging.faults_per_token}/tok${disk} — ${paging.note || ''}`;
       document.getElementById('stat-paging-bar').style.width = Math.min(100, (mbpt / 50) * 100) + '%';
     } else {
       document.getElementById('stat-paging-val').textContent = 'n/a';
