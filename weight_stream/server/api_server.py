@@ -240,13 +240,22 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     async def scan_models(dir: str | None = None):
         """
         Scan directories for available GGUF model files.
-        
+
         Scans the configured models directory (WS_MODELS_DIR env var,
         default: current directory + common model locations).
         Returns a list of found .gguf files with size info.
+
+        The recursive glob + GGUF header parsing is blocking I/O that can
+        take minutes on large model stores, so it runs in a worker thread
+        (never on the event loop — a blocked loop freezes /health, stats,
+        and every in-flight generation).
         """
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _scan_gguf_models, dir)
+
+    def _scan_gguf_models(dir: str | None = None) -> dict:
         import os, glob
-        
+
         search_dirs = []
         if dir:
             search_dirs.append(dir)
@@ -262,6 +271,13 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
                 os.path.join(os.getcwd(), "models"),
                 os.path.expanduser("~/models"),
             ])
+            # Desktop-app model stores users actually keep their GGUFs in
+            if os.name == "nt":
+                appdata = os.environ.get("APPDATA", "")
+                if appdata:
+                    search_dirs.append(os.path.join(
+                        appdata, "Jan", "data", "llamacpp", "models"
+                    ))
         
         found = []
         seen = set()
@@ -279,6 +295,7 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
                 try:
                     size = os.path.getsize(abspath)
                     arch = "unknown"
+                    quant = None
                     try:
                         from gguf import GGUFReader
                         reader = GGUFReader(abspath)
@@ -291,11 +308,29 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
                                 arch = data.tobytes().decode("utf-8", errors="replace").strip("\x00")
                             else:
                                 arch = str(data)
+                        # Effective quantization = dominant non-F32 tensor
+                        # type (authoritative over general.file_type, whose
+                        # label can be stale/custom-converter-wrong).
+                        # Python ≥3.11 str(IntEnum) is the bare integer, so
+                        # use the enum's .name ("Q2_K", "F16", …).
+                        counts: dict = {}
+                        for t in reader.tensors:
+                            tt = t.tensor_type
+                            key = getattr(tt, "name", None) or str(tt).split(".")[-1]
+                            if key == "F32":
+                                continue
+                            counts[key] = counts.get(key, 0) + 1
+                        if counts:
+                            quant = max(counts.items(), key=lambda kv: kv[1])[0]
                     except Exception:
                         pass
-                    # Architectures known to need newer llama-cpp
+                    # Architectures that needed newer llama-cpp in older
+                    # installs. "qwen35" was verified working on the pinned
+                    # llama-cpp-python 0.3.34 (live generation + user report,
+                    # 2026-07-30) and removed. Remaining entries are kept
+                    # conservatively until each arch is re-verified.
                     needs_upgrade = arch in (
-                        "qwen35", "qwen35moe", "qwen3", "qwen3moe",
+                        "qwen35moe", "qwen3", "qwen3moe",
                         "deepseek2", "deepseek3",
                     )
                     found.append({
@@ -305,6 +340,7 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
                         "size_gb": round(size / (1024**3), 2),
                         "directory": os.path.dirname(abspath),
                         "architecture": arch,
+                        "quant": quant,
                         "may_need_upgrade": needs_upgrade,
                     })
                 except OSError:
