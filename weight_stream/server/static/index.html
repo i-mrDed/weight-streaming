@@ -616,10 +616,16 @@ textarea#chat-input {
             <label style="font-size:0.75rem;color:var(--primary);font-weight:600;display:block;margin-bottom:2px;" title="CTX (Tok): Max Context Window length in tokens. Recommended 2048-4096 Tokens.">CTX (Tok) ℹ️</label>
             <input type="number" id="load-ctx" class="setting-input" value="2048" onchange="syncModelConfigToSettings()" title="Max Context Window length in tokens">
           </div>
+          <div style="width:100px;">
+            <label style="font-size:0.75rem;color:var(--primary);font-weight:600;display:block;margin-bottom:2px;" title="CPU inference threads. Empty = server default (half of logical cores). Fewer threads = slower generation but a more responsive machine.">THR ℹ️</label>
+            <input type="number" id="load-threads" class="setting-input" placeholder="auto" min="1" max="256" title="CPU inference threads (empty = server default)">
+          </div>
         </div>
 
+        <div id="load-quant-warn" style="display:none;font-size:0.75rem;margin-bottom:12px;background:rgba(245,158,11,0.1);padding:6px 10px;border-radius:6px;border:1px solid var(--accent-warn);color:var(--accent-warn);"></div>
+
         <div style="font-size:0.75rem;color:var(--text-dim);margin-bottom:12px;background:rgba(255,255,255,0.03);padding:6px 10px;border-radius:6px;border:1px solid var(--border-color);">
-          💡 <b>BUF (MB)</b> = ขนาด RAM ที่กันเป็น Hot-Weight Cache (แนะนำ 64-256MB) | <b>CTX (Tok)</b> = ความยาวจำบริบทบทสนทนา (แนะนำ 2048-4096 Tokens)
+          💡 <b>BUF (MB)</b> = ขนาด RAM ที่กันเป็น Hot-Weight Cache (แนะนำ 64-256MB) | <b>CTX (Tok)</b> = ความยาวจำบริบทบทสนทนา (แนะนำ 2048-4096 Tokens) | <b>THR</b> = จำนวน CPU threads (เว้นว่าง = ค่า default ของเซิร์ฟเวอร์ — ครึ่งหนึ่งของ logical cores)
         </div>
 
         <div style="display:flex;gap:8px;">
@@ -710,6 +716,7 @@ let currentModel = '';
 let conversationHistory = [];
 let abortController = null;
 let scanned = false;
+let scannedModels = []; // last /v1/models/scan result (carries quant info)
 
 const chatInput = document.getElementById('chat-input');
 const messagesContainer = document.getElementById('chat-messages-container');
@@ -827,7 +834,12 @@ function renderChatMessages() {
     return;
   }
   conversationHistory.forEach(msg => {
-    addMessageCard(msg.role, msg.content);
+    const { textEl } = addMessageCard(msg.role, '');
+    if (msg.role === 'assistant') {
+      applySegmentedContent(textEl, msg.content); // thinking/answer split
+    } else {
+      textEl.textContent = msg.content;
+    }
   });
 }
 
@@ -883,6 +895,186 @@ function addMessageCard(role, content) {
   return { card, textEl, timeEl: card.querySelector('.message-time') };
 }
 
+/* ── Thinking/answer separation ──────────────────────────────────────
+   Thinking models (Qwen3.5 family etc.) emit  thinking blocks inside
+   the assistant content. Split them into a collapsible muted accordion
+   so the actual answer stays readable. Stream-safe: a marker can arrive
+   split across deltas, so while streaming we hold back trailing chars
+   that could be the start of a marker. All rendering via textContent
+   (no innerHTML — XSS-safe, same contract as the plain chat bubbles). */
+const THINK_OPEN = '<' + 'think>';
+const THINK_CLOSE = '<' + '/think>';
+
+/* Verbal thinking conventions used by models that were not trained on
+    think  tags (e.g. Kimi/Qwen instruction fine-tunes that open with a
+   prose "Thinking Process:" preamble). Detected at the very start of an
+   assistant message; the block ends at the first answer separator. */
+const THINK_VERBAL_RE = /^\s*(thinking process|chain of thought|let'?s think step by step|reasoning)\b[^\n]*/i;
+const THINK_VERBAL_END_RE = /\n\s*(?:final answer|answer|conclusion|สรุป|คำตอบ(?:สุดท้าย)?|ตอบ)\s*[:：#]/i;
+
+function tailTagHold(raw) {
+  // Longest trailing run that could be a partial open/close marker.
+  let hold = 0;
+  for (let n = 1; n <= THINK_CLOSE.length; n++) {
+    const tail = raw.slice(-n);
+    if (THINK_OPEN.startsWith(tail) || THINK_CLOSE.startsWith(tail)) hold = n;
+  }
+  return hold;
+}
+
+function ensureThinkElements(textEl) {
+  if (textEl._think) return textEl._think;
+  const acc = document.createElement('div');
+  acc.className = 'thought-accordion';
+  const details = document.createElement('details');
+  details.open = true;
+  const summary = document.createElement('summary');
+  summary.className = 'thought-summary';
+  summary.textContent = '💭 กำลังคิด…';
+  const content = document.createElement('div');
+  content.className = 'thought-content';
+  details.appendChild(summary);
+  details.appendChild(content);
+  acc.appendChild(details);
+  textEl.parentNode.insertBefore(acc, textEl);
+  details.addEventListener('toggle', () => { textEl._think.userToggled = true; });
+  textEl._think = { acc: acc, details: details, summary: summary, content: content, userToggled: false };
+  return textEl._think;
+}
+
+function parseThinkSegments(raw) {
+  // Returns [{type:'think'|'answer', text}] — only fully-delimited
+  // thinking blocks become 'think'; markers themselves are consumed.
+  const parts = raw.split(/(<\/?think>)/);
+  const segs = [];
+  let mode = 'answer';
+  for (const part of parts) {
+    if (part === THINK_OPEN) { mode = 'think'; continue; }
+    if (part === THINK_CLOSE) { mode = 'answer'; continue; }
+    if (part === '') continue;
+    const last = segs[segs.length - 1];
+    if (last && last.type === mode) last.text += part;
+    else segs.push({ type: mode, text: part });
+  }
+  return segs;
+}
+
+function renderThinkInto(textEl, thinkText, ansText) {
+  // Shared final-state renderer for streaming-complete and history.
+  if (thinkText) {
+    const t = ensureThinkElements(textEl);
+    t.content.textContent = thinkText;
+    if (ansText.trim() && !t.userToggled) {
+      t.details.open = false;
+      t.summary.textContent = '💭 Thinking (คลิกเพื่ออ่าน)';
+    } else if (!ansText.trim()) {
+      t.summary.textContent = '💭 Thinking';
+    }
+  }
+  if (thinkText && !ansText.trim()) {
+    noAnswerNote(textEl);
+  } else {
+    textEl.textContent = ansText;
+  }
+}
+
+function splitVerbalThink(text, done) {
+  // Prose-style thinking preamble at the message start. Returns
+  // {think, answer}. While streaming (done=false) and no separator has
+  // appeared yet, everything stays in 'think' (may be revised later as
+  // more text arrives — the render is recomputed each frame).
+  const m = THINK_VERBAL_RE.exec(text);
+  if (!m) return null;
+  const end = THINK_VERBAL_END_RE.exec(text);
+  if (end) return { think: text.slice(0, end.index), answer: text.slice(end.index) };
+  if (done) {
+    // No explicit separator. Only treat the whole message as thinking
+    // when the preamble is an explicit LABEL with a colon ("Thinking
+    // Process:", "Chain of thought:", "Reasoning:") — that is strong
+    // evidence. A bare "Let's think step by step" could be the answer
+    // itself; don't guess, show it plain.
+    if (/^\s*(thinking process|chain of thought|reasoning)\b[^\n]*[:：]/i.test(text)) {
+      return { think: text, answer: '' };
+    }
+    return null;
+  }
+  return { think: text, answer: '' };
+}
+
+function noAnswerNote(textEl) {
+  // Called when a response ended with thinking but no answer section
+  // (typically the token budget ran out mid-reasoning).
+  textEl.textContent = '⚠️ โมเดลใช้ token budget ทั้งหมดไปกับ thinking — ไม่มีคำตอบแยกออกมา';
+  textEl.style.color = 'var(--text-dim)';
+  textEl.style.fontStyle = 'italic';
+}
+
+function streamRenderThink(textEl, raw, done) {
+  // Marker tags take precedence over the verbal heuristic.
+  if (raw.indexOf(THINK_OPEN) !== -1) {
+    const hold = done ? 0 : tailTagHold(raw);
+    const safe = raw.slice(0, raw.length - hold);
+    const segs = parseThinkSegments(safe);
+    const inThink = segs.length > 0 && segs[segs.length - 1].type === 'think';
+    if (hold > 0 && inThink) {
+      segs[segs.length - 1].text += raw.slice(raw.length - hold);
+    }
+    const thinkText = segs.filter(s => s.type === 'think').map(s => s.text).join('');
+    const ansText = segs.filter(s => s.type === 'answer').map(s => s.text).join('');
+    if (thinkText) {
+      const t = ensureThinkElements(textEl);
+      t.content.textContent = thinkText;
+    }
+    textEl.textContent = ansText;
+  } else {
+    const verbal = splitVerbalThink(raw, done);
+    if (verbal) {
+      const t = ensureThinkElements(textEl);
+      t.content.textContent = verbal.think;
+      textEl.textContent = verbal.answer;
+    } else {
+      // No thinking after all (or a mid-stream reclassification):
+      // drop any accordion an earlier frame created, show plain text.
+      if (textEl._think) {
+        textEl._think.acc.remove();
+        textEl._think = null;
+      }
+      textEl.textContent = raw;
+    }
+  }
+  if (done) {
+    const t = textEl._think;
+    if (t) {
+      if (textEl.textContent.trim() && !t.userToggled) {
+        t.details.open = false;
+        t.summary.textContent = '💭 Thinking (คลิกเพื่ออ่าน)';
+      } else if (!textEl.textContent.trim()) {
+        t.summary.textContent = '💭 Thinking';
+        noAnswerNote(textEl);
+      } else {
+        t.summary.textContent = '💭 Thinking';
+      }
+    }
+  }
+}
+
+function applySegmentedContent(textEl, raw) {
+  // Static (history) rendering of a complete assistant message.
+  if (raw && raw.indexOf(THINK_OPEN) !== -1) {
+    const segs = parseThinkSegments(raw);
+    const thinkText = segs.filter(s => s.type === 'think').map(s => s.text).join('');
+    const ansText = segs.filter(s => s.type === 'answer').map(s => s.text).join('');
+    renderThinkInto(textEl, thinkText, ansText);
+    return;
+  }
+  const verbal = raw ? splitVerbalThink(raw, true) : null;
+  if (verbal) {
+    renderThinkInto(textEl, verbal.think, verbal.answer);
+    return;
+  }
+  textEl.textContent = raw || '';
+}
+
 /* Streaming chat with batched rendering (item 4):
    - deltas accumulate in a plain string; the DOM is touched at most once
      per animation frame via textContent (no innerHTML re-parse per token)
@@ -910,7 +1102,7 @@ async function sendMessage() {
 
   function flushRender() {
     frameScheduled = false;
-    streamTextEl.textContent = fullResponse;
+    streamRenderThink(streamTextEl, fullResponse, false);
     scrollIfStuck(stickToBottom);
   }
   function scheduleRender() {
@@ -969,7 +1161,7 @@ async function sendMessage() {
       }
     }
 
-    flushRender(); // guarantee the final text is painted
+    streamRenderThink(streamTextEl, fullResponse, true); // final paint (no hold-back)
     streamTimeEl.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
 
     conversationHistory.push({ role: 'user', content: text });
@@ -980,7 +1172,7 @@ async function sendMessage() {
     if (e.name === 'AbortError') {
       // Stopped by user: keep what was generated so far, and keep the
       // conversation consistent between UI and history.
-      flushRender();
+      streamRenderThink(streamTextEl, fullResponse, true);
       streamTimeEl.textContent = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
       if (fullResponse.trim()) {
         conversationHistory.push({ role: 'user', content: text });
@@ -1191,14 +1383,35 @@ async function scanModels(dir) {
   if (dir) url += '?dir=' + encodeURIComponent(dir);
   try {
     const data = await apiJSON(url);
-    const models = data.models || [];
-    let html = '<option value="">-- Select a model (' + models.length + ' found) --</option>';
-    models.forEach(m => {
-      html += `<option value="${escapeHtml(m.path)}">${escapeHtml(m.name)} (${m.size_gb} GB)</option>`;
+    scannedModels = data.models || [];
+    let html = '<option value="">-- Select a model (' + scannedModels.length + ' found) --</option>';
+    scannedModels.forEach(m => {
+      const quant = m.quant ? ' · ' + escapeHtml(m.quant) : '';
+      html += `<option value="${escapeHtml(m.path)}">${escapeHtml(m.name)} (${m.size_gb} GB${quant})</option>`;
     });
     picker.innerHTML = html;
+    updateQuantWarn();
   } catch (e) {
+    scannedModels = [];
     picker.innerHTML = '<option value="">Scan error: ' + escapeHtml(e.message) + '</option>';
+  }
+}
+
+/* Warn before loading an unquantized (F16/F32/BF16) GGUF on CPU:
+   such files read 2 bytes per parameter per token and are typically
+   2-4x slower than a Q4_K_M build of the same model. */
+function updateQuantWarn() {
+  const warn = document.getElementById('load-quant-warn');
+  const path = document.getElementById('load-path').value.trim();
+  const hit = scannedModels.find(m => m.path === path);
+  const q = hit && hit.quant ? hit.quant.toUpperCase() : '';
+  if (q === 'F16' || q === 'F32' || q === 'BF16') {
+    warn.style.display = 'block';
+    warn.innerHTML = '⚠️ โมเดล <b>' + escapeHtml(q) + '</b> ไม่ถูก quantize — บน CPU จะช้ามาก '
+      + '(อ่าน ~2 bytes/parameter/token; วัดจริง: F16 4.2B ≈ 2.8 tok/s เทียบกับ Q6_K 9B ≈ 3-4 tok/s) '
+      + 'แนะนำให้ใช้ GGUF รุ่น Q4_K_M หรือ Q6_K แทน · ดู docs/MODEL_GUIDE.md';
+  } else {
+    warn.style.display = 'none';
   }
 }
 
@@ -1220,6 +1433,7 @@ async function browseModel() {
   if (data.path) {
     document.getElementById('load-path').value = data.path;
     document.getElementById('load-id').value = data.name.replace('.gguf', '');
+    updateQuantWarn(); // quant unknown for arbitrary paths — hides the badge
   }
 }
 
@@ -1228,6 +1442,7 @@ document.getElementById('model-picker').addEventListener('change', function() {
     document.getElementById('load-path').value = this.value;
     const name = this.value.split(/[\\/]/).pop().replace('.gguf', '');
     document.getElementById('load-id').value = name || 'default';
+    updateQuantWarn();
   }
 });
 
@@ -1236,6 +1451,8 @@ async function loadModel(force) {
   const id = document.getElementById('load-id').value.trim() || 'default';
   const buffer = parseInt(document.getElementById('load-buffer').value) || 64;
   const ctx = parseInt(document.getElementById('load-ctx').value) || 2048;
+  const threadsRaw = document.getElementById('load-threads').value.trim();
+  const threads = threadsRaw ? parseInt(threadsRaw) : null; // null = server default
   const msg = document.getElementById('load-msg');
 
   if (!path) { msg.innerHTML = '<span style="color:var(--accent-error);">Select a model path first.</span>'; return; }
@@ -1245,7 +1462,7 @@ async function loadModel(force) {
     await apiJSON('/v1/models/load', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model_id: id, model_path: path, buffer_mb: buffer, n_ctx: ctx, force: force })
+      body: JSON.stringify({ model_id: id, model_path: path, buffer_mb: buffer, n_ctx: ctx, n_threads: threads, force: force })
     });
     msg.innerHTML = '<span style="color:var(--accent-green);">Loaded successfully!</span>';
     refreshModels();
