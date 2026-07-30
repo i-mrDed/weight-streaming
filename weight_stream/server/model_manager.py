@@ -13,9 +13,10 @@ compute. All streaming paths in this manager therefore consume them through
 free for health checks, stats, and cancellation while a response generates.
 
 Chat design note (item 5):
-Chat paths consume the model's public ``stream_chat`` wrapper instead of
-touching ``_llm`` directly, so generation stats and page-cache telemetry
-are recorded for chat runs as well.
+All streaming paths consume the model's public wrappers — ``stream_chat``
+(chat) and ``stream_prompt`` (plain-prompt completions) — instead of
+touching ``_llm`` directly, so generation stats, OS paging telemetry, and
+page-cache sampling are recorded on every path.
 """
 
 from __future__ import annotations
@@ -328,29 +329,27 @@ class ModelManager:
             try:
                 loop = asyncio.get_running_loop()
 
-                def make_stream() -> Iterator[dict]:
-                    # Runs in the worker thread. NOTE: the plain-prompt path
-                    # still uses `_llm` directly; the public chat wrapper
-                    # (stream_chat) covers chat streaming only.
-                    return model._llm(
+                def make_stream() -> Iterator[str]:
+                    # Runs in the worker thread. The plain-prompt path goes
+                    # through the public WeightStreamModel wrapper, so
+                    # generation stats and paging telemetry are recorded
+                    # exactly like on the chat path.
+                    return model.stream_prompt(
                         prompt,
                         max_tokens=max_tokens,
                         temperature=temperature,
                         top_p=top_p,
-                        stream=True,
                         **kwargs,
                     )
 
                 token_count = 0
-                async for chunk in self._iter_blocking(make_stream):
-                    if "choices" in chunk and len(chunk["choices"]) > 0:
-                        text = chunk["choices"][0].get("text", "")
-                        yield {
-                            "token": text,
-                            "index": token_count,
-                            "done": False,
-                        }
-                        token_count += 1
+                async for text in self._iter_blocking(make_stream):
+                    yield {
+                        "token": text,
+                        "index": token_count,
+                        "done": False,
+                    }
+                    token_count += 1
 
                 stats = await loop.run_in_executor(None, model.get_stats)
 

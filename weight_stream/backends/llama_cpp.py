@@ -494,6 +494,107 @@ class WeightStreamModel(WeightStreamBackend):
                 except Exception:
                     pass
 
+    def stream_prompt(
+        self,
+        prompt: str,
+        max_tokens: int = 128,
+        temperature: float = 0.7,
+        top_p: float = 0.9,
+        **kwargs,
+    ) -> Iterator[str]:
+        """
+        Stream a plain-prompt completion as text chunks through the public
+        wrapper.
+
+        Plain-prompt counterpart of ``stream_chat()``: server code must
+        consume this instead of touching ``_llm`` directly, so generation
+        stats, OS paging telemetry, and page-cache sampling are recorded
+        for this path too (completions endpoints, Anthropic-compat).
+
+        Records ``_last_gen_stats`` (incl. ``paging``) on completion, on
+        error, and on early close.
+
+        Yields:
+            Text chunks as strings.
+
+        Raises:
+            GenerationError: If the model is not loaded or generation fails.
+        """
+        if not self.is_loaded:
+            raise GenerationError(
+                "Model not loaded",
+                details={"model_path": self._model_path},
+            )
+
+        try:
+            stream = self._llm(
+                prompt,
+                max_tokens=max_tokens,
+                temperature=temperature,
+                top_p=top_p,
+                stream=True,
+                **kwargs,
+            )
+        except Exception as e:
+            raise GenerationError(
+                f"Inference engine error: {e}",
+                details={"error": str(e)},
+            )
+
+        token_count = 0
+        start_time = time.time()
+        faults_before = page_fault_count()  # None if platform unsupported
+        hard_before = hard_fault_count()    # POSIX only (None on Windows)
+        res_before = (self._page_monitor.get_resident_bytes()
+                      if self._page_monitor else None)
+        try:
+            for chunk in stream:
+                choices = chunk.get("choices") or []
+                if not choices:
+                    continue
+                text = choices[0].get("text", "")
+                if not text:
+                    continue
+                token_count += 1
+                yield text
+
+                if token_count % 5 == 0 and self._page_monitor:
+                    try:
+                        self._page_monitor.sample_resident_pages()
+                    except Exception:
+                        pass
+        except GeneratorExit:
+            raise
+        except Exception as e:
+            raise GenerationError(
+                f"Prompt generation failed at token {token_count}: {e}",
+                token_count=token_count or None,
+                details={"error": str(e)},
+            )
+        finally:
+            elapsed = time.time() - start_time
+            tokens_per_sec = token_count / elapsed if elapsed > 0 else 0
+            self._last_gen_stats = {
+                "token_count": token_count,
+                "elapsed": elapsed,
+                "tokens_per_sec": tokens_per_sec,
+                "prompt": prompt[:50] + ("..." if len(prompt) > 50 else ""),
+            }
+            if self._page_monitor:
+                try:
+                    self._page_monitor.sample_resident_pages()
+                except Exception:
+                    pass
+            paging = paging_demand(
+                faults_before, page_fault_count(), token_count,
+                hard_before=hard_before, hard_after=hard_fault_count(),
+                residency_before_bytes=res_before,
+                residency_after_bytes=(self._page_monitor.get_resident_bytes()
+                                       if self._page_monitor else None),
+            )
+            if paging is not None:
+                self._last_gen_stats["paging"] = paging
+
     @staticmethod
     def _format_chat_prompt(messages: List[dict], arch: str = "") -> str:
         """

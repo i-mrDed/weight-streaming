@@ -89,6 +89,7 @@ class _FakeStreamModel:
         self._iter_error_after = iter_error_after
         self._chunk_delay = chunk_delay
         self.stream_requests = []
+        self.prompt_requests = []
 
     def _get_arch(self):
         return "unknown"
@@ -118,6 +119,25 @@ class _FakeStreamModel:
                 raise RuntimeError("boom mid-stream")
             if self._chunk_delay:
                 time.sleep(self._chunk_delay)  # simulate blocking compute
+            yield chunk
+
+    def stream_prompt(self, prompt, max_tokens=128, temperature=0.7, top_p=0.9, **kwargs):
+        self.prompt_requests.append(
+            {
+                "prompt": prompt,
+                "max_tokens": max_tokens,
+                "temperature": temperature,
+                "top_p": top_p,
+                "extra": kwargs,
+            }
+        )
+        if self._setup_error is not None:
+            raise self._setup_error
+        for i, chunk in enumerate(self._chunks):
+            if self._iter_error_after is not None and i == self._iter_error_after:
+                raise RuntimeError("boom mid-stream")
+            if self._chunk_delay:
+                time.sleep(self._chunk_delay)
             yield chunk
 
 
@@ -196,6 +216,31 @@ def test_streaming_chat_reads_wrapper_chunks_and_marks_done():
     assert [event["token"] for event in events[:-1]] == ["Native ", "stream"]
     assert events[-1]["done"] is True
     assert model.stream_requests[0]["max_tokens"] == 32
+
+
+def test_generate_stream_uses_public_prompt_wrapper():
+    """Plain-prompt streaming must go through WeightStreamModel.stream_prompt
+    (public wrapper), never model._llm, so stats/paging are recorded too."""
+    manager = ModelManager(ServerConfig())
+    model = _FakeStreamModel(chunks=("plain ", "prompt"))
+    _register(manager, "test", model)
+
+    async def collect():
+        return [
+            event
+            async for event in manager.generate_stream(
+                "test", "Once upon a time", max_tokens=24
+            )
+        ]
+
+    events = asyncio.run(collect())
+
+    assert [event["token"] for event in events[:-1]] == ["plain ", "prompt"]
+    assert events[-1]["done"] is True
+    assert model.prompt_requests, "stream_prompt wrapper was not used"
+    assert model.prompt_requests[0]["prompt"] == "Once upon a time"
+    assert model.prompt_requests[0]["max_tokens"] == 24
+    assert not model.stream_requests, "chat wrapper must not be used here"
 
 
 # -- Item 4: event loop stays responsive, cleanup is guaranteed -------------
