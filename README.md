@@ -182,6 +182,20 @@ Options:
 
 The abstraction layer supports both MoE and Dense architectures. For dense models, prefetch focuses on sequential layer access.
 
+## Model Selection & CPU Etiquette
+
+CPU generation speed is memory-bandwidth bound: `tok/s ≈ RAM bandwidth ÷ weight bytes per token`.
+Dense models read the whole file per token, so quantization decides speed more than parameter
+count — a 4.2B model in F16 (8.4 GB/token) measured **2.8 tok/s**, while a 9B Q6_K (7.35 GB/token)
+gives 3–4 tok/s and a MoE reading ~1 GB/token active weights reached 17.9 tok/s on the same box.
+Prefer **Q4_K_M / Q6_K** GGUFs over F16 for CPU use. Full tables and measurements:
+[docs/MODEL_GUIDE.md](docs/MODEL_GUIDE.md).
+
+While a model is loaded the server runs one priority class below normal
+(`WS_LOWER_PRIORITY=0` to disable) so the desktop/browser stay responsive, and the SPA's
+Models tab exposes per-model CPU thread count (default `WS_N_THREADS` = half of logical cores).
+Thinking models' ` think ` output is folded into a collapsible panel, separate from the answer.
+
 ## License
 
 MIT

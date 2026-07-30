@@ -22,6 +22,7 @@
 | I/O engine | io_uring/IOCP dispatch, core path (§4) | OS-managed; native io_uring/IOCP/SIMD kernels kept as research prototypes (`core/native/`) | Not needed while compute-bound on consumer hardware |
 | Integration | Fork llama.cpp (§6.4) | **llama-cpp-python adapter** (`backends/llama_cpp.py` → `WeightStreamModel`) with public `stream_chat()` wrapper | No C++ build dependency; works with any GGUF model |
 | Telemetry | Confidence/prediction metrics | **Honest telemetry**: real generation stats, OS page-residency sampling, prefetch accuracy only from real evidence (else `n/a`) | Synthetic values mislead product decisions |
+| CPU etiquette | (not in research scope) | Below-normal process priority while a model is loaded (`io/process_priority.py`), default threads = half of logical cores + per-load override, SPA thinking/answer separation | Added 2026-07-30 from real-use testing: keeps the daily-driver machine responsive (measured 80% → 37% system busy at ~same tok/s on a bandwidth-bound F16 model); throughput ceiling itself is physics — see `docs/MODEL_GUIDE.md` |
 
 ### First real-model validation (2026-07-29)
 

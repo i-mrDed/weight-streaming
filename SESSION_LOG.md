@@ -587,6 +587,69 @@
 
 ---
 
+## [S019] — 2026-07-30 — รอบแก้จากของจริง: CPU saturation + Thinking UI + คู่มือเลือกโมเดล
+
+**🎯 เป้าหมาย:** แก้ 3 ปัญหาที่ผู้ใช้พบจากการทดสอบใช้งานจริง (ช้า 3–4 tok/s, CPU เครื่อง 100%, thinking/answer ปนกัน) อย่างเป็นระบบ: บันทึกปัญหา → สาเหตุ → แผน → แก้ไข → ทดสอบ → ผลลัพธ์ → ยืนยัน
+
+### 📋 ปัญหา (ผู้ใช้ทดสอบจริงกับโมเดลใน Jan Desktop)
+1. Kimi R37 (qwen35, 4.2B **F16**, 8.42 GB) และ Ornith 9B (**Q6_K**, 7.36 GB) → 3–4 tok/s "ถ้าใช้งานจริงคงไม่ไหว"
+2. ขณะ generate: CPU process 70%+ จนเครื่องรวม 100% "แบบนี้ไม่ไหว"
+3. แชทดีขึ้นมาก แต่ควรแยกส่วน Thinking ออกจากคำตอบ
+
+### 🔍 สาเหตุ (ยืนยันแล้วด้วยการวัด/อ่านโค้ด)
+- **ช้า = physics ไม่ใช่ bug** — decode อ่านน้ำหนักเกือบทั้งโมเดลทุก token: tok/s ≈ bandwidth ÷ bytes/token; F16 4.2B = 8.4 GB/tok (มากกว่า 9B Q6_K ที่ 7.35 GB/tok!) → ทำนาย 2.4–3.6 tok/s วัดจริง 2.8 ✓; Q6_K 9B → 2.9–3.7 vs ผู้ใช้วัด 3–4 ✓; Qwen MoE Q2_K อ่าน ~1 GB/tok (active experts) → 17.9 — ทุกจุดบนเส้น bandwidth เดียวกัน (~23–35 GB/s effective)
+- **CPU = พบบั๊กจริง**: `ModelLoadRequest.n_threads=None` (SPA ไม่ส่งค่า) ผ่าน `kwargs.pop("n_threads", default)` เป็น None ตรง ๆ → หลุดถึง `os.cpu_count()` = **16 threads (ทุก logical core)** แทน default 8; วัดจริง: server process 56.2% ของเครื่อง + โหลดอื่น → ผู้ใช้เห็นรวม 100%
+- **Thinking**: qwen35 fine-tune ("heretic") เขียน prose "Thinking Process:" แทน ` think ` tags — SPA โชว์ raw ตรง ๆ
+
+### 🛠️ การแก้ไข
+1. `weight_stream/io/process_priority.py` (ใหม่) — below-normal ขณะมีโมเดลโหลด (Win: SetPriorityClass + ctypes prototypes ครบ / POSIX: nice+5 + รายงานตรง ๆ เมื่อ restore ไม่ได้), restore เมื่อ unload โมเดลสุดท้าย, สถานะจริงใน `/v1/stats` → `server.priority`; ปิดด้วย `WS_LOWER_PRIORITY=0`
+2. `model_manager.py` — แก้ None-plumbing: `kwargs.pop("n_threads", None) or default`; SPA เพิ่มช่อง THR รายโมเดล
+3. SPA thinking separation — รองรับทั้ง ` think ` tags (streaming-safe: hold-back marker ข้าม delta) **และ** verbal preamble ("Thinking Process:" ฯลฯ + ตัดเมื่อพบ separator เช่น "Answer:"/"สรุป:"/"ตอบ:"); accordion 💭 พับได้, โหลดประวัติก็แยก; ไม่มี marker = fast path ปกติ
+4. `/v1/models/scan` — เพิ่ม `quant` (ชนิด tensor ครอง ยกเว้น F32, ใช้ enum `.name`), **ย้ายเข้า executor** (ของเดิมบล็อก event loop — พบตอนสแกน Jan folder: เซิร์ฟเวอร์ค้าง /health timeout), เพิ่ม Jan path ใน default scan
+5. SPA เตือน ⚠️ เมื่อเลือก F16/F32/BF16 จากผล scan; `docs/MODEL_GUIDE.md` (ใหม่) + README section; ลดธง `may_need_upgrade` เฉพาะ qwen35 (ยืนยันแล้ว), คงตัวอื่นแบบ conservative
+6. `scripts/measure_cpu_attribution.py` (ใหม่) — GetSystemTimes/GetProcessTimes sampling 3 เฟส
+
+### 🧪 ทดสอบ
+- unit: +11 priority tests (both backends + live round-trip), +3 manager tests (None→default, priority lower/restore อย่างละครั้ง, env override)
+- suite: **113 passed**, mypy clean **44 files**
+- live (server ใหม่ + Chrome จริง): priority lifecycle load→below_normal / unload→normal ✓; scan 20 โมเดล 113s ระหว่างนั้น **health 45/45 OK** ✓; quant names ✓; warning banner ✓ (screenshot); streaming thinking แยกสด ✓ (screenshot)
+
+### 📊 ผลลัพธ์ (Kimi R37 F16, เครื่องเดิม 16 logical)
+| config | tok/s | server process | ทั้งระบบ |
+|---|---|---|---|
+| โค้ดเก่า (16 threads, normal priority) | 2.8 | 56.2% | 80.1% |
+| ใหม่ default (8 threads, below-normal) | 2.5 | 22.6% | 37.0% |
+| THR=4 (below-normal) | 2.3 | 16.0% | 26.5% |
+
+→ โทเคนลดลง ~18% แลกกับ CPU footprint ลด ~3.5× (bandwidth-bound); priority below-normal การันตี browser/desktop ชนะ scheduling เสมอ
+
+### ⚡ การตัดสินใจ
+- ไม่ไล่ความเร็ว 3–4 tok/s ต่อ (เป็น physics) → แก้ที่การตั้งความคาดหวัง + เตือน F16 + ตัวเลือก threads
+- below-normal ผูกกับ model lifecycle (โหลด/unload) ไม่ใช่ราย generation — ง่ายและครอบคลุม idle-prompt-eval ด้วย
+- verbal-thinking heuristic เฉพาะขึ้นต้นข้อความ + ต้องมี separator ตอนจบ (กัน false positive; ข้อความที่ถูก max_tokens ตัดกลางทางจะโชว์เต็มตามเดิม — ซื่อสัตย์)
+- บันทึกข้อจำกัดตรง ๆ: attribution ตอนผู้ใช้รายงานย้อนหลังไม่ได้ (โมเดลถูก unload ไปแล้ว) — วัดใหม่บนสถานการณ์เดียวกันแทน
+
+### 🐛 ปัญหา / อุปสรรค
+- `/v1/models/scan` บล็อก event loop (pre-existing) — Jan folder ทำให้ปรากฏชัด; แก้ด้วย executor
+- quant integer: Python 3.14 `str(IntEnum)` = เลขล้วน → ใช้ `.name`
+- SPA picker แสดง quant เลข — ผล scan ค้างจากก่อน restart; สแกนใหม่หาย
+- `rtk grep` ไม่มี rg → fallback; `rtk pip` ใช้ไม่ได้ (uv venv) ใช้ `python -m pip`
+
+### ⏭️ ถัดไป
+- [ ] Push commits ขึ้น origin/main — **HOLD ต่อเนื่องตามคำสั่งผู้ใช้**
+- [ ] Shard-level tracking ผ่าน native core (ระยะยาว)
+- [ ] MyPy --strict gradual (baseline 225)
+- [ ] Calibrate simulator กับข้อมูล multi-model (Tier 1 เดิม — physics model tok/s ≈ BW/bytes พร้อมใช้แล้ว)
+
+### 📎 อ้างอิง
+- `docs/verification/cpu_attribution_before_2026-07-30.json` — โค้ดเก่า 56.2%/80.1%
+- `docs/verification/cpu_attribution_default_threads_2026-07-30.json` — ใหม่ default 22.6%/37.0%
+- `docs/verification/cpu_attribution_2026-07-30.json` — THR=4 16.0%/26.5%
+- `docs/verification/spa_f16_warning_2026-07-30.png`, `spa_thinking_streaming_2026-07-30.png`, `spa_thinking_markers_2026-07-30.png`
+- `docs/MODEL_GUIDE.md` — คู่มือเลือกโมเดล + CPU etiquette
+
+---
+
 > ```markdown
 > ## [S000] — YYYY-MM-DD — [หัวข้อสั้น]
 >

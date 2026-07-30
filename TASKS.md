@@ -19,6 +19,20 @@
 
 ---
 
+## ✅ Real-Use Reliability Round (2026-07-30, from user live testing)
+
+| สถานะ | Task | Priority | Notes |
+|-------|------|----------|-------|
+| ✅ | วินิจฉัย 3–4 tok/s (Kimi R37 F16 / Ornith Q6_K) | 🔴 | physics ไม่ใช่ bug: bandwidth-bound (tok/s ≈ BW ÷ bytes/token); F16 4.2B อ่าน 8.4 GB/tok → วัด 2.8 ตรงคำทำนาย; ทุกจุดบนเส้น ~23–35 GB/s เดียวกัน |
+| ✅ | แก้ CPU saturation | 🔴 | พบบั๊ก n_threads=None→16 threads + เพิ่ม below-normal priority (`io/process_priority.py`, WS_LOWER_PRIORITY); วัด: 56.2%→22.6% process, 80.1%→37.0% system, tok/s 2.8→2.5 |
+| ✅ | THR control รายโมเดลใน SPA | 🟡 | ช่อง THR + วัด trade-off: THR=4 → 16.0% CPU / 2.3 tok/s |
+| ✅ | แยก Thinking ออกจากคำตอบในแชท | 🟡 | ` think ` tags (streaming-safe) + verbal "Thinking Process:" heuristic; ยืนยันสดใน Chrome กับ Kimi R37 (screenshot ใน docs/verification/) |
+| ✅ | คู่มือเลือกโมเดล + เตือน F16 | 🟡 | `docs/MODEL_GUIDE.md` + scan `quant` field + SPA ⚠️ warning + README section |
+| ✅ | แก้ `/v1/models/scan` บล็อก event loop | 🔴 | pre-existing; พบตอนสแกน Jan folder — ย้ายเข้า executor; ระหว่างสแกน 113s health 45/45 OK; เพิ่ม Jan path ใน default scan |
+| ⬜ | Calibrate simulator ด้วย physics model (BW ÷ bytes/token) + multi-model data | 🟡 | ข้อมูลวัดพร้อมแล้วใน docs/verification/ |
+
+---
+
 ## 📋 Phase 1: Research Review
 
 | สถานะ | Task | Priority | Notes |
