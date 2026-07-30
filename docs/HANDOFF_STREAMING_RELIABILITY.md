@@ -7,7 +7,8 @@ Items 4 and 5 below were implemented and validated end-to-end on 2026-07-29:
 - **Item 4** — `ModelManager._iter_blocking()` runs blocking iterators in a worker thread (bounded queue + cooperative cancellation); SPA renders via `requestAnimationFrame` + `textContent`; Stop cancels cleanly and always releases the model lock.
 - **Item 5** — `WeightStreamModel.stream_chat()` is the public chat-stream API (native template → fallback, real stats incl. cancelled runs, page-cache sampling, no synthetic prefetch). Server code no longer touches `model._llm` for chat. SPA stats panel de-faked.
 - **Verified** with `research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf` + live SPA in Chrome: 3/3 checks passed (`/health` ≤ 28 ms during 220-token generation at 14–15 tok/s; cancellation releases the lock with regeneration in 540 ms; `/v1/stats` reflects real wrapper measurements). Raw results: `docs/verification/items_45_2026-07-29_raw.txt`; rerunnable via `scripts/verify_items_45.py`.
-- **Not covered**: Llama-family native-template check (no Llama GGUF available locally); before/after baseline comparison (old code already replaced — only "after" metrics retained).
+- **Not covered**: before/after baseline comparison (old code already replaced — only "after" metrics retained).
+- **Llama-family native-template check added 2026-07-30**: `Llama-3.2-1B-Instruct` Q2_K (embedded 3827-char template) — native path used, response "Reply with exactly one word: hello" → `Hello`, zero leaked template markers, stats + paging telemetry recorded. Rerun: `scripts/verify_llama_template.py`; raw: `docs/verification/llama_template_2026-07-30.json`.
 - Tests: `tests/test_server_config_and_chat.py` (19 tests); full suite 92 passed / 7 skipped.
 
 The original handoff content follows for reference.

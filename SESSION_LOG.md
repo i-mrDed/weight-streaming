@@ -576,6 +576,7 @@
 - [ ] แยก hard faults / soft faults (disk I/O demand vs RAM remap)
 - [ ] Shard-level tracking ผ่าน native core (ระยะยาว)
 - [ ] ทดสอบ native template กับ Llama-family GGUF เมื่อมีโมเดล (ค้างจาก S017)
+- [x] ทดสอบ native template กับ Llama-family GGUF — PASS (Llama-3.2-1B-Instruct Q2_K: template ฝังใน GGUF 3827 chars, native path, ตอบ "Hello" ไม่มี template tokens รั่ว; `scripts/verify_llama_template.py`)
 - [ ] Public streaming wrapper สำหรับ plain-prompt path (ค้างจาก S017)
 - [ ] MyPy strict pass (ค้างจาก S014)
 - [ ] Push 39 commits ขึ้น origin/main เมื่อผู้ใช้สั่ง

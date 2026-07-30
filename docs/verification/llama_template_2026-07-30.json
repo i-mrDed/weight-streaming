@@ -1,0 +1,21 @@
+{
+  "model": "research/models/Llama-3.2-1B-Instruct-Q2_K.gguf",
+  "results": {
+    "has_embedded_template": true,
+    "native_path_used": true,
+    "chunks": 1,
+    "leaked_markers": [],
+    "response_preview": "Hello",
+    "stats_token_count": 1,
+    "paging": {
+      "faults": 140118,
+      "faults_per_token": 140118.0,
+      "fault_mb_per_token": 573.923,
+      "note": "process-wide soft+hard faults; dominated by model mmap during generation; disk_demand estimated from model-file residency growth (newly resident bytes)",
+      "disk_demand_mb": 0.0,
+      "disk_demand_source": "residency_growth_estimate",
+      "disk_mb_per_token": 0.0
+    }
+  },
+  "pass": true
+}
