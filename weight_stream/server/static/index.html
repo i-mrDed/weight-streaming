@@ -559,6 +559,11 @@ textarea#chat-input {
           <div class="metric-val" id="stat-prefetch-val">—</div>
           <div class="metric-bar-bg"><div class="metric-bar-fill" id="stat-prefetch-bar" style="width: 0%;"></div></div>
         </div>
+        <div class="metric-card" title="Real OS page-fault demand per generated token (soft+hard, process-wide; dominated by the model mmap during generation; n/a = no generation yet or unsupported platform)">
+          <div class="metric-header"><span>PAGING DEMAND</span> 📟</div>
+          <div class="metric-val" id="stat-paging-val">—</div>
+          <div class="metric-bar-bg"><div class="metric-bar-fill" id="stat-paging-bar" style="width: 0%;"></div></div>
+        </div>
       </div>
 
       <!-- Compact MoE Expert Heatmap Grid -->
@@ -1087,12 +1092,28 @@ async function refreshStats() {
       document.getElementById('stat-prefetch-bar').style.width = '0%';
     }
 
+    // 5. Paging Demand — real OS page-fault telemetry per generated token.
+    //    llama.cpp reads its own mmap so the buffer tracker sees nothing;
+    //    this is the honest OS-level signal (ADR-003 addendum 2026-07-30).
+    const paging = gen.paging;
+    if (paging && typeof paging.fault_mb_per_token === 'number') {
+      const mbpt = paging.fault_mb_per_token;
+      const el = document.getElementById('stat-paging-val');
+      el.textContent = mbpt.toFixed(2) + ' MB/tok';
+      el.title = `${paging.faults.toLocaleString()} faults · ${paging.faults_per_token}/tok — ${paging.note || ''}`;
+      document.getElementById('stat-paging-bar').style.width = Math.min(100, (mbpt / 50) * 100) + '%';
+    } else {
+      document.getElementById('stat-paging-val').textContent = 'n/a';
+      document.getElementById('stat-paging-bar').style.width = '0%';
+    }
+
     renderHeatmap(first);
   } catch(e) {
     document.getElementById('stat-hitrate-val').textContent = '--';
     document.getElementById('stat-ram-val').textContent = '--';
     document.getElementById('stat-speed-val').textContent = '--';
     document.getElementById('stat-prefetch-val').textContent = '--';
+    document.getElementById('stat-paging-val').textContent = '--';
   }
 }
 
