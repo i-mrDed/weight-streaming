@@ -254,8 +254,12 @@ export function ChatPage() {
       botMsg.error = errMsg || undefined
 
       // Footer stats — real numbers from /v1/stats (last generation block).
+      // Call WITHOUT ?model=: the server puts a single model's stat dict
+      // directly under `models` in that mode (api_server.py:181 — it is not
+      // keyed by id), so only the all-models shape matches StatsPayload and
+      // can be indexed by our model id.
       try {
-        const s = await fetchStats(c!.model, 5000)
+        const s = await fetchStats(undefined, 5000)
         const g = s.models[c!.model]?.generation
         if (g && typeof g.tokens_per_sec === 'number' && g.tokens_per_sec > 0) {
           botMsg.stats = {

@@ -135,6 +135,7 @@ export function StatsPage() {
     )
   }
 
+  void ringTick.value // subscribe → repaint charts after each ring-buffer push
   const prev = prevRef.current
   const cur = snapshotOf(ms)
   const idle = !hasGeneration(ms ?? undefined)
@@ -248,7 +249,9 @@ export function StatsPage() {
             <h2>{t('stats.chart.tokTitle')}</h2>
             <span class="st-window">{t('stats.chart.window')}</span>
           </div>
-          <Sparkline data={tokRing.current.items()} unit="tok/s" cssVar="--ws-accent-brand" />
+          {/* items().slice() → fresh array ref each render so the Sparkline
+              always re-diffs (RingBuffer.items() returns one mutated array) */}
+          <Sparkline data={tokRing.current.items().slice()} unit="tok/s" cssVar="--ws-accent-brand" />
         </Card>
         <Card>
           <div class="st-chart-head">
@@ -258,7 +261,7 @@ export function StatsPage() {
             <span class="st-window">{t('stats.chart.window')}</span>
           </div>
           <Sparkline
-            data={faultRing.current.items()}
+            data={faultRing.current.items().slice()}
             unit={faultSourceRef.current === 'faults' ? t('stats.gauge.pagingUnit') : 'MB/tok'}
             cssVar="--ws-status-warn"
             format={(n) => fmtNumber(n, { maximumFractionDigits: 2 })}

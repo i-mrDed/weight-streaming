@@ -3,7 +3,7 @@
    /v1/models/unload, /v1/browse, /v1/browse-dir (all pre-existing).
    Library view / file deletion are OUT of v1 (spec). Quant advisories from
    MODEL_GUIDE + ISSUE-011/018. `may_need_upgrade` → pip install hint. */
-import { useEffect } from 'preact/hooks'
+import { useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import {
   BarChart3,
@@ -69,6 +69,7 @@ export function ModelsPage() {
   const filter = useSignal('')
   const sort = useSignal<SortKey>('size')
   const browsingDir = useSignal(false)
+  const scanSeqRef = useRef(0) // request-sequence guard: latest scan wins
 
   // load form state
   const loadPath = useSignal('')
@@ -88,16 +89,19 @@ export function ModelsPage() {
   }, [])
 
   const runScan = async () => {
+    const seq = ++scanSeqRef.current
     scanning.value = true
     scanError.value = ''
     try {
       const res = await scanModels(scanDir.value.trim() || undefined)
+      if (seq !== scanSeqRef.current) return // stale response — a newer scan owns the UI
       scanResults.value = res.models
       toast('info', t('models.scan.done', { count: res.total }))
     } catch (e) {
+      if (seq !== scanSeqRef.current) return // stale failure — don't clobber the newer scan
       scanError.value = e instanceof ApiError && e.detail ? e.detail : String(e)
     } finally {
-      scanning.value = false
+      if (seq === scanSeqRef.current) scanning.value = false
     }
   }
 
