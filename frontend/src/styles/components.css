@@ -296,6 +296,15 @@
   animation: ws-drawer-in var(--ws-dur-base) var(--ws-ease-out);
 }
 @keyframes ws-drawer-in { from { transform: translateX(40px); opacity: 0; } }
+/* Left-edge variant — used by the primary navigation drawer so the menu
+   enters from the same corner as the hamburger that summons it. */
+.overlay--drawer-left { justify-content: flex-start; }
+.drawer--left {
+  border-left: none;
+  border-right: 1px solid var(--ws-border-default);
+  animation-name: ws-drawer-in-left;
+}
+@keyframes ws-drawer-in-left { from { transform: translateX(-40px); opacity: 0; } }
 .drawer__header {
   display: flex;
   align-items: center;

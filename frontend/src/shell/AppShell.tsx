@@ -19,7 +19,7 @@ export function AppShell() {
         <RouterView />
       </main>
       <MobileNav onMore={() => setDrawer(true)} />
-      <Drawer open={drawer} onClose={() => setDrawer(false)} title={t('common.appName')} width={300}>
+      <Drawer open={drawer} onClose={() => setDrawer(false)} title={t('common.appName')} width={300} side="left">
         <SidebarContent onNavigate={() => setDrawer(false)} />
       </Drawer>
       <ToastViewport />

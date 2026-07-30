@@ -11,13 +11,17 @@ interface Props {
   title?: string
   children: ComponentChildren
   width?: number
+  /* Which edge the sheet slides in from. Navigation (hamburger) reads as
+     left — it matches the burger's corner — while action panels (params,
+     conversation list) stay on the right. Default right = existing callers. */
+  side?: 'left' | 'right'
 }
 
 // Same focusable set as Dialog — kept local so the QA-verified Dialog stays untouched.
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
 
-export function Drawer({ open, onClose, title, children, width = 380 }: Props) {
+export function Drawer({ open, onClose, title, children, width = 380, side = 'right' }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const restoreRef = useRef<Element | null>(null)
 
@@ -63,10 +67,10 @@ export function Drawer({ open, onClose, title, children, width = 380 }: Props) {
   if (!open) return null
 
   return createPortal(
-    <div class="overlay overlay--drawer" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div class={`overlay overlay--drawer overlay--drawer-${side}`} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <aside
         ref={ref}
-        class="drawer"
+        class={`drawer drawer--${side}`}
         role="dialog"
         aria-modal="true"
         aria-label={title ?? 'drawer'}
