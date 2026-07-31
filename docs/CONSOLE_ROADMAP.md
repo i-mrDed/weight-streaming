@@ -19,9 +19,17 @@
 | **P3** | 3 หน้าจริง: **Issues** (9-state lifecycle + transition matrix + verify loop + maintainer panel) / **API Docs** (markdown-driven + code tabs + copy + honest notes) / **Settings** (runtime+persist · server read-only · apply-on-restart snippet · honest n/a) | ✅ เสร็จ + QA PASS + ผู้ใช้ตรวจรับ (รวมรอบ polish `bf512fd`: drawer→ซ้าย, toolbar, card, mobile left-sheet) |
 | **P4** | **backend endpoint ใหม่** (spec §10): hub search/download+progress SSE, `/v1/usage/history`, `/v1/logs/tail`, `/v1/config` (+`PATCH` v1.1) + pytest — **backend ล้วน ห้ามแตะ frontend (หน้าที่ใช้ = P5)** | 🔄 **เริ่มแล้ว** — PM ปล่อยสเปค (`docs/P4_BRIEF.md` `b56e0d8`) → รอ Dev |
 | **P5** | หน้า **Hub** (search-first, one-click download) + polish (light theme, palette, notifications, export) + **i18n batch สุดท้าย = full TH sweep** + native check | ⬜ ยังไม่เริ่ม |
-| **P6** | PM สรุป + demo → **ผู้ใช้อนุมัติสุดท้าย** → merge กลับ main + route swap (`/`→console, ของเก่า→`/app-legacy` หนึ่ง release) + CHANGELOG | ⬜ ยังไม่เริ่ม |
+| **P6** | **Promote Console ขึ้นproduction** — PM สรุป+demo → **ผู้ใช้อนุมัติสุดท้าย** → merge `feature→main` (`--no-ff`) + route swap (`/`→console, ของเก่า→`/app-legacy` หนึ่ง release) + CHANGELOG + **ลบ `dashboard_server.py` (มติผู้ใช้)** | ⬜ ยังไม่เริ่ม |
 
 > หมายเหตุสถานะ P4: สเปคอยู่ที่ **`docs/P4_BRIEF.md`** (ตรวจโค้ดจริงก่อนเขียน — usage-hook ที่ ModelManager, PATCH safe subset, logging rewire, HF raw HTTP, hub security) + NOTE ทีม · เป็นเฟสแรกที่แตะ server core; **frontend ที่ใช้ endpoint P4 ทั้งหมดเลื่อนไป P5** เพื่อแยกตรวจด้วย pytest/contract tests ล้วน
+
+## 🧭 มติผู้ใช้ (2026-07-31) — รูปแบบการย้ายระบบ (migration model)
+1. **ทดลองใช้ก่อน โปรโมททีหลัง (trial-first / promote-later)**:
+   - **`main` = เวอร์ชัน "Classic"** (production ปัจจุบัน, SPA `/app` เดิม) — คงไว้เป็นตัวหลักที่ปลอดภัย ตลอดช่วงทดลอง
+   - **`feature/dashboard-theme` = เวอร์ชัน "Console"** — ผู้ใช้จะรันเซิร์ฟเวอร์จาก worktree บน**พอร์ตแยก** (เช่น 8799) เพื่อลองใช้งานจริงไประยะหนึ่ง (main 8765 ไม่ถูกแตะ)
+   - เมื่อพอใจ → **โปรโมท = P6**: merge `feature→main` (`--no-ff`) + route swap (`/`→console, `/app`→`/app-legacy` หนึ่ง release) + CHANGELOG · **ผู้ใช้อนุมัติเอง ไม่มีอะไร flip อัตโนมัติ**
+   - **สถานะ divergence (ตรวจ 2026-07-31)**: branch **รวม main ครบแล้ว** (main 0 commit ที่ branch ไม่มี · merge-base = HEAD main `9eb95b5`) → promote ตอนนี้ = ไร้ conflict · ถ้าผู้ใช้ commit เพิ่มใส่ main ระหว่างทดลอง ต้อง **sync main→branch** ก่อนโปรโมท (ทำโดย PM/ผู้ใช้ + รัน pytest ใหม่ทั้งชุด)
+2. **ลบ `dashboard_server.py`** (CLI dashboard พอร์ต 8766 — เสิร์ฟค่าปลอม ขัด honest-telemetry) **ตอน merge P6** — ไม่ใช่ใน P4 · ต้องลบ call sites ด้วย: `cli/main.py:94-96,172-173,503-506` + `cli/__init__.py:21,55-57`
 
 ---
 
