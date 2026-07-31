@@ -311,7 +311,9 @@ export function ChatPage() {
       </aside>
 
       {/* ── Mobile sidebar sheet ──────────────────────────────── */}
-      <Drawer open={sideDrawer.value} onClose={() => (sideDrawer.value = false)} title={t('chat.side.title')} width={320}>
+      {/* side="left": the toggle that opens this lives in the top-LEFT of the
+          toolbar, so the sheet must enter from the left (see Drawer convention). */}
+      <Drawer open={sideDrawer.value} onClose={() => (sideDrawer.value = false)} title={t('chat.side.title')} width={320} side="left">
         <ConversationSidebar
           onNew={() => {
             if (loaded.length) createConversation(loaded[0].id)

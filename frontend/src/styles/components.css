@@ -326,6 +326,19 @@
     animation: ws-sheet-in var(--ws-dur-base) var(--ws-ease-out);
   }
   @keyframes ws-sheet-in { from { transform: translateY(60px); opacity: 0; } }
+  /* Left-edge drawers (nav, chat conversation list) stay LEFT sheets on phones
+     too — same corner as their trigger — instead of becoming a bottom sheet.
+     Right-edge drawers (chat params) keep the bottom sheet above. */
+  .overlay--drawer-left { align-items: stretch; justify-content: flex-start; }
+  .drawer--left {
+    width: min(var(--drawer-width, 320px), 86vw);
+    height: 100%;
+    border-top: none;
+    border-left: none;
+    border-right: 1px solid var(--ws-border-default);
+    border-radius: 0;
+    animation-name: ws-drawer-in-left;
+  }
 }
 
 /* ── Toasts ────────────────────────────────────────────────── */

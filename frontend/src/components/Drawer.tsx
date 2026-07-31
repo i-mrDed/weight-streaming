@@ -11,9 +11,16 @@ interface Props {
   title?: string
   children: ComponentChildren
   width?: number
-  /* Which edge the sheet slides in from. Navigation (hamburger) reads as
-     left — it matches the burger's corner — while action panels (params,
-     conversation list) stay on the right. Default right = existing callers. */
+  /* CONVENTION (learned the hard way — this is the 2nd bug of its class):
+     pick `side` to MATCH THE CORNER OF THE TRIGGER that opens this drawer.
+     A trigger in the top-left (hamburger, the chat conversation-list toggle)
+     must slide the sheet in from the LEFT; a trigger in the top-right (the
+     chat params gear) slides from the RIGHT. Mismatching feels broken to the
+     user. Default 'right' only suits right-corner triggers — set it
+     explicitly for left-corner ones. (Centre-screen Dialog/Modal, anchored
+     Menu dropdowns and Tip bubbles are NOT edge-sliding, so this rule does
+     not apply to them.) When adding a future drawer (e.g. Hub in P5), apply
+     this rule from the start. */
   side?: 'left' | 'right'
 }
 

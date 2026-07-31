@@ -472,11 +472,15 @@ select.md-input { cursor: pointer; }
 }
 .chat__toolbar-spacer { flex: 1; }
 .chat__tool-group { display: inline-flex; align-items: center; gap: 2px; flex-shrink: 0; }
-/* Text-trigger menus (model / agent selectors) must NOT inherit the icon-only
-   .icon-btn 34×34 fixed box — that square crushes the label into a vertical
-   stack and, being centred, overflows sideways onto the neighbour buttons.
-   Scope to the toolbar so navbar icon-menus keep their square look. */
-.chat__toolbar .menu__trigger {
+/* Text-trigger menus (chat model/agent selectors, Issues export, …) must NOT
+   inherit the icon-only .icon-btn 34×34 fixed box — that square crushes the
+   label into a vertical stack and, being centred, overflows sideways onto the
+   neighbour buttons (the Issues export menu collided with "+ รายงานปัญหา").
+   Apply to EVERY toolbar that hosts a text-trigger menu; the navbar keeps its
+   icon-only menus square because it is NOT listed here. When you add a new
+   toolbar with a text-trigger Menu, add its class to this selector list. */
+.chat__toolbar .menu__trigger,
+.iss-toolbar .menu__trigger {
   width: auto;
   height: auto;
   padding: 5px 9px;
@@ -880,7 +884,10 @@ select.md-input { cursor: pointer; }
 .iss-chip.is-on { border-color: var(--ws-accent-brand); background: var(--ws-accent-brand-soft); color: var(--ws-text-primary); }
 .iss-chip .tnum { font-weight: 700; }
 .iss-list { display: flex; flex-direction: column; gap: 10px; }
-.iss-card { cursor: pointer; display: flex; flex-direction: column; gap: 8px; }
+/* 14px 16px = site card standard (cf .md-card/.set-card). The base .card has
+   NO padding by design, so each card must set its own — earlier this was 10px
+   which made the issue id/title sit too close to the left edge. */
+.iss-card { cursor: pointer; display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; }
 .iss-card__top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .iss-card__id { font-family: var(--ws-font-mono); font-size: var(--ws-text-xs); color: var(--ws-text-tertiary); }
 .iss-card__title { margin: 0; font-size: var(--ws-text-base); font-weight: 600; color: var(--ws-text-primary); }
