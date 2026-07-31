@@ -16,12 +16,12 @@
 | **P0** | PM สำรวจ + ออก spec + ผู้ใช้อนุมัติ R1–R3 (Preact+Vite / backend แบ่งเฟส / worktree) | ✅ เสร็จ |
 | **P1** | ฐาน: core/theme/i18n/router/shell/particles/components + **โลโก้ใหม่** + boot splash + i18n batch-1 (TH) | ✅ เสร็จ + QA PASS |
 | **P2** | 4 หน้าจริง: **Overview / Chat / Live Stats / Models** (markdown XSS-safe, SSE streaming+Stop, honest hit-rate 0%+caveat, scan/load/unload) | ✅ เสร็จ + QA PASS + ผู้ใช้ตรวจรับ |
-| **P3** | 3 หน้าจริง: **Issues** (9-state lifecycle + transition matrix + verify loop + maintainer panel) / **API Docs** (markdown-driven + code tabs + copy + honest notes) / **Settings** (runtime+persist · server read-only · apply-on-restart snippet · honest n/a) | ✅ ฟีเจอร์เสร็จ + QA PASS · 🔄 **กำลังวนรอบ polish** (แก้จาก feedback: drawer รายการแชท→ซ้าย, toolbar Issues เบียด, card ชิดซ้าย + audit drawer ทั่วแอป) |
-| **P4** | **backend endpoint ใหม่** (spec §10): hub search/download+progress SSE, `/v1/usage/history`, `/v1/logs/tail`, `/v1/config` (+`PATCH` v1.1) + pytest | ⬜ ยังไม่เริ่ม |
+| **P3** | 3 หน้าจริง: **Issues** (9-state lifecycle + transition matrix + verify loop + maintainer panel) / **API Docs** (markdown-driven + code tabs + copy + honest notes) / **Settings** (runtime+persist · server read-only · apply-on-restart snippet · honest n/a) | ✅ เสร็จ + QA PASS + ผู้ใช้ตรวจรับ (รวมรอบ polish `bf512fd`: drawer→ซ้าย, toolbar, card, mobile left-sheet) |
+| **P4** | **backend endpoint ใหม่** (spec §10): hub search/download+progress SSE, `/v1/usage/history`, `/v1/logs/tail`, `/v1/config` (+`PATCH` v1.1) + pytest — **backend ล้วน ห้ามแตะ frontend (หน้าที่ใช้ = P5)** | 🔄 **เริ่มแล้ว** — PM ปล่อยสเปค (`docs/P4_BRIEF.md` `b56e0d8`) → รอ Dev |
 | **P5** | หน้า **Hub** (search-first, one-click download) + polish (light theme, palette, notifications, export) + **i18n batch สุดท้าย = full TH sweep** + native check | ⬜ ยังไม่เริ่ม |
 | **P6** | PM สรุป + demo → **ผู้ใช้อนุมัติสุดท้าย** → merge กลับ main + route swap (`/`→console, ของเก่า→`/app-legacy` หนึ่ง release) + CHANGELOG | ⬜ ยังไม่เริ่ม |
 
-> หมายเหตุสถานะ P3: ตัวฟีเจอร์ผ่าน QA แล้ว ที่ค้างคือ "รอบเก็บงานตาม feedback ผู้ใช้" ซึ่งแยก spec ไว้ต่างหาก (`docs/P3_BRIEF.md` ไม่มี — spec อยู่เป็น NOTE ทีม + memory) เพื่อตรวจง่ายและกัน regression; พอ Dev+QA ผ่านรอบนี้ P3 จึงปิดสมบูรณ์
+> หมายเหตุสถานะ P4: สเปคอยู่ที่ **`docs/P4_BRIEF.md`** (ตรวจโค้ดจริงก่อนเขียน — usage-hook ที่ ModelManager, PATCH safe subset, logging rewire, HF raw HTTP, hub security) + NOTE ทีม · เป็นเฟสแรกที่แตะ server core; **frontend ที่ใช้ endpoint P4 ทั้งหมดเลื่อนไป P5** เพื่อแยกตรวจด้วย pytest/contract tests ล้วน
 
 ---
 
