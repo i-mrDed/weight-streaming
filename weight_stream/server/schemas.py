@@ -43,6 +43,16 @@ class ModelUnloadRequest(BaseModel):
     model_id: str = Field(..., min_length=1, description="Model ID to unload")
 
 
+class HubDownloadRequest(BaseModel):
+    """Request to start a Hugging Face GGUF download (P4 Hub)."""
+    repo_id: str = Field(..., min_length=1, description="HF repo id, e.g. 'org/model-gguf'")
+    filename: str = Field(..., min_length=1, description="GGUF filename within the repo")
+    target_dir: Optional[str] = Field(
+        default=None,
+        description="Destination dir; must resolve inside an allowed model dir",
+    )
+
+
 # ── Response Models ──────────────────────────────────────────────────
 
 

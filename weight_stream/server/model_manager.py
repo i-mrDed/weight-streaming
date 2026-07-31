@@ -37,6 +37,7 @@ from ..io.process_priority import (
 )
 from .config import get_config, ServerConfig
 from .schemas import ModelStatus
+from .usage import UsageRecorder
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +50,11 @@ class ModelManager:
     Access to _models dict is protected by _dict_lock.
     """
 
-    def __init__(self, config: Optional[ServerConfig] = None):
+    def __init__(
+        self,
+        config: Optional[ServerConfig] = None,
+        usage_recorder: Optional[UsageRecorder] = None,
+    ):
         self._models: Dict[str, WeightStreamModel] = {}
         self._configs: Dict[str, dict] = {}  # saved configs for reload
         self._locks: Dict[str, asyncio.Lock] = {}
@@ -63,6 +68,11 @@ class ModelManager:
         # This makes --n-threads and lifecycle settings apply to models loaded
         # later from the SPA as well as auto-loaded models.
         self._cfg = config or get_config()
+
+        # Optional generation-usage recorder (P4). All four generation methods
+        # report through ``_record_usage`` so history covers native generate,
+        # OpenAI/Anthropic compat, and WebSocket from one choke point.
+        self._usage = usage_recorder
 
     # ── Model lifecycle ─────────────────────────────────────────────
 
@@ -307,6 +317,8 @@ class ModelManager:
                 gen = stats.get("generation", {})
                 token_count = gen.get("token_count", 0)
 
+                self._record_usage(model_id, stats, elapsed)
+
                 return {
                     "model": model_id,
                     "prompt": prompt,
@@ -370,6 +382,7 @@ class ModelManager:
                     token_count += 1
 
                 stats = await loop.run_in_executor(None, model.get_stats)
+                self._record_usage(model_id, stats)
 
                 yield {
                     "token": "",
@@ -479,6 +492,11 @@ class ModelManager:
                     or self._estimate_tokens(content)
                 )
 
+                self._record_usage(
+                    model_id, stats, elapsed,
+                    fallback_tokens=self._estimate_tokens(content),
+                )
+
                 return {
                     "model": model_id,
                     "output": content,
@@ -536,10 +554,19 @@ class ModelManager:
                     }
                     token_count += 1
 
+                # P4 fix: the streaming chat path previously skipped
+                # get_stats(), so usage history had no real tok_s/paging for
+                # chat. Read the backend stats now (also makes the done event
+                # consistent with generate_stream, which already carries them).
+                loop = asyncio.get_running_loop()
+                stats = await loop.run_in_executor(None, model.get_stats)
+                self._record_usage(model_id, stats, fallback_tokens=token_count)
+
                 yield {
                     "token": "",
                     "index": token_count,
                     "done": True,
+                    "stats": stats,
                 }
             finally:
                 self._generating[model_id] = False
@@ -595,6 +622,51 @@ class ModelManager:
                 "port": self._cfg.port,
                 "priority": describe_process_priority(),
             }
+
+    # ── Usage history (P4) ──────────────────────────────────────────
+
+    def _record_usage(
+        self,
+        model_id: str,
+        stats: Optional[dict],
+        elapsed: Optional[float] = None,
+        fallback_tokens: Optional[int] = None,
+    ) -> None:
+        """Best-effort honest usage record from a backend ``get_stats()``.
+
+        Never raises — telemetry must not break generation. ``tok_s`` stays
+        ``None`` when the stats carry no real tokens/sec (never fabricated).
+        """
+        if self._usage is None:
+            return
+        try:
+            gen = stats.get("generation", {}) if isinstance(stats, dict) else {}
+            tokens = gen.get("token_count")
+            if tokens is None:
+                tokens = fallback_tokens
+            self._usage.record(
+                model=model_id,
+                tokens=tokens,
+                tok_s=gen.get("tokens_per_sec"),
+                elapsed_s=gen.get("elapsed", elapsed),
+                paging=gen.get("paging"),
+            )
+        except Exception:  # pragma: no cover - defensive, never break generation
+            logger.warning("Failed to record usage history", exc_info=True)
+
+    def usage_history(
+        self,
+        limit: Optional[int] = None,
+        since: Optional[int] = None,
+    ) -> list[dict]:
+        """Return recorded generation history (empty list if no recorder)."""
+        if self._usage is None:
+            return []
+        return self._usage.history(limit=limit, since=since)
+
+    def usage_capacity(self) -> int:
+        """Ring-buffer capacity (0 when no recorder is attached)."""
+        return self._usage.capacity if self._usage is not None else 0
 
     # ── Internal ─────────────────────────────────────────────────────
 

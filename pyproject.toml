@@ -43,6 +43,9 @@ server = [
 ]
 gradio = ["gradio>=5.0.0"]
 tui = ["textual>=1.0.0", "rich>=13.0.0"]
+# Test-only (P4): httpx enables fastapi.testclient.TestClient for the API
+# contract tests. Does NOT affect the runtime install footprint.
+test = ["httpx>=0.27", "pytest>=8.0"]
 all = ["weight-streaming[llama-cpp,server,gradio,tui]"]
 
 [project.urls]

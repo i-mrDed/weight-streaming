@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import time
 from contextlib import asynccontextmanager
 from typing import Any, AsyncIterator, Optional
@@ -27,8 +28,23 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .config import get_config, ServerConfig
+from .config import (
+    get_config,
+    ServerConfig,
+    get_model_search_dirs,
+    describe_config,
+    CONFIG_ENV_KEYS,
+)
 from .model_manager import ModelManager
+from .usage import UsageRecorder
+from .logs import (
+    RecentLogsHandler,
+    attach_server_logging,
+    detach_server_logging,
+    LOG_LINE_FORMAT,
+    DEFAULT_TAIL_LINES,
+)
+from .hub import DownloadManager, HubUpstreamError, HubValidationError
 from .openai_compat import handle_chat_completion
 from .anthropic_compat import handle_anthropic_messages
 from ..issues import (
@@ -47,10 +63,30 @@ from .schemas import (
     ModelStatus,
     ErrorResponse,
     ChatCompletionRequest,
+    HubDownloadRequest,
 )
 from .streaming import sse_stream, ws_stream
 
 logger = logging.getLogger(__name__)
+
+# ── PATCH /v1/config policy (P4 v1.1) ───────────────────────────────
+# Which runtime config mutations are safe. ModelManager has no setters, so
+# allowed keys mutate ``manager._cfg`` directly (it reads ``self._cfg`` live):
+#   SAFE  — read on every relevant tick → effective immediately.
+#   GATED — read only at model load → effective for models loaded afterward.
+#   REJECT — restart-only, inconsistent mid-run, or never enforced (no-op);
+#            answered with 409 + an env snippet (honest capability claim).
+_CONFIG_SAFE_KEYS = {"idle_unload_timeout", "max_loaded_models"}
+_CONFIG_GATED_KEYS = {"default_buffer_mb", "default_n_ctx", "default_n_threads"}
+_CONFIG_INT_KEYS = {"default_buffer_mb", "default_n_ctx", "default_n_threads", "max_loaded_models"}
+_CONFIG_REJECT_REASONS = {
+    "host": "bind address is fixed at startup; restart required",
+    "port": "bind port is fixed at startup; restart required",
+    "log_level": "logging is configured at startup; restart required",
+    "lower_process_priority": "applied only on first model load / last unload; restart for a consistent state",
+    "max_concurrent_requests": "not enforced by the model manager yet (no-op); set via env + restart",
+    "request_queue_depth": "not enforced by the model manager yet (no-op); set via env + restart",
+}
 
 # ── Application factory ─────────────────────────────────────────────
 
@@ -60,19 +96,41 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     if config is None:
         config = get_config()
     
-    manager = ModelManager(config)
+    from weight_stream import __version__  # lazy: avoid circular import at module load
+
+    # Generation-usage recorder (P4): ring buffer + JSONL persistence. Path is
+    # overridable so tests can point it at a temp file instead of data/.
+    usage_path = os.environ.get(
+        "WS_USAGE_HISTORY_FILE", os.path.join("data", "usage_history.jsonl")
+    )
+    usage_recorder = UsageRecorder(usage_path)
+    manager = ModelManager(config, usage_recorder=usage_recorder)
     issue_service = IssueService()
-    # Ring buffer of recent log-like events for debug context
+
+    # Logging (P4): a ring-buffer handler feeds both the legacy `recent_errors`
+    # list (fixing the dead /v1/debug/context log_tail) and the larger ring that
+    # backs GET /v1/logs/tail. Handlers attach to the root logger on startup and
+    # detach on shutdown — additive; console/uvicorn logging stays untouched.
     recent_errors: list[str] = []
-    
+    ring_handler = RecentLogsHandler(mirror=recent_errors)
+    ring_handler.setFormatter(logging.Formatter(LOG_LINE_FORMAT))
+    log_file = os.environ.get("WS_LOG_FILE", os.path.join("data", "server.log"))
+
+    # Hugging Face Hub (P4): search + GGUF download. Uses injectable HTTP
+    # callables so tests run fully offline (monkeypatch the urllib defaults).
+    hub_manager = DownloadManager()
+
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         """Startup and shutdown lifecycle."""
+        app.state.recent_logs = ring_handler
+        file_handler = attach_server_logging(config, ring_handler, log_file)
         logger.info(f"Server starting on {config.host}:{config.port}")
         yield
         logger.info("Server shutting down...")
         await manager.shutdown()
         logger.info("Server stopped")
+        detach_server_logging(ring_handler, file_handler)
     
     app = FastAPI(
         title="Weight Streaming API",
@@ -80,7 +138,7 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             "Run LLMs larger than your RAM — speculative weight streaming from NVMe. "
             "OpenAI-compatible API for IDE/agent integration."
         ),
-        version="0.11.0",
+        version=__version__,
         lifespan=lifespan,
     )
     
@@ -94,7 +152,6 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     )
     
     # Mount static files (SPA)
-    import os
     static_dir = os.path.join(os.path.dirname(__file__), "static")
     if os.path.isdir(static_dir):
         app.mount("/app", StaticFiles(directory=static_dir, html=True), name="static")
@@ -105,11 +162,17 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     console_dir = os.path.join(static_dir, "console")
     if os.path.isdir(console_dir):
         app.mount("/console", StaticFiles(directory=console_dir, html=True), name="console")
-    
+
+    # Expose the ring-buffer log handler for GET /v1/logs/tail (it fills once
+    # the lifespan attaches it to the root logger).
+    app.state.recent_logs = ring_handler
+    # Expose the Hub download manager (test access + P5 wiring convenience).
+    app.state.hub_manager = hub_manager
+
     # Health check
     @app.get("/health")
     async def health():
-        return {"status": "ok", "version": "0.11.0"}
+        return {"status": "ok", "version": __version__}
     
     # Root → SPA (product frontend for end users)
     @app.get("/")
@@ -131,7 +194,137 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         }
     
     # ── REST Endpoints ──────────────────────────────────────────────
-    
+
+    @app.get("/v1/config")
+    async def read_config():
+        """
+        Effective server configuration.
+
+        Each key reports `{"value": …, "source": "env"|"default"}` — the
+        source is re-checked against the real `WS_*` environment variable.
+        Also returns the model search directories (shared with
+        `/v1/models/scan`), the issues directory, and the package version.
+
+        Honest limitation: a value injected via the CLI constructor (no env
+        var) is reported as `"default"`; the effective value is still correct.
+        """
+        from weight_stream import __version__
+        return {
+            "config": describe_config(manager._cfg),
+            "models_dirs": get_model_search_dirs(),
+            "issues_dir": str(issue_service.store.base),
+            "version": __version__,
+        }
+
+    @app.patch("/v1/config")
+    async def patch_config(body: dict):
+        """
+        Mutate the safe subset of server config at runtime (v1.1).
+
+        - **Applied immediately**: `idle_unload_timeout`, `max_loaded_models`.
+        - **Applied with a note** (next model load only): `default_buffer_mb`,
+          `default_n_ctx`, `default_n_threads`.
+        - **Everything else → 409** + an env snippet (restart-only, inconsistent
+          mid-run, or not yet enforced — an honest capability claim).
+
+        ModelManager has no setters, so allowed keys mutate the live config
+        object it reads from. Applied keys are reported with `source: "runtime"`.
+        """
+        if not isinstance(body, dict) or not body:
+            raise HTTPException(status_code=400, detail="provide a JSON object of config keys")
+
+        rejected: dict[str, str] = {}
+        coerced: dict[str, Any] = {}
+        for key, val in body.items():
+            if key in _CONFIG_REJECT_REASONS:
+                rejected[key] = _CONFIG_REJECT_REASONS[key]
+                continue
+            if key not in _CONFIG_SAFE_KEYS and key not in _CONFIG_GATED_KEYS:
+                raise HTTPException(status_code=400, detail=f"unknown config key: {key}")
+            try:
+                if key in _CONFIG_INT_KEYS:
+                    coerced[key] = int(val)
+                elif key == "idle_unload_timeout":
+                    coerced[key] = float(val)
+                else:
+                    coerced[key] = val
+            except (TypeError, ValueError):
+                raise HTTPException(status_code=400, detail=f"{key}: invalid value {val!r}")
+            if key in _CONFIG_INT_KEYS and coerced[key] < 1:
+                raise HTTPException(status_code=400, detail=f"{key} must be >= 1")
+            if key == "idle_unload_timeout" and coerced[key] < 0:
+                raise HTTPException(status_code=400, detail="idle_unload_timeout must be >= 0")
+
+        if rejected:
+            snippet = "\n".join(
+                f"{CONFIG_ENV_KEYS[k]}={body[k]}"
+                for k in rejected if k in CONFIG_ENV_KEYS
+            )
+            return JSONResponse(
+                status_code=409,
+                content={
+                    "detail": "these keys are not runtime-mutable (restart required or not enforced)",
+                    "restart_required": True,
+                    "rejected": rejected,
+                    "snippet": snippet,
+                },
+            )
+
+        overrides = set(getattr(manager._cfg, "_runtime_overrides", set()))
+        applied: dict[str, dict] = {}
+        notes: dict[str, str] = {}
+        for key, val in coerced.items():
+            setattr(manager._cfg, key, val)
+            overrides.add(key)
+            applied[key] = {"value": val, "source": "runtime"}
+            if key in _CONFIG_GATED_KEYS:
+                notes[key] = "applies to models loaded after this change"
+        manager._cfg._runtime_overrides = overrides  # type: ignore[attr-defined]
+
+        return {
+            "status": "applied",
+            "applied": applied,
+            "notes": notes,
+            "config": describe_config(manager._cfg),
+        }
+
+    @app.get("/v1/usage/history")
+    async def usage_history(limit: int | None = None, since: int | None = None):
+        """
+        Generation usage history — real per-generation telemetry (tokens,
+        tok/s, elapsed, paging summary) recorded from the single ModelManager
+        choke point, so native `/v1/generate`, OpenAI/Anthropic compat, and
+        WebSocket generations are all covered.
+
+        - `?limit=N` — newest N records (0/omitted-negative → none).
+        - `?since=<epoch_ms>` — only records with `ts >= since`.
+
+        `tok_s` is `null` when a streaming path had no real measurement
+        (never fabricated). Backed by a 500-entry ring buffer persisted to
+        `data/usage_history.jsonl`.
+        """
+        records = manager.usage_history(limit=limit, since=since)
+        return {
+            "history": records,
+            "count": len(records),
+            "capacity": manager.usage_capacity(),
+        }
+
+    @app.get("/v1/logs/tail")
+    async def logs_tail(lines: int = DEFAULT_TAIL_LINES):
+        """
+        Tail recent server log lines from the in-memory ring buffer fed by the
+        root logging handler (default 100, capped at 1000). The same handler
+        now also backs `/v1/debug/context`'s `log_tail` (previously always
+        empty). Empty until the app lifespan attaches logging (running under
+        uvicorn or a `with TestClient(app)` block).
+        """
+        handler = getattr(app.state, "recent_logs", None)
+        if handler is None:
+            return {"lines": [], "count": 0}
+        items = handler.tail(lines)
+        return {"lines": items, "count": len(items)}
+
     @app.post("/v1/generate", response_model=GenerateResponse)
     async def generate(request: GenerateRequest):
         """
@@ -264,29 +457,10 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     def _scan_gguf_models(dir: str | None = None) -> dict:
         import os, glob
 
-        search_dirs = []
-        if dir:
-            search_dirs.append(dir)
-        else:
-            # Default search paths
-            ws_dir = os.environ.get("WS_MODELS_DIR", "")
-            if ws_dir:
-                search_dirs.append(ws_dir)
-            # Also search current dir + common locations
-            search_dirs.extend([
-                os.getcwd(),
-                os.path.join(os.getcwd(), "research", "models"),
-                os.path.join(os.getcwd(), "models"),
-                os.path.expanduser("~/models"),
-            ])
-            # Desktop-app model stores users actually keep their GGUFs in
-            if os.name == "nt":
-                appdata = os.environ.get("APPDATA", "")
-                if appdata:
-                    search_dirs.append(os.path.join(
-                        appdata, "Jan", "data", "llamacpp", "models"
-                    ))
-        
+        # Default search paths come from the shared helper so /v1/config and
+        # the Hub download target_dir guard agree on legitimate model folders.
+        search_dirs = [dir] if dir else get_model_search_dirs()
+
         found = []
         seen = set()
         for search_dir in search_dirs:
@@ -607,7 +781,89 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             return issue.model_dump()
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
-    
+
+    # ── Hub (P4): Hugging Face GGUF search + download ───────────────
+    # Backend-only in P4; the Hub UI page consumes these in P5. Security:
+    # the server has no auth + CORS "*", so downloads are confined to the
+    # model dirs, written atomically, and size-guarded (see server/hub.py).
+
+    @app.get("/v1/hub/search")
+    async def hub_search(q: str = "", sort: str = "downloads", limit: int = 20):
+        """
+        Search Hugging Face for GGUF models (filtered to GGUF only), with
+        quant + parameter-size parsed from each file's name. Results are
+        cached in-memory for 5 minutes. HF unreachable → 502 (never a fake
+        list). `sort` ∈ downloads|likes|recent.
+        """
+        try:
+            results = hub_manager.search(q=q, sort=sort, limit=limit)
+        except HubUpstreamError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+        return {"results": results, "count": len(results)}
+
+    @app.post("/v1/hub/download", status_code=202)
+    async def hub_download(body: HubDownloadRequest):
+        """
+        Start a background GGUF download and return the task (poll
+        `/v1/hub/progress/{id}` or `/v1/hub/downloads`).
+
+        Security: `target_dir` must resolve inside an allowed model dir
+        (traversal / absolute-outside / symlink-escape → 403); `filename`
+        must be a plain `*.gguf` name (else 400). Writes are atomic
+        (`.part` → rename) and size-guarded. No auth in v1 — isolate the
+        server (see API Docs note, P5).
+        """
+        try:
+            task = hub_manager.create_download(body.repo_id, body.filename, body.target_dir)
+        except HubValidationError as e:
+            raise HTTPException(status_code=e.status, detail=str(e))
+        hub_manager.schedule_download(task)
+        return task.to_dict()
+
+    @app.get("/v1/hub/downloads")
+    async def hub_downloads():
+        """List all download tasks with their latest status/progress."""
+        items = hub_manager.list_tasks()
+        return {"downloads": items, "count": len(items)}
+
+    @app.get("/v1/hub/progress/{task_id}")
+    async def hub_progress(task_id: str):
+        """
+        SSE stream of a download's REAL progress (bytes/percent/speed_bps/
+        eta_s/status) until it reaches a terminal state (done/failed/cancelled).
+        """
+        task = hub_manager.get_task(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail=f"download task {task_id} not found")
+
+        async def event_generator():
+            while True:
+                yield f"data: {json.dumps(task.to_dict(), ensure_ascii=False)}\n\n"
+                if task.status in ("done", "failed", "cancelled"):
+                    break
+                await asyncio.sleep(0.5)
+
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "X-Accel-Buffering": "no",
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+            },
+        )
+
+    @app.post("/v1/hub/download/{task_id}/cancel")
+    async def hub_cancel(task_id: str):
+        """
+        Cancel a download. Sets the cancel flag; the worker stops within one
+        chunk and removes the `.part`. Idempotent for already-terminal tasks.
+        """
+        task = hub_manager.cancel(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail=f"download task {task_id} not found")
+        return task.to_dict()
+
     return app, manager
 
 
