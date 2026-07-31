@@ -7,7 +7,11 @@
     "auto": "Auto (follow system)",
     "autoHint": "Aurora follows your OS light/dark preference.",
     "particles": "Particle background",
-    "particlesHint": "Animated constellation behind the interface. Turns off automatically for reduced motion."
+    "particlesHint": "Animated constellation behind the interface. Turns off automatically for reduced motion.",
+    "density": "Density",
+    "densityHint": "Comfortable gives more breathing room; compact fits more on screen.",
+    "comfortable": "Comfortable",
+    "compact": "Compact"
   },
   "language": {
     "title": "Language",
@@ -21,5 +25,82 @@
     "auroraDarkDesc": "Signature spectrum with a living constellation.",
     "auroraLight": "Aurora Light",
     "auroraLightDesc": "Daylight Aurora — bright, soft, diffuse."
+  },
+  "chatDefaults": {
+    "title": "Chat defaults",
+    "hint": "Starting values for new conversations. You can still change them per-chat.",
+    "temperature": "Temperature",
+    "topP": "Top-p",
+    "maxTokens": "Max tokens",
+    "systemPreset": "Default system prompt",
+    "systemPresetPlaceholder": "Optional instructions applied to every new chat…",
+    "notifications": "Desktop notifications",
+    "notificationsHint": "Ask to notify you when a long generation finishes in the background.",
+    "testNotif": "Test notification",
+    "testNotifBody": "If you see this, notifications are allowed.",
+    "testNotifBlocked": "Notifications are blocked — allow them in your browser settings."
+  },
+  "server": {
+    "title": "Server",
+    "readTitle": "Live values (read-only)",
+    "readHint": "Read from the running server. These cannot be changed from here.",
+    "version": "Version",
+    "hostPort": "Host / port",
+    "status": "Status",
+    "versionSource": "from /v1/debug/context (the accurate value)",
+    "healthVersionNote": "The navbar dot uses /health which currently reports a stale number; this page shows the accurate one.",
+    "applyTitle": "Change for next start",
+    "applyHint": "This server reads its config from environment variables / CLI flags at start-up — there is no live write API yet. Edit the values below to generate a command to run next time.",
+    "generateSnippet": "Generate start command",
+    "copySnippet": "Copy command",
+    "restartNote": "Run this before starting the server next time. It does not change the running server.",
+    "p4Note": "Detailed per-key config (with env/default/cli source) arrives with GET /v1/config in a later phase — shown as n/a until then.",
+    "field": {
+      "host": "Host",
+      "port": "Port",
+      "bufferMb": "Default buffer (MB)",
+      "nCtx": "Default context",
+      "nThreads": "Default threads",
+      "idleTimeout": "Idle unload (s, 0 = off)",
+      "maxModels": "Max loaded models",
+      "logLevel": "Log level"
+    }
+  },
+  "data": {
+    "title": "Data",
+    "clearHistory": "Clear chat history",
+    "clearHistoryHint": "Removes all saved conversations from this browser only. The server is untouched.",
+    "clearConfirmTitle": "Clear all chat history?",
+    "clearConfirmBody": "This deletes every saved conversation in this browser. It cannot be undone.",
+    "clearConfirm": "Yes, clear everything",
+    "export": "Export settings",
+    "import": "Import settings",
+    "exportHint": "Downloads your preferences (theme, language, chat defaults, display name) as JSON.",
+    "storage": "Local storage used",
+    "conversations": "Saved conversations"
+  },
+  "diagnostics": {
+    "title": "Diagnostics",
+    "debugContext": "View debug context",
+    "debugContextHint": "The privacy-safe snapshot attached to issue reports.",
+    "reportPrefill": "Report an issue",
+    "copyContext": "Copy context"
+  },
+  "about": {
+    "title": "About",
+    "version": "Version",
+    "docs": "API docs",
+    "github": "Source on GitHub",
+    "license": "License",
+    "tagline": "Run models bigger than your RAM — weights streamed from NVMe on demand."
+  },
+  "toast": {
+    "densityChanged": "Density: {{name}}",
+    "cleared": "Chat history cleared",
+    "exported": "Settings exported",
+    "imported": "Settings imported",
+    "importFailed": "Couldn't read that file",
+    "snippetCopied": "Start command copied",
+    "contextCopied": "Debug context copied"
   }
 }

@@ -41,6 +41,7 @@ import {
   activeId,
   autoTitle,
   createConversation,
+  notificationsEnabled,
   persist,
   selectConversation,
   type ChatMsg,
@@ -273,7 +274,7 @@ export function ChatPage() {
       msgTick.value += 1
 
       if (errMsg) toast('error', t('chat.genFailed'), { body: errMsg })
-      if (!errMsg && Date.now() - startedAt > NOTIFY_AFTER_MS && document.hidden) {
+      if (!errMsg && notificationsEnabled.value && Date.now() - startedAt > NOTIFY_AFTER_MS && document.hidden) {
         try {
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification(t('chat.notif.title'), { body: t('chat.notif.body') })

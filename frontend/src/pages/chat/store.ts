@@ -50,6 +50,27 @@ export interface ConvMeta {
 const INDEX_KEY = 'ws-chat-index-v1'
 const convKey = (id: string) => `ws-chat-conv-v1-${id}`
 const DEFAULTS_KEY = 'ws-chat-defaults-v1'
+const LS_NOTIF = 'ws-chat-notif'
+
+/** Desktop-notification preference for long background generations. Defaults
+ *  ON; the browser still gates on actual permission (Settings has a test). */
+export const notificationsEnabled = signal<boolean>((() => {
+  try {
+    return localStorage.getItem(LS_NOTIF) !== '0'
+  } catch {
+    return true
+  }
+})())
+
+export function setNotificationsEnabled(on: boolean) {
+  notificationsEnabled.value = on
+  try {
+    if (on) localStorage.removeItem(LS_NOTIF)
+    else localStorage.setItem(LS_NOTIF, '0')
+  } catch {
+    /* non-fatal */
+  }
+}
 
 export const DEFAULT_PARAMS: ChatParams = { temperature: 0.7, top_p: 0.95, max_tokens: 1024 }
 
@@ -152,6 +173,21 @@ export function deleteConversation(id: string) {
     activeId.value = null
     activeConv.value = null
   }
+}
+
+/** Wipe ALL saved conversations (Settings → Data). Client-only, honest. */
+export function clearAllConversations() {
+  const ids = readIndex().map((m) => m.id)
+  for (const id of ids) {
+    try {
+      localStorage.removeItem(convKey(id))
+    } catch {
+      /* non-fatal */
+    }
+  }
+  writeIndex([])
+  activeId.value = null
+  activeConv.value = null
 }
 
 /** Auto-title from the first user message (only while still default). */

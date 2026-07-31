@@ -1,0 +1,118 @@
+{
+  "title": "Issues",
+  "toolbar": {
+    "search": "Search issues…",
+    "filterStatus": "Status",
+    "filterSeverity": "Severity",
+    "allStatus": "All statuses",
+    "allSeverity": "All severities",
+    "sort": "Sort",
+    "sortNewest": "Newest first",
+    "sortOldest": "Oldest first",
+    "sortSeverity": "Severity",
+    "export": "Export",
+    "exportMd": "Export Markdown",
+    "exportJson": "Export JSON",
+    "newReport": "Report an issue"
+  },
+  "status": {
+    "open": "Open",
+    "triaged": "Triaged",
+    "in_progress": "In progress",
+    "fixed": "Fixed",
+    "verify_pending": "Awaiting verification",
+    "verified": "Verified",
+    "wontfix": "Won't fix",
+    "duplicate": "Duplicate",
+    "closed": "Closed"
+  },
+  "severity": {
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "critical": "Critical"
+  },
+  "summary": {
+    "total": "{{count}} total",
+    "openCount": "{{count}} open",
+    "bySeverity": "By severity"
+  },
+  "card": {
+    "created": "opened {{when}}",
+    "timelineCount": "{{count}} events",
+    "by": "by {{name}}"
+  },
+  "empty": {
+    "title": "No reports yet — everything's running smoothly 🎉",
+    "body": "When something misbehaves, report it here. We automatically attach a privacy-safe debug snapshot (OS, Python, llama.cpp, model arch — no prompts or file contents) so a fix is easier. You stay in control of what you type."
+  },
+  "detail": {
+    "title": "Issue detail",
+    "description": "Description",
+    "steps": "Steps to reproduce",
+    "expected": "Expected",
+    "actual": "Actual",
+    "debugContext": "Debug context (redacted)",
+    "timeline": "Timeline",
+    "noTimeline": "No timeline events.",
+    "maintainer": "Maintainer",
+    "createdBy": "Reported by {{name}} · {{when}}"
+  },
+  "maintainer": {
+    "toggle": "Maintainer mode",
+    "toggleHint": "Reveal status / triage controls. Status changes follow the server's transition rules — illegal moves are disabled.",
+    "rootCause": "Root cause",
+    "fixSummary": "Fix summary",
+    "commit": "Commit / reference",
+    "verifySteps": "Verification steps",
+    "testNotes": "Test notes",
+    "note": "Note (optional)",
+    "notePlaceholder": "Add a note to the timeline…",
+    "saveFields": "Save notes",
+    "fixedRequires": "Marking fixed requires: {{fields}}",
+    "illegalTransition": "That status change isn't allowed from the current state."
+  },
+  "verify": {
+    "title": "This fix is awaiting your confirmation",
+    "confirm": "✅ Yes, it's fixed",
+    "still": "❌ Still broken",
+    "notePlaceholder": "What did you see? (optional)",
+    "confirmHint": "Confirming will verify and auto-close the issue.",
+    "stillHint": "This reopens it as in-progress so it can be looked at again."
+  },
+  "action": {
+    "startProgress": "Start work",
+    "triage": "Triaged",
+    "markFixed": "Mark fixed",
+    "reopen": "Reopen",
+    "close": "Close",
+    "wontfix": "Won't fix",
+    "duplicate": "Duplicate"
+  },
+  "report": {
+    "title": "Report an issue",
+    "titleLabel": "Title",
+    "titlePlaceholder": "Short summary of the problem",
+    "descLabel": "Description",
+    "descPlaceholder": "What happened? What were you doing?",
+    "stepsLabel": "Steps to reproduce (one per line)",
+    "stepsPlaceholder": "1. Open…\n2. Click…",
+    "expectedLabel": "Expected result",
+    "actualLabel": "Actual result",
+    "severityLabel": "Severity",
+    "attachHint": "A redacted debug snapshot (OS, Python, llama.cpp, model arch) is attached automatically — no prompts or file contents.",
+    "submit": "Submit report",
+    "titleError": "Title must be 5–200 characters.",
+    "descError": "Description must be 10–10,000 characters."
+  },
+  "toast": {
+    "created": "Issue reported",
+    "updated": "Issue updated",
+    "verified": "Verified — closed",
+    "reopened": "Reopened as in progress",
+    "exported": "Exported {{count}} issue(s)",
+    "loadFailed": "Couldn't load issues",
+    "saveFailed": "Couldn't save the change",
+    "exportFailed": "Export failed"
+  }
+}

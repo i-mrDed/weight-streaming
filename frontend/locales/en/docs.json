@@ -1,0 +1,58 @@
+{
+  "title": "API Docs",
+  "subtitle": "Every way to talk to this server — documented as it actually behaves.",
+  "toc": "On this page",
+  "search": "Search docs…",
+  "searchNoMatch": "No matching sections.",
+  "openSwagger": "Open full Swagger UI",
+  "copyBlock": "Copy",
+  "honest": "Honest note",
+  "sections": {
+    "quickstart": {
+      "title": "Quick start",
+      "body": "The server speaks the OpenAI chat format on `/v1/chat/completions`. Point any OpenAI-compatible client at `http://<host>:<port>/v1` and it works. Streaming uses server-sent events (`data: {json}` lines, terminated by `data: [DONE]`)."
+    },
+    "openai": {
+      "title": "OpenAI-compatible",
+      "body": "`POST /v1/chat/completions` accepts `model`, `messages`, `max_tokens`, `temperature`, `top_p`, `stream`, plus `reasoning_effort` and `tools`."
+    },
+    "anthropic": {
+      "title": "Anthropic-compatible",
+      "body": "`POST /v1/messages` mirrors the Anthropic Messages shape for clients that prefer it."
+    },
+    "native": {
+      "title": "Native generate (SSE)",
+      "body": "`POST /v1/generate` returns a single completion; with streaming it emits tokens over SSE. Errors are reported in-stream rather than as a separate HTTP status."
+    },
+    "websocket": {
+      "title": "WebSocket streaming",
+      "body": "A WebSocket stream path exists in the server source, but it is NOT described by the OpenAPI schema and is not a stable contract yet. Prefer the HTTP SSE endpoints above. If you use the socket, cancellation is by disconnect."
+    },
+    "ide": {
+      "title": "IDE integration",
+      "body": "Any tool that accepts an OpenAI base URL (Cursor, Continue, Claude Code, etc.) can use this server. Set the base URL to `http://<host>:<port>/v1` and pick any model id that is currently loaded."
+    },
+    "models": {
+      "title": "Models API",
+      "body": "Scan folders for GGUF files, then load / unload / reload by id. `/v1/models/scan` can take a while on large model stores."
+    },
+    "issues": {
+      "title": "Issues API",
+      "body": "Full report lifecycle with a 9-state machine. Status changes are validated against a transition matrix; marking an issue `fixed` requires `root_cause`, `fix_summary` and `verify_steps`, and then auto-advances to `verify_pending`."
+    },
+    "server": {
+      "title": "Server info",
+      "body": "Live version, host and port are read from the running server. The full interactive schema lives in Swagger."
+    }
+  },
+  "honestNotes": {
+    "reasoningEffort": "`reasoning_effort` is accepted and echoed back, but the server does not act on it yet — it has no effect on generation.",
+    "tools": "`tools` is accepted for compatibility but the server does not execute tool calls yet.",
+    "anthropicStream": "On the Anthropic-compatible streaming path the prompt is sent as plain text (a discovered quirk) — keep that in mind when adapting clients.",
+    "websocket": "The WebSocket route is not in the OpenAPI schema and is not a stable contract — prefer HTTP SSE."
+  },
+  "lifecycle": {
+    "title": "Issue lifecycle",
+    "body": "open → triaged → in_progress → fixed → (auto) verify_pending → verified → (auto) closed. `wontfix` / `duplicate` may close directly; verification failure reopens as in_progress."
+  }
+}

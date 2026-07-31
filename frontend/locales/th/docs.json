@@ -1,0 +1,58 @@
+{
+  "title": "เอกสาร API",
+  "subtitle": "ทุกวิธีในการสื่อสารกับเซิร์ฟเวอร์นี้ — เอกสารตามพฤติกรรมจริง",
+  "toc": "ในหน้านี้",
+  "search": "ค้นหาเอกสาร…",
+  "searchNoMatch": "ไม่พบหมวดที่ตรงกัน",
+  "openSwagger": "เปิด Swagger UI เต็ม",
+  "copyBlock": "คัดลอก",
+  "honest": "หมายเหตุตามจริง",
+  "sections": {
+    "quickstart": {
+      "title": "เริ่มเร็ว",
+      "body": "เซิร์ฟเวอร์ใช้รูปแบบ chat ของ OpenAI ที่ `/v1/chat/completions` ชี้ไคลเอนต์ที่รองรับ OpenAI ไปที่ `http://<host>:<port>/v1` แล้วใช้งานได้ทันที การสตรีมใช้ server-sent events (บรรทัด `data: {json}` จบด้วย `data: [DONE]`)"
+    },
+    "openai": {
+      "title": "รองรับ OpenAI",
+      "body": "`POST /v1/chat/completions` รับ `model`, `messages`, `max_tokens`, `temperature`, `top_p`, `stream` รวมถึง `reasoning_effort` และ `tools`"
+    },
+    "anthropic": {
+      "title": "รองรับ Anthropic",
+      "body": "`POST /v1/messages` เลียนแบบรูปทรง Anthropic Messages สำหรับไคลเอนต์ที่ชอบแบบนั้น"
+    },
+    "native": {
+      "title": "generate แบบ native (SSE)",
+      "body": "`POST /v1/generate` คืนผลลัพธ์เดียว; เมื่อสตรีมจะส่งโทเคนผ่าน SSE ข้อผิดพลาดจะรายงานในสตรีมแทนที่จะเป็น HTTP status แยก"
+    },
+    "websocket": {
+      "title": "สตรีมผ่าน WebSocket",
+      "body": "มีเส้นทาง WebSocket ในซอร์สของเซิร์ฟเวอร์ แต่ไม่ได้ระบุใน OpenAPI schema และยังไม่เป็นสัญญาที่เสถียร แนะนำให้ใช้ HTTP SSE ข้างต้น หากใช้ socket การยกเลิกทำด้วยการตัดการเชื่อมต่อ"
+    },
+    "ide": {
+      "title": "การใช้งานกับ IDE",
+      "body": "เครื่องมือที่รับ OpenAI base URL (Cursor, Continue, Claude Code ฯลฯ) ใช้เซิร์ฟเวอร์นี้ได้ ตั้ง base URL เป็น `http://<host>:<port>/v1` แล้วเลือก model id ใดก็ตามที่โหลดอยู่"
+    },
+    "models": {
+      "title": "API โมเดล",
+      "body": "สแกนโฟลเดอร์หาไฟล์ GGUF แล้ว load / unload / reload ตาม id `/v1/models/scan` อาจใช้เวลาเมื่อคลังโมเดลใหญ่"
+    },
+    "issues": {
+      "title": "API ปัญหา",
+      "body": "วงจรการรายงานเต็มพร้อม state machine 9 สถานะ การเปลี่ยนสถานะถูกตรวจสอบกับ transition matrix; การ marking ว่า `fixed` ต้องมี `root_cause`, `fix_summary` และ `verify_steps` จากนั้นจะเลื่อนเป็น `verify_pending` อัตโนมัติ"
+    },
+    "server": {
+      "title": "ข้อมูลเซิร์ฟเวอร์",
+      "body": "เวอร์ชัน, host และ port แบบสด อ่านจากเซิร์ฟเวอร์ที่กำลังรัน schema แบบ interactive เต็มอยู่ใน Swagger"
+    }
+  },
+  "honestNotes": {
+    "reasoningEffort": "`reasoning_effort` ถูกรับและสะท้อนกลับ แต่เซิร์ฟเวอร์ยังไม่ได้ทำตาม — ไม่มีผลต่อการสร้างข้อความ",
+    "tools": "`tools` ถูกรับเพื่อความเข้ากันได้ แต่เซิร์ฟเวอร์ยังไม่ได้ execute tool calls",
+    "anthropicStream": "บนเส้นทางสตรีมที่รองรับ Anthropic พรอมต์จะถูกส่งเป็น plain text (ความแปลกที่พบ) — คำนึงถึงจุดนี้เมื่อปรับไคลเอนต์",
+    "websocket": "เส้นทาง WebSocket ไม่อยู่ใน OpenAPI schema และไม่เป็นสัญญาที่เสถียร — แนะนำ HTTP SSE"
+  },
+  "lifecycle": {
+    "title": "วงจรชีวิตปัญหา",
+    "body": "open → triaged → in_progress → fixed → (auto) verify_pending → verified → (auto) closed `wontfix` / `duplicate` ปิดได้โดยตรง; การยืนยันล้มเหลวจะเปิดใหม่เป็น in_progress"
+  }
+}

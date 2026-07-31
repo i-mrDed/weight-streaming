@@ -9,6 +9,9 @@ import { DEFAULT_THEME, getTheme, isThemeId, THEMES } from './registry'
 const LS_THEME = 'ws-theme'
 const LS_AUTO = 'ws-theme-auto'
 const LS_PARTICLES = 'ws-particles'
+const LS_DENSITY = 'ws-density'
+
+export type Density = 'comfortable' | 'compact'
 
 function readInitialTheme(): string {
   try {
@@ -35,6 +38,14 @@ export const particlesEnabled = signal<boolean>((() => {
     return localStorage.getItem(LS_PARTICLES) !== '0'
   } catch {
     return true
+  }
+})())
+
+export const density = signal<Density>((() => {
+  try {
+    return localStorage.getItem(LS_DENSITY) === 'compact' ? 'compact' : 'comfortable'
+  } catch {
+    return 'comfortable'
   }
 })())
 
@@ -86,6 +97,7 @@ export function applyTheme() {
   const el = document.documentElement
   el.setAttribute('data-theme', theme.id)
   el.setAttribute('data-mode', theme.mode)
+  el.setAttribute('data-density', density.value)
   el.style.backgroundColor = '' // hand back to CSS tokens
 }
 
@@ -108,6 +120,12 @@ export function setAutoMode(on: boolean) {
 export function toggleParticles() {
   particlesEnabled.value = !particlesEnabled.value
   persist(LS_PARTICLES, particlesEnabled.value ? null : '0')
+}
+
+export function setDensity(d: Density) {
+  density.value = d
+  persist(LS_DENSITY, d === 'comfortable' ? null : d)
+  applyTheme()
 }
 
 /** Boot: reconcile DOM with signals (index.html bootstrap already painted) */

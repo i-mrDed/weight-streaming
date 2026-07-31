@@ -7,7 +7,11 @@
     "auto": "อัตโนมัติ (ตามระบบ)",
     "autoHint": "Aurora จะตามการตั้งค่าสีสว่าง/มืดของระบบปฏิบัติการ",
     "particles": "พื้นหลังอนุภาค",
-    "particlesHint": "กลุ่มดาวเคลื่อนไหวอยู่หลังหน้าจอ จะปิดเองเมื่อเปิดโหมดลดการเคลื่อนไหว"
+    "particlesHint": "กลุ่มดาวเคลื่อนไหวอยู่หลังหน้าจอ จะปิดเองเมื่อเปิดโหมดลดการเคลื่อนไหว",
+    "density": "ความหนาแน่น",
+    "densityHint": "แบบสบายตาเว้นช่องว่างมากขึ้น แบบกะทัดรัดแสดงได้มากขึ้นบนจอ",
+    "comfortable": "สบายตา",
+    "compact": "กะทัดรัด"
   },
   "language": {
     "title": "ภาษา",
@@ -21,5 +25,82 @@
     "auroraDarkDesc": "สเปกตรัมเอกลักษณ์พร้อมกลุ่มดาวที่มีชีวิตชีวา",
     "auroraLight": "Aurora Light",
     "auroraLightDesc": "Aurora แบบกลางวัน — สว่าง นุ่ม กระจายแสง"
+  },
+  "chatDefaults": {
+    "title": "ค่าเริ่มต้นแชท",
+    "hint": "ค่าเริ่มต้นสำหรับการสนทนาใหม่ ยังเปลี่ยนต่อแชทได้",
+    "temperature": "Temperature",
+    "topP": "Top-p",
+    "maxTokens": "โทเคนสูงสุด",
+    "systemPreset": "system prompt ตั้งต้น",
+    "systemPresetPlaceholder": "คำสั่งไม่บังคับ ใช้กับทุกแชทใหม่…",
+    "notifications": "การแจ้งเตือนเดสก์ท็อป",
+    "notificationsHint": "ขอแจ้งเตือนเมื่อการสร้างข้อความยาวเสร็จในพื้นหลัง",
+    "testNotif": "ทดสอบการแจ้งเตือน",
+    "testNotifBody": "ถ้าเห็นข้อความนี้ แสดงว่าการแจ้งเตือนได้รับอนุญาต",
+    "testNotifBlocked": "การแจ้งเตือนถูกบล็อก — อนุญาตในการตั้งค่าเบราว์เซอร์"
+  },
+  "server": {
+    "title": "เซิร์ฟเวอร์",
+    "readTitle": "ค่าสด (อ่านอย่างเดียว)",
+    "readHint": "อ่านจากเซิร์ฟเวอร์ที่กำลังรัน เปลี่ยนจากที่นี่ไม่ได้",
+    "version": "เวอร์ชัน",
+    "hostPort": "Host / port",
+    "status": "สถานะ",
+    "versionSource": "จาก /v1/debug/context (ค่าที่ถูกต้อง)",
+    "healthVersionNote": "จุดบน navbar ใช้ /health ซึ่งปัจจุบันรายงานตัวเลขเก่า หน้านี้แสดงค่าที่ถูกต้อง",
+    "applyTitle": "เปลี่ยนสำหรับการเริ่มครั้งถัดไป",
+    "applyHint": "เซิร์ฟเวอร์นี้อ่าน config จากตัวแปร environment / CLI flags ตอนเริ่ม — ยังไม่มี API เขียนสด แก้ค่าข้างล่างเพื่อสร้างคำสั่งไว้รันครั้งหน้า",
+    "generateSnippet": "สร้างคำสั่งเริ่ม",
+    "copySnippet": "คัดลอกคำสั่ง",
+    "restartNote": "รันคำสั่งนี้ก่อนเริ่มเซิร์ฟเวอร์ครั้งถัดไป ไม่เปลี่ยนเซิร์ฟเวอร์ที่กำลังรัน",
+    "p4Note": "config ราย key (พร้อมแหล่ง env/default/cli) จะมากับ GET /v1/config ในเฟสถัดไป — แสดง n/a จนกว่าจะถึง",
+    "field": {
+      "host": "Host",
+      "port": "Port",
+      "bufferMb": "buffer ตั้งต้น (MB)",
+      "nCtx": "context ตั้งต้น",
+      "nThreads": "threads ตั้งต้น",
+      "idleTimeout": "idle unload (วิ, 0 = ปิด)",
+      "maxModels": "โมเดลโหลดสูงสุด",
+      "logLevel": "ระดับ log"
+    }
+  },
+  "data": {
+    "title": "ข้อมูล",
+    "clearHistory": "ล้างประวัติแชท",
+    "clearHistoryHint": "ลบการสนทนาที่บันทึกในเบราว์เซอร์นี้เท่านั้น ไม่แตะเซิร์ฟเวอร์",
+    "clearConfirmTitle": "ล้างประวัติแชททั้งหมด?",
+    "clearConfirmBody": "จะลบทุกการสนทนาที่บันทึกในเบราว์เซอร์นี้ ยกเลิกไม่ได้",
+    "clearConfirm": "ใช่ ล้างทั้งหมด",
+    "export": "ส่งออกการตั้งค่า",
+    "import": "นำเข้าการตั้งค่า",
+    "exportHint": "ดาวน์โหลดค่าปรับแต่ง (ธีม, ภาษา, ค่าเริ่มต้นแชท, ชื่อที่แสดง) เป็น JSON",
+    "storage": "พื้นที่ local storage ที่ใช้",
+    "conversations": "การสนทนาที่บันทึก"
+  },
+  "diagnostics": {
+    "title": "การวินิจฉัย",
+    "debugContext": "ดู debug context",
+    "debugContextHint": "สแนปช็อตปลอดภัยต่อความเป็นส่วนตัวที่แนบกับรายงานปัญหา",
+    "reportPrefill": "รายงานปัญหา",
+    "copyContext": "คัดลอก context"
+  },
+  "about": {
+    "title": "เกี่ยวกับ",
+    "version": "เวอร์ชัน",
+    "docs": "เอกสาร API",
+    "github": "ซอร์สบน GitHub",
+    "license": "สัญญาอนุญาต",
+    "tagline": "รันโมเดลใหญ่กว่า RAM — สตรีม weight จาก NVMe ตามต้องการ"
+  },
+  "toast": {
+    "densityChanged": "ความหนาแน่น: {{name}}",
+    "cleared": "ล้างประวัติแชทแล้ว",
+    "exported": "ส่งออกการตั้งค่าแล้ว",
+    "imported": "นำเข้าการตั้งค่าแล้ว",
+    "importFailed": "อ่านไฟล์นั้นไม่ได้",
+    "snippetCopied": "คัดลอกคำสั่งเริ่มแล้ว",
+    "contextCopied": "คัดลอก debug context แล้ว"
   }
 }
