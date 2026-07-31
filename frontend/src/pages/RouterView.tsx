@@ -5,11 +5,12 @@ import { ChatPage } from './chat/ChatPage'
 import { StatsPage } from './stats/StatsPage'
 import { ModelsPage } from './models/ModelsPage'
 import { IssuesPage } from './issues/IssuesPage'
+import { HubPage } from './hub/HubPage'
 import { DocsPage } from './docs/DocsPage'
 import { SettingsPage } from './settings/SettingsPage'
 
 /* P2: Overview / Chat / Live Stats / Models. P3: Issues / API Docs / Settings.
-   Hub (P5) keeps an honest placeholder. */
+   P5: Hub (search-first GGUF discovery + real-progress downloads). */
 export function RouterView() {
   const r = route.value
   switch (r.path) {
@@ -23,6 +24,8 @@ export function RouterView() {
       return <ModelsPage />
     case 'issues':
       return <IssuesPage />
+    case 'hub':
+      return <HubPage />
     case 'docs':
       return <DocsPage />
     case 'settings':

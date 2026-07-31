@@ -53,8 +53,12 @@
   },
   "activity": {
     "title": "Activity",
-    "tip": "Recent generations will appear here. Usage history needs a server endpoint that ships in a later phase (P4) — nothing is recorded yet.",
+    "tip": "The five most recent generations from the server's usage history. Every value is real per-run telemetry; tok/s shows – when a streaming path had no measurement.",
     "emptyTitle": "Recording starts after your next generation",
-    "emptyBody": "The console does not store generation history locally. A server-side usage history arrives in phase 4 — until then this panel stays honestly empty."
+    "emptyBody": "The server keeps the last 500 generations, but this history only began with the phase-4 backend — older runs are not listed.",
+    "colModel": "Model",
+    "colTokens": "Tokens",
+    "colSpeed": "tok/s",
+    "colWhen": "When"
   }
 }

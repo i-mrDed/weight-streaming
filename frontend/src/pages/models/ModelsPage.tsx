@@ -1,14 +1,17 @@
-/* 🧠 Models (spec §9.4) — loaded models + scan panel + load form.
+/* 🧠 Models (spec §9.4) — loaded models + scan panel + load form + library.
    Endpoints: /v1/models, /v1/models/scan, /v1/models/load,
-   /v1/models/unload, /v1/browse, /v1/browse-dir (all pre-existing).
-   Library view / file deletion are OUT of v1 (spec). Quant advisories from
-   MODEL_GUIDE + ISSUE-011/018. `may_need_upgrade` → pip install hint. */
+   /v1/models/unload, /v1/browse, /v1/browse-dir (all pre-existing), and
+   P5: GET /v1/config (models_dirs) for the Library view + Hub shortcut.
+   File DELETION stays OUT of v1 (spec — unauthenticated server; the tooltip
+   says so honestly). Quant advisories from MODEL_GUIDE + ISSUE-011/018.
+   `may_need_upgrade` → pip install hint. */
 import { useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import {
   BarChart3,
   FolderOpen,
   FolderSearch,
+  Globe,
   HardDriveDownload,
   MessageSquare,
   RefreshCw,
@@ -26,7 +29,8 @@ import { Tip } from '@/components/Tip'
 import { toast } from '@/components/Toast'
 import { navigate } from '@/core/router'
 import { models } from '@/core/store'
-import { statsFocusModel, chatFocusModel } from '@/core/nav-hints'
+import { statsFocusModel, chatFocusModel, hubFocusQuery } from '@/core/nav-hints'
+import { fetchConfig } from '@/core/config'
 import {
   browseDir,
   browseFile,
@@ -84,9 +88,27 @@ export function ModelsPage() {
   const reloadTarget = useSignal<ModelStatus | null>(null)
   const rememberUnload = useSignal(false)
 
+  // library (P5): the model folders the server actually scans (GET /v1/config)
+  const libDirs = useSignal<string[]>([])
+
   useEffect(() => {
     refreshModels()
+    void fetchConfig()
+      .then((c) => (libDirs.value = c.models_dirs))
+      .catch(() => (libDirs.value = []))
   }, [])
+
+  /** Loaded models whose file lives under a given scan dir (string prefix —
+      an honest best effort: the server reports raw paths, no realpath API). */
+  const loadedIn = (dir: string): ModelStatus[] => {
+    const norm = dir.replace(/[\\/]+$/, '').replace(/\\/g, '/')
+    return loaded.filter((m) => m.path.replace(/\\/g, '/').startsWith(norm + '/') || m.path.replace(/\\/g, '/') === norm)
+  }
+
+  const openHub = () => {
+    hubFocusQuery.value = '' // no term — the Hub shows its curated shelves
+    navigate('hub')
+  }
 
   const runScan = async () => {
     const seq = ++scanSeqRef.current
@@ -459,6 +481,67 @@ export function ModelsPage() {
             </Button>
           </div>
         </Card>
+      </section>
+
+      {/* ── Library (P5: models dirs + loaded/on-disk + Hub shortcut) ── */}
+      <section class="md-section">
+        <h2 class="md-section__title">
+          {t('models.library.title')}
+          <Tip label={t('models.library.tip')} />
+        </h2>
+        {libDirs.value.length === 0 ? (
+          <Card>
+            <EmptyState emoji="📁" title={t('common.notAvailable')} body={t('models.library.fetchFailed')} />
+          </Card>
+        ) : (
+          <div class="md-lib">
+            {libDirs.value.map((dir) => {
+              const here = loadedIn(dir)
+              return (
+                <Card key={dir} class="md-lib__card">
+                  <div class="md-lib__head">
+                    <code class="md-lib__path" title={dir}>
+                      {dir}
+                    </code>
+                    <Badge tone={here.length > 0 ? 'ok' : 'neutral'}>
+                      {t('models.library.loadedCount', { count: here.length })}
+                    </Badge>
+                  </div>
+                  {here.length > 0 ? (
+                    <ul class="md-lib__loaded">
+                      {here.map((m) => (
+                        <li key={m.id} title={m.path}>
+                          <span class="status-dot status-dot--online" aria-hidden="true" />
+                          {m.id} <span class="dialog-text--dim">({t('models.library.onDisk')})</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p class="dialog-text--dim md-lib__none">{t('models.library.noneHere')}</p>
+                  )}
+                  <div class="md-card__actions">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        scanDir.value = dir
+                        void runScan()
+                      }}
+                    >
+                      <FolderSearch size={13} aria-hidden="true" /> {t('models.library.scanThis')}
+                    </Button>
+                    <Button variant="soft" size="sm" onClick={openHub}>
+                      <Globe size={13} aria-hidden="true" /> {t('models.library.findHub')}
+                    </Button>
+                  </div>
+                </Card>
+              )
+            })}
+          </div>
+        )}
+        <p class="set-note">
+          <Tip label={t('models.library.noDelete')} /> {t('models.library.noDelete')}
+        </p>
       </section>
 
       {/* ── Unload confirm (with session-remember, spec §8.3) ─── */}

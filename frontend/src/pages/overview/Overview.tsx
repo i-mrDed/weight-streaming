@@ -1,7 +1,9 @@
 /* 🏠 Overview (spec §9.1) — system status at a glance + shortcuts.
    Sources: /health + /v1/stats (polled 5s, visibility-aware), /v1/models,
-   /v1/issues?status=open (via shell store). Activity feed is an HONEST
-   empty state — usage history needs the P4 backend (/v1/usage/history). */
+   /v1/issues?status=open (via shell store). P5: the Activity feed now shows
+   the five most recent generations from /v1/usage/history — real per-run
+   telemetry (tok/s renders "–" when a path had no measurement, never a
+   fabricated number), with an honest empty state before the first run. */
 import { useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import {
@@ -22,9 +24,10 @@ import { Tip } from '@/components/Tip'
 import { toast } from '@/components/Toast'
 import { ApiError } from '@/core/api'
 import { navigate } from '@/core/router'
-import { t, fmtNumber, relativeDay, locale } from '@/i18n'
+import { t, fmtNumber, fmtRelative, relativeDay, locale } from '@/i18n'
 import { createPoller } from '@/core/poll'
 import { fetchStats, type StatsPayload, type ModelStats } from '@/core/stats'
+import { fetchUsageHistory, type UsageRecord } from '@/core/config'
 import { guessQuant, unloadModel } from '@/core/models'
 import { health, models, openIssueCount, serverVersion } from '@/core/store'
 
@@ -50,6 +53,7 @@ function pickPaging(stats: StatsPayload | null): { id: string; ms: ModelStats } 
 export function Overview() {
   locale.value // subscribe: relative labels re-render on language switch
   const stats = useSignal<StatsPayload | null>(null)
+  const activity = useSignal<UsageRecord[] | null>(null) // null = not fetched yet
   const unreachable = useSignal(false)
   const onlineSince = useRef<number | null>(null)
   const tick = useSignal(0) // 1s heartbeat for the uptime label
@@ -63,8 +67,12 @@ export function Overview() {
   useEffect(() => {
     const poller = createPoller(async () => {
       try {
-        stats.value = await fetchStats()
-        unreachable.value = false
+        // Independent fetches: a usage-history hiccup must not blank the
+        // stats, and vice versa (both stay honest — last good value or empty).
+        const [st, usage] = await Promise.allSettled([fetchStats(), fetchUsageHistory(5)])
+        if (st.status === 'fulfilled') stats.value = st.value
+        if (usage.status === 'fulfilled') activity.value = usage.value.history.slice().reverse()
+        unreachable.value = st.status === 'rejected'
       } catch {
         unreachable.value = true
       }
@@ -202,7 +210,7 @@ export function Overview() {
               <Button variant="primary" onClick={() => navigate('models')}>
                 <FolderSearch size={15} aria-hidden="true" /> {t('overview.models.emptyScan')}
               </Button>
-              <Button variant="ghost" onClick={() => navigate('hub')} disabled title={t('common.comingSoon')}>
+              <Button variant="ghost" onClick={() => navigate('hub')}>
                 {t('overview.models.emptyHub')}
               </Button>
             </EmptyState>
@@ -249,18 +257,46 @@ export function Overview() {
       </section>
 
       <div class="ov-grid">
-        {/* ── Activity (HONEST empty — usage history is P4) ─────── */}
+        {/* ── Activity (P5: real usage history, newest 5) ───────── */}
         <section class="ov-section">
           <h2 class="ov-section__title">
             {t('overview.activity.title')}
             <Tip label={t('overview.activity.tip')} />
           </h2>
           <Card>
-            <EmptyState emoji="📈" title={t('overview.activity.emptyTitle')} body={t('overview.activity.emptyBody')}>
-              <Button variant="soft" onClick={() => navigate('chat')}>
-                <MessageSquare size={15} aria-hidden="true" /> {t('overview.quick.chat')}
-              </Button>
-            </EmptyState>
+            {!activity.value || activity.value.length === 0 ? (
+              <EmptyState emoji="📈" title={t('overview.activity.emptyTitle')} body={t('overview.activity.emptyBody')}>
+                <Button variant="soft" onClick={() => navigate('chat')}>
+                  <MessageSquare size={15} aria-hidden="true" /> {t('overview.quick.chat')}
+                </Button>
+              </EmptyState>
+            ) : (
+              <table class="ov-activity">
+                <thead>
+                  <tr>
+                    <th>{t('overview.activity.colModel')}</th>
+                    <th class="tnum">{t('overview.activity.colTokens')}</th>
+                    <th class="tnum">{t('overview.activity.colSpeed')}</th>
+                    <th>{t('overview.activity.colWhen')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activity.value.map((rec) => (
+                    <tr key={`${rec.ts}-${rec.model}`}>
+                      <td class="ov-activity__model" title={rec.model}>
+                        {rec.model}
+                      </td>
+                      <td class="tnum">{rec.tokens != null ? fmtNumber(rec.tokens) : '–'}</td>
+                      {/* tok_s = null → honest "–", never a fabricated number */}
+                      <td class="tnum">
+                        {rec.tok_s != null ? fmtNumber(rec.tok_s, { maximumFractionDigits: 1 }) : '–'}
+                      </td>
+                      <td title={fmtRelative(rec.ts)}>{fmtRelative(rec.ts)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
           </Card>
         </section>
 

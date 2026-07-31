@@ -119,6 +119,18 @@ export function relativeDay(ts: number, now: number = Date.now()): string {
   return rtf.format(-diffDays, 'day')
 }
 
+/** Fine-grained relative time ("2 min ago" / "in 3 h") — picks the natural
+    unit for the distance; localized via Intl (no UI strings involved). */
+export function fmtRelative(ts: number, now: number = Date.now()): string {
+  const diff = ts - now
+  const abs = Math.abs(diff)
+  const rtf = new Intl.RelativeTimeFormat(locale.value, { numeric: 'auto' })
+  if (abs < 60_000) return rtf.format(Math.round(diff / 1000), 'second')
+  if (abs < 3_600_000) return rtf.format(Math.round(diff / 60_000), 'minute')
+  if (abs < DAY) return rtf.format(Math.round(diff / 3_600_000), 'hour')
+  return rtf.format(Math.round(diff / DAY), 'day')
+}
+
 function startOfDay(ts: number): number {
   const d = new Date(ts)
   d.setHours(0, 0, 0, 0)

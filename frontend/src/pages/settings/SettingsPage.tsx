@@ -1,14 +1,21 @@
 /* ⚙️ Settings (spec §9.8) — HONEST by design.
    - Appearance / Language / Chat defaults = runtime + persisted (localStorage).
-   - Server = READ-ONLY from /health + /v1/debug/context (version taken from
-     debug context, the accurate value — NOT /health's stale 0.11.0).
-   - "Change for next start" = a SNIPPET GENERATOR (real WS_* env names from
-     server/config.py). It never pretends to edit the running server; /v1/config
-     (P4) is shown as n/a until it exists.
+   - Server (P5, wired to the P4 endpoints):
+     · READ — every key from GET /v1/config with its real source badge
+       (env / default / runtime), plus models_dirs, issues_dir, version.
+     · RUNTIME EDIT — the safe subset {idle_unload_timeout, max_loaded_models}
+       applies live via PATCH /v1/config; the gated subset {buffer/n_ctx/
+       n_threads} applies to models loaded afterwards (the server says so in
+       `notes`, and the UI warns before sending).
+     · RESTART-ONLY KEYS — the server refuses them (HTTP 409) and answers
+       with an env snippet; the UI renders that snippet for copy instead of
+       a scary error toast (honest capability claim).
+     · "Change for next start" snippet generator stays (real WS_* env names).
+   - Diagnostics = debug context + log-tail viewer/downloader (GET /v1/logs/tail).
    - Data = clear chat history (confirm) + export/import prefs (client-only). */
 import { useEffect } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
-import { Copy, Download, DownloadCloud, FileJson, Sparkles, Trash2, Upload } from 'lucide-preact'
+import { Copy, Download, DownloadCloud, FileJson, RefreshCw, Sparkles, Trash2, Upload } from 'lucide-preact'
 import {
   autoMode,
   density,
@@ -40,6 +47,14 @@ import {
   type ChatParams,
 } from '@/pages/chat/store'
 import { fetchDebugContext, downloadText, type DebugContext } from '@/core/issues'
+import {
+  fetchConfig,
+  fetchLogsTail,
+  patchConfig,
+  type PatchRejected,
+  type ServerConfigResponse,
+} from '@/core/config'
+import { ApiError } from '@/core/api'
 import { navigate } from '@/core/router'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/Button'
@@ -103,6 +118,38 @@ interface EnvDraft {
   logLevel: string
 }
 
+// GET /v1/config key → label key (unknown future keys fall back to the raw name)
+const CONFIG_LABELS: Record<string, string> = {
+  host: 'settings.server.field.host',
+  port: 'settings.server.field.port',
+  default_buffer_mb: 'settings.server.field.bufferMb',
+  default_n_ctx: 'settings.server.field.nCtx',
+  default_n_threads: 'settings.server.field.nThreads',
+  idle_unload_timeout: 'settings.server.field.idleTimeout',
+  max_loaded_models: 'settings.server.field.maxModels',
+  lower_process_priority: 'settings.server.field.lowerPriority',
+  max_concurrent_requests: 'settings.server.field.maxRequests',
+  request_queue_depth: 'settings.server.field.queueDepth',
+  log_level: 'settings.server.field.logLevel',
+}
+
+// Keys the server answers with 409 + snippet (api_server._CONFIG_REJECT_REASONS).
+// Listed only to offer them in the form — the 409 body carries the real reasons.
+const RESTART_KEYS = [
+  'host',
+  'port',
+  'log_level',
+  'lower_process_priority',
+  'max_concurrent_requests',
+  'request_queue_depth',
+] as const
+
+function fmtCfgValue(v: unknown): string {
+  if (typeof v === 'boolean') return v ? 'true' : 'false'
+  if (v == null) return '–'
+  return String(v)
+}
+
 export function SettingsPage() {
   locale.value
   const dbg = useSignal<DebugContext | null>(null)
@@ -138,6 +185,122 @@ export function SettingsPage() {
   // diagnostics
   const showCtx = useSignal(false)
 
+  // server config (P4 GET/PATCH /v1/config — wired in P5)
+  const serverCfg = useSignal<ServerConfigResponse | null>(null)
+  const cfgLoading = useSignal(false)
+  const rtIdle = useSignal('0') // idle_unload_timeout draft
+  const rtMax = useSignal('4') // max_loaded_models draft
+  const rtBuf = useSignal('64') // default_buffer_mb draft (gated)
+  const rtCtx = useSignal('2048') // default_n_ctx draft (gated)
+  const rtThreads = useSignal('') // default_n_threads draft (gated; '' = keep)
+  const applying = useSignal(false)
+  const restartKey = useSignal<string>('host')
+  const restartVal = useSignal('')
+  const restartResult = useSignal<PatchRejected | null>(null)
+  const restartBusy = useSignal(false)
+
+  // log tail (P4 GET /v1/logs/tail — wired in P5)
+  const logLinesCount = useSignal(100)
+  const logLines = useSignal<string[] | null>(null)
+  const logLoading = useSignal(false)
+
+  const loadConfig = async () => {
+    cfgLoading.value = true
+    try {
+      const c = await fetchConfig()
+      serverCfg.value = c
+      // seed the runtime drafts from the real live values
+      rtIdle.value = fmtCfgValue(c.config.idle_unload_timeout?.value)
+      rtMax.value = fmtCfgValue(c.config.max_loaded_models?.value)
+      rtBuf.value = fmtCfgValue(c.config.default_buffer_mb?.value)
+      rtCtx.value = fmtCfgValue(c.config.default_n_ctx?.value)
+      rtThreads.value = fmtCfgValue(c.config.default_n_threads?.value)
+    } catch {
+      serverCfg.value = null // health dot tells the real story
+    } finally {
+      cfgLoading.value = false
+    }
+  }
+
+  const applyRuntime = async () => {
+    applying.value = true
+    restartResult.value = null
+    const body: Record<string, unknown> = {
+      idle_unload_timeout: Number(rtIdle.value),
+      max_loaded_models: Number(rtMax.value),
+      default_buffer_mb: Number(rtBuf.value),
+      default_n_ctx: Number(rtCtx.value),
+    }
+    if (rtThreads.value.trim() !== '') body.default_n_threads = Number(rtThreads.value)
+    try {
+      const res = await patchConfig(body)
+      if (res.status === 'applied') {
+        const gated = Object.keys(res.notes).length > 0
+        toast(gated ? 'warning' : 'success', gated ? t('settings.server.appliedGated') : t('settings.server.applied'))
+        await loadConfig() // source badges flip to "runtime" — the truth, from the server
+      } else {
+        // only restart-only keys get 409 — this form never sends them, so a
+        // rejection here is shown verbatim rather than hidden (honest)
+        restartResult.value = res
+        toast('error', t('settings.server.applyFailed'), { body: res.detail })
+      }
+    } catch (e) {
+      toast('error', t('settings.server.applyFailed'), {
+        body: e instanceof ApiError && e.detail ? e.detail : String(e),
+      })
+    } finally {
+      applying.value = false
+    }
+  }
+
+  const requestRestartSnippet = async () => {
+    restartBusy.value = true
+    restartResult.value = null
+    try {
+      const res = await patchConfig({ [restartKey.value]: restartVal.value })
+      if (res.status === 'rejected') {
+        restartResult.value = res // the HONEST answer: reasons + env snippet
+      } else {
+        // The server unexpectedly applied a "restart-only" key — say so plainly.
+        toast('success', t('settings.server.applied'))
+        await loadConfig()
+      }
+    } catch (e) {
+      toast('error', t('settings.server.applyFailed'), {
+        body: e instanceof ApiError && e.detail ? e.detail : String(e),
+      })
+    } finally {
+      restartBusy.value = false
+    }
+  }
+
+  const copyRestartSnippet = async () => {
+    if (!restartResult.value) return
+    try {
+      await navigator.clipboard?.writeText(restartResult.value.snippet)
+      toast('success', t('settings.toast.snippetCopied'))
+    } catch {
+      toast('error', t('chat.copyFailed'))
+    }
+  }
+
+  const loadLogs = async () => {
+    logLoading.value = true
+    try {
+      const res = await fetchLogsTail(logLinesCount.value)
+      logLines.value = res.lines
+    } catch {
+      logLines.value = []
+    } finally {
+      logLoading.value = false
+    }
+  }
+
+  const downloadLogs = () => {
+    const lines = logLines.value ?? []
+    downloadText('server-tail.log', lines.join('\n') + '\n', 'text/plain')
+  }
+
   useEffect(() => {
     // accurate version + redacted snapshot for About/Diagnostics/Server
     dbgLoading.value = true
@@ -145,6 +308,7 @@ export function SettingsPage() {
       dbg.value = c
       dbgLoading.value = false
     })
+    void loadConfig()
     // honest local-storage usage (chat + prefs we own)
     try {
       let bytes = 0
@@ -434,7 +598,7 @@ export function SettingsPage() {
         </Card>
       </section>
 
-      {/* Server (read-only + apply-on-restart) */}
+      {/* Server (live read + runtime edit + restart-only snippet) */}
       <section class="md-section">
         <h2 class="md-section__title">{t('settings.server.title')}</h2>
         <Card class="set-card">
@@ -463,9 +627,204 @@ export function SettingsPage() {
           <p class="set-note">
             <Tip label={t('settings.server.healthVersionNote')} /> {t('settings.server.healthVersionNote')}
           </p>
-          <p class="set-note">
-            <Tip label={t('settings.server.p4Note')} /> {t('settings.server.p4Note')}
-          </p>
+
+          {/* per-key live values with their TRUE source (GET /v1/config) */}
+          <div class="set-cfghead">
+            <h4 class="set-subtitle">{t('settings.server.configKeys')}</h4>
+            <Button variant="ghost" size="sm" loading={cfgLoading.value} onClick={() => void loadConfig()}>
+              <RefreshCw size={13} aria-hidden="true" /> {t('common.retry')}
+            </Button>
+          </div>
+          {serverCfg.value ? (
+            <>
+              <dl class="set-dl set-dl--cfg">
+                {Object.entries(serverCfg.value.config).map(([key, entry]) => (
+                  <div key={key}>
+                    <dt>
+                      {CONFIG_LABELS[key] ? t(CONFIG_LABELS[key]) : key}{' '}
+                      <Badge tone={entry.source === 'runtime' ? 'ok' : entry.source === 'env' ? 'info' : 'neutral'} class="set-src">
+                        {t(`settings.server.src_${entry.source}`)}
+                        <Tip
+                          label={
+                            entry.source === 'runtime'
+                              ? t('settings.server.srcRuntimeTip')
+                              : entry.source === 'env'
+                                ? t('settings.server.srcEnvTip')
+                                : t('settings.server.srcDefaultTip')
+                          }
+                        />
+                      </Badge>
+                    </dt>
+                    <dd class="tnum">{fmtCfgValue(entry.value)}</dd>
+                  </div>
+                ))}
+              </dl>
+              <div class="set-dirs">
+                <span class="set-dirs__label">
+                  {t('settings.server.modelsDirs')} <Tip label={t('settings.server.modelsDirsHint')} />
+                </span>
+                <ul>
+                  {serverCfg.value.models_dirs.map((d) => (
+                    <li key={d}>
+                      <code>{d}</code>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div class="set-dirs">
+                <span class="set-dirs__label">{t('settings.server.issuesDir')}</span>
+                <ul>
+                  <li>
+                    <code>{serverCfg.value.issues_dir}</code>
+                  </li>
+                </ul>
+              </div>
+              <div class="set-dirs">
+                <span class="set-dirs__label">{t('settings.server.configVersion')}</span>
+                <ul>
+                  <li>
+                    <code class="tnum">{serverCfg.value.version}</code>
+                  </li>
+                </ul>
+              </div>
+            </>
+          ) : (
+            <p class="set-note">{cfgLoading.value ? t('common.loading') : t('common.notAvailable')}</p>
+          )}
+
+          {/* runtime edits (PATCH /v1/config) */}
+          <h3 class="set-subtitle">{t('settings.server.runtimeTitle')}</h3>
+          <p class="dialog-text--dim">{t('settings.server.runtimeHint')}</p>
+          <p class="set-note set-note--warn">⚠️ {t('settings.server.gatedWarn')}</p>
+          <div class="set-env">
+            <label class="set-field">
+              <span>
+                {t('settings.server.field.idleTimeout')} <Badge tone="ok" class="set-src">{t('settings.server.runtimeSafe')}</Badge>
+              </span>
+              <input
+                class="md-input tnum"
+                type="number"
+                min={0}
+                step={10}
+                value={rtIdle.value}
+                onInput={(e) => (rtIdle.value = (e.target as HTMLInputElement).value)}
+              />
+            </label>
+            <label class="set-field">
+              <span>
+                {t('settings.server.field.maxModels')} <Badge tone="ok" class="set-src">{t('settings.server.runtimeSafe')}</Badge>
+              </span>
+              <input
+                class="md-input tnum"
+                type="number"
+                min={1}
+                step={1}
+                value={rtMax.value}
+                onInput={(e) => (rtMax.value = (e.target as HTMLInputElement).value)}
+              />
+            </label>
+            <label class="set-field">
+              <span>
+                {t('settings.server.field.bufferMb')} <Badge tone="warn" class="set-src">{t('settings.server.runtimeGated')}</Badge>
+              </span>
+              <input
+                class="md-input tnum"
+                type="number"
+                min={1}
+                step={16}
+                value={rtBuf.value}
+                onInput={(e) => (rtBuf.value = (e.target as HTMLInputElement).value)}
+              />
+            </label>
+            <label class="set-field">
+              <span>
+                {t('settings.server.field.nCtx')} <Badge tone="warn" class="set-src">{t('settings.server.runtimeGated')}</Badge>
+              </span>
+              <input
+                class="md-input tnum"
+                type="number"
+                min={8}
+                step={512}
+                value={rtCtx.value}
+                onInput={(e) => (rtCtx.value = (e.target as HTMLInputElement).value)}
+              />
+            </label>
+            <label class="set-field">
+              <span>
+                {t('settings.server.field.nThreads')} <Badge tone="warn" class="set-src">{t('settings.server.runtimeGated')}</Badge>
+              </span>
+              <input
+                class="md-input tnum"
+                type="number"
+                min={1}
+                value={rtThreads.value}
+                onInput={(e) => (rtThreads.value = (e.target as HTMLInputElement).value)}
+              />
+            </label>
+          </div>
+          <div class="set-actions">
+            <Button variant="primary" size="sm" loading={applying.value} onClick={() => void applyRuntime()}>
+              {t('settings.server.apply')}
+            </Button>
+          </div>
+
+          {/* restart-only keys → honest 409 + snippet (not an error toast) */}
+          <h3 class="set-subtitle">{t('settings.server.restartTitle')}</h3>
+          <p class="dialog-text--dim">{t('settings.server.restartHint')}</p>
+          <div class="set-restart">
+            <label class="set-field">
+              <span>{t('settings.server.restartKey')}</span>
+              <select
+                class="md-input md-select"
+                value={restartKey.value}
+                onChange={(e) => (restartKey.value = (e.target as HTMLSelectElement).value)}
+              >
+                {RESTART_KEYS.map((k) => (
+                  <option key={k} value={k}>
+                    {CONFIG_LABELS[k] ? t(CONFIG_LABELS[k]) : k}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label class="set-field set-restart__val">
+              <span>{t('settings.server.restartValue')}</span>
+              <input
+                class="md-input"
+                type="text"
+                value={restartVal.value}
+                onInput={(e) => (restartVal.value = (e.target as HTMLInputElement).value)}
+              />
+            </label>
+            <Button
+              variant="soft"
+              size="sm"
+              loading={restartBusy.value}
+              disabled={restartVal.value.trim() === ''}
+              onClick={() => void requestRestartSnippet()}
+            >
+              {t('settings.server.requestSnippet')}
+            </Button>
+          </div>
+          {restartResult.value ? (
+            <div class="set-snippetblock">
+              <p class="set-snippetblock__title">{t('settings.server.snippetTitle')}</p>
+              {Object.keys(restartResult.value.rejected).length > 0 ? (
+                <ul class="set-snippetblock__reasons">
+                  {Object.entries(restartResult.value.rejected).map(([k, reason]) => (
+                    <li key={k}>
+                      <code>{k}</code> — {reason}
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              <pre class="set-snippet">{restartResult.value.snippet || restartResult.value.detail}</pre>
+              <div class="set-actions">
+                <Button variant="ghost" size="sm" onClick={() => void copyRestartSnippet()}>
+                  <Copy size={13} aria-hidden="true" /> {t('settings.server.copySnippet')}
+                </Button>
+              </div>
+            </div>
+          ) : null}
 
           <h3 class="set-subtitle">{t('settings.server.applyTitle')}</h3>
           <p class="dialog-text--dim">{t('settings.server.applyHint')}</p>
@@ -551,6 +910,42 @@ export function SettingsPage() {
           {showCtx.value ? (
             <pre class="set-snippet">{dbg.value ? JSON.stringify(dbg.value, null, 2) : t('common.loading')}</pre>
           ) : null}
+
+          {/* log tail (GET /v1/logs/tail — real lines from the server's ring
+              buffer; empty until the server actually starts logging) */}
+          <h3 class="set-subtitle">{t('settings.diagnostics.logTitle')}</h3>
+          <div class="set-logbar">
+            <select
+              class="md-input md-select set-logbar__lines"
+              value={String(logLinesCount.value)}
+              aria-label={t('settings.diagnostics.logLines', { count: logLinesCount.value })}
+              onChange={(e) => (logLinesCount.value = Number((e.target as HTMLSelectElement).value))}
+            >
+              {[50, 100, 500, 1000].map((n) => (
+                <option key={n} value={String(n)}>
+                  {t('settings.diagnostics.logLines', { count: n })}
+                </option>
+              ))}
+            </select>
+            <Button variant="soft" size="sm" loading={logLoading.value} onClick={() => void loadLogs()}>
+              <RefreshCw size={13} aria-hidden="true" /> {t('common.retry')}
+            </Button>
+            <Button variant="ghost" size="sm" disabled={logLines.value == null} onClick={downloadLogs}>
+              <Download size={13} aria-hidden="true" /> {t('settings.diagnostics.logDownload')}
+            </Button>
+          </div>
+          {logLines.value != null ? (
+            logLines.value.length === 0 ? (
+              <p class="set-note">{t('settings.diagnostics.logEmpty')}</p>
+            ) : (
+              <pre class="set-snippet set-log">
+                {logLines.value.join('\n')}
+              </pre>
+            )
+          ) : null}
+          <p class="set-note">
+            <Tip label={t('settings.diagnostics.logHint')} /> {t('settings.diagnostics.logHint')}
+          </p>
         </Card>
       </section>
 

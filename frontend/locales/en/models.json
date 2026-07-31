@@ -54,5 +54,16 @@
     "progressTitle": "Loading model…",
     "progressBody": "Mapping weights and warming the buffer. Large models can take a while.",
     "progressNote": "The server cannot cancel a load in progress — closing this dialog would not stop it."
+  },
+  "library": {
+    "title": "Library",
+    "tip": "The model folders from GET /v1/config and which loaded models live in each. Scanning a folder reveals the files on disk.",
+    "fetchFailed": "Could not read the model folders from the server.",
+    "loadedCount": "{{count}} loaded",
+    "onDisk": "on disk",
+    "noneHere": "No loaded model points at this folder yet.",
+    "scanThis": "Scan this folder",
+    "findHub": "Find models in the Hub",
+    "noDelete": "Deleting model files is intentionally not available in v1 — the server has no authentication, so removal stays a manual job on the host machine."
   }
 }
