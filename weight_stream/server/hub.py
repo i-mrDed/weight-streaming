@@ -18,6 +18,21 @@ endpoint writes files from the internet to disk):
 - A SIZE GUARD compares ``Content-Length`` against ``WS_HUB_MAX_BYTES``
   (0 = unlimited) and the target volume's free space before writing, and
   aborts if the running total exceeds the ceiling.
+- The ``.part`` file is created with EXCLUSIVE, NO-FOLLOW semantics
+  (``O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW`` where available), so a
+  pre-placed symlink at the destination can never redirect the write
+  (closes the symlink-TOCTOU between the dir-containment check and the
+  write; a stale regular ``.part`` from an interrupted run is removed
+  first — v1 has no resume, a retry is a fresh download).
+
+Honest limitation (disk-free guard without ``Content-Length``): when the
+upstream sends no ``Content-Length`` header the free-space pre-check cannot
+run (the total is unknown), so the guard degrades to the mid-stream
+``WS_HUB_MAX_BYTES`` byte count, which still cannot be breached. With
+``WS_HUB_MAX_BYTES=0`` (unlimited) AND no ``Content-Length`` a chunked
+write could in principle fill the volume — the resulting ``OSError`` fails
+the task honestly and the ``.part`` is removed. HF CDN responses normally
+carry ``Content-Length``, so the pre-check applies in practice.
 
 Honest telemetry (ADR-003): ``bytes``/``percent``/``speed_bps``/``eta_s`` are
 computed from real bytes transferred and real elapsed time — never fixed or
@@ -145,6 +160,40 @@ def _default_open_stream(url: str, timeout: float) -> _UrlStream:
     req = urllib.request.Request(url, headers={"User-Agent": "weight-streaming"})
     resp = urllib.request.urlopen(req, timeout=timeout)  # follows CDN redirects
     return _UrlStream(resp)
+
+
+def _open_part_exclusive(part_path: str) -> Any:
+    """Open the ``.part`` file for writing with no-follow/exclusive semantics.
+
+    Closes the symlink-TOCTOU between the target-dir containment check (which
+    resolves symlinks) and the actual write: if an attacker races a symlink
+    into ``<name>.gguf.part``, the write must NOT follow it.
+
+    - An existing symlink (even a dangling one) at the path → refuse
+      (``HubValidationError``) — never unlink or follow an attacker object.
+    - An existing regular file = a stale partial from an interrupted download;
+      remove it, because v1 has no resume (a retry is a fresh download — same
+      semantics the old ``open(path, "wb")`` truncate gave, made explicit).
+    - Then create with ``O_CREAT|O_EXCL`` (fails if anything reappears in the
+      race window) plus ``O_NOFOLLOW`` where the platform exposes it (POSIX);
+      Windows has no ``O_NOFOLLOW`` but ``O_EXCL`` there also refuses to open
+      an existing symlink, and the ``islink`` check above already covered it.
+
+    Returns a binary file object opened from the raw fd (caller closes it).
+    """
+    if os.path.lexists(part_path):
+        if os.path.islink(part_path):
+            raise HubValidationError(
+                "refusing to write through a symlink at the .part path", status=400
+            )
+        os.remove(part_path)  # stale regular partial — retry = fresh download
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW  # POSIX: fail instead of following a symlink
+    if os.name == "nt" and hasattr(os, "O_NOINHERIT"):
+        flags |= os.O_NOINHERIT  # don't leak the handle to child processes
+    fd = os.open(part_path, flags, 0o644)
+    return os.fdopen(fd, "wb")
 
 
 # ── Download task + manager ───────────────────────────────────────────
@@ -302,7 +351,13 @@ class DownloadManager:
         asyncio.create_task(asyncio.to_thread(self.run_download, task))
 
     def run_download(self, task: DownloadTask) -> None:
-        """Blocking download: stream → ``.part`` → atomic rename. Sync & testable."""
+        """Blocking download: stream → ``.part`` → atomic rename. Sync & testable.
+
+        The ``.part`` is opened exclusively and without following symlinks
+        (``_open_part_exclusive``); the mid-stream ``WS_HUB_MAX_BYTES`` guard
+        counts REAL transferred bytes, so the ceiling holds even when the
+        upstream sends no ``Content-Length`` (see module docstring).
+        """
         part_path = task.target_path + ".part"
         if task._cancel.is_set():
             task.status = "cancelled"
@@ -332,7 +387,7 @@ class DownloadManager:
                             f"insufficient disk space: need {total} bytes, free {free}",
                             status=400,
                         )
-                with open(part_path, "wb") as fh:
+                with _open_part_exclusive(part_path) as fh:
                     while True:
                         if task._cancel.is_set():
                             raise _Cancelled()

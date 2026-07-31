@@ -251,6 +251,51 @@ def test_size_guard_max_bytes(monkeypatch, models_dir):
     assert not (models_dir / "big.gguf.part").exists()
 
 
+def test_size_guard_without_content_length(monkeypatch, models_dir):
+    """P5 hardening #2: with NO Content-Length header the pre-check cannot
+    run, but the mid-stream guard still counts REAL bytes — the transfer
+    cannot breach WS_HUB_MAX_BYTES (beyond one chunk of granularity)."""
+    monkeypatch.setenv("WS_HUB_MAX_BYTES", "100")
+
+    class UnknownLengthStream(FakeStream):
+        def __init__(self, data: bytes):
+            super().__init__(data)
+            self.content_length = None  # header absent → total unknown
+
+    mgr = DownloadManager(
+        fetch_json=lambda u, t: FAKE_SEARCH,
+        open_stream=lambda u, t: UnknownLengthStream(b"X" * 3000),
+        chunk_size=100,  # small chunks so the guard trips early
+    )
+    task = mgr.create_download("org/m", "sneaky.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "failed"
+    assert "WS_HUB_MAX_BYTES" in task.error
+    # the real byte count never ran past the ceiling by more than one chunk
+    assert task.bytes_downloaded <= 100 + 100
+    assert not (models_dir / "sneaky.gguf").exists()
+    assert not (models_dir / "sneaky.gguf.part").exists()  # part cleaned up
+
+
+def test_part_symlink_not_followed(models_dir, tmp_path):
+    """P5 hardening #1: a pre-placed symlink at the .part path must be
+    refused, never written through (closes the symlink-TOCTOU)."""
+    victim = tmp_path / "victim.gguf"
+    victim.write_bytes(b"original")
+    link = models_dir / "trap.gguf.part"
+    try:
+        os.symlink(victim, link)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks unavailable on this platform")
+    mgr = _mgr()
+    task = mgr.create_download("org/m", "trap.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "failed"
+    assert "symlink" in (task.error or "").lower()
+    assert victim.read_bytes() == b"original"      # never written through
+    assert not (models_dir / "trap.gguf").exists()  # no final file
+
+
 def test_size_guard_insufficient_disk(monkeypatch, models_dir):
     class _Usage:
         free = 10  # bytes
