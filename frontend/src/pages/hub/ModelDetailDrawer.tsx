@@ -177,8 +177,8 @@ function DetailBody({ detail }: { detail: HubModelDetail }) {
               <Tip label={t('hub.ramHint')} />
             </div>
             <ul class="hd-ram">
-              {detail.quants.map((q) => (
-                <li key={q.quant ?? 'unknown'} class="hd-ram__row">
+              {detail.quants.map((q, i) => (
+                <li key={`${q.quant ?? 'unknown'}-${i}`} class="hd-ram__row">
                   <Badge tone={isUnquantized(q.quant) ? 'warn' : 'brand'}>
                     {q.quant ?? t('hub.noQuant')}
                   </Badge>

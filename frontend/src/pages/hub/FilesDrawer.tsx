@@ -123,10 +123,10 @@ export function FilesDrawer({
 
           {/* quant groups */}
           <div class="hf-groups">
-            {detail.quants.map((q) => {
+            {detail.quants.map((q, i) => {
               const fp16 = isUnquantized(q.quant)
               return (
-                <div key={q.quant ?? 'unknown'} class={`hf-quant${fp16 ? ' hf-quant--fp16' : ''}`}>
+                <div key={`${q.quant ?? 'unknown'}-${i}`} class={`hf-quant${fp16 ? ' hf-quant--fp16' : ''}`}>
                   <div class="hf-quant__head">
                     <Badge tone={fp16 ? 'warn' : 'brand'}>{q.quant ?? t('hub.noQuant')}</Badge>
                     <span class="hf-quant__total tnum">{fmtBytes(q.total_bytes)}</span>

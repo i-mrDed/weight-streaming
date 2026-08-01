@@ -730,11 +730,15 @@ function HubCard({
         </div>
       ) : null}
       <div class="hub-card__stats tnum">
-        <span title={t('hub.downloads')}>
-          <Download size={12} aria-hidden="true" /> {fmtNumber(r.downloads ?? 0)}
-        </span>
-        {/* honest telemetry: the live HF search returns downloads but may omit
-            likes entirely — hide the stat instead of showing a fabricated 0 */}
+        {/* honest telemetry (ADR-003): a search payload may omit likes — and
+            rarely downloads — so hide each stat on null instead of rendering a
+            fabricated 0. The detail drawer shows n/a for the same fields. This
+            matches the card's established pattern (likes already hid on null). */}
+        {r.downloads != null ? (
+          <span title={t('hub.downloads')}>
+            <Download size={12} aria-hidden="true" /> {fmtNumber(r.downloads)}
+          </span>
+        ) : null}
         {r.likes != null ? (
           <span title={t('hub.likes')}>
             <Heart size={12} aria-hidden="true" /> {fmtNumber(r.likes)}
