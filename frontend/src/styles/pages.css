@@ -973,9 +973,11 @@ select.md-input { cursor: pointer; }
 .set-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .set-note { margin: 0; display: flex; align-items: flex-start; gap: 6px; font-size: var(--ws-text-xs); color: var(--ws-text-tertiary); line-height: 1.5; }
 .set-dl { margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px 18px; }
-.set-dl > div { display: flex; flex-direction: column; gap: 3px; }
-.set-dl dt { font-size: var(--ws-text-xs); color: var(--ws-text-tertiary); }
-.set-dl dd { margin: 0; font-size: var(--ws-text-sm); color: var(--ws-text-primary); }
+/* P5.3 tidy: every grid cell can shrink and long values wrap instead of
+   overflowing the card — fixes the crowded/overlapping server-card rows. */
+.set-dl > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.set-dl dt { font-size: var(--ws-text-xs); color: var(--ws-text-tertiary); min-width: 0; overflow-wrap: anywhere; }
+.set-dl dd { margin: 0; font-size: var(--ws-text-sm); color: var(--ws-text-primary); min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .set-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
 .set-theme { display: flex; flex-direction: column; gap: 7px; border: 1px solid var(--ws-border-default); background: var(--ws-surface-card); border-radius: var(--ws-radius-md); padding: 8px; cursor: pointer; text-align: left; }
 .set-theme.is-on { border-color: var(--ws-accent-brand); box-shadow: 0 0 0 1px var(--ws-accent-brand); }
@@ -994,7 +996,8 @@ select.md-input { cursor: pointer; }
 .set-dirs { margin-top: 10px; }
 .set-dirs__label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ws-text-xs); font-weight: 600; color: var(--ws-text-primary); }
 .set-dirs ul { margin: 5px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
-.set-dirs code { font-family: var(--ws-font-mono); font-size: var(--ws-text-xs); color: var(--ws-text-secondary); word-break: break-all; }
+.set-dirs li { min-width: 0; }
+.set-dirs code { font-family: var(--ws-font-mono); font-size: var(--ws-text-xs); color: var(--ws-text-secondary); word-break: break-all; overflow-wrap: anywhere; }
 .set-note--warn { color: var(--ws-status-warn); }
 .set-restart { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
 .set-restart .set-field { min-width: 160px; }
