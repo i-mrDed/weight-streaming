@@ -63,11 +63,22 @@ HF_RESOLVE_BASE = "https://huggingface.co"
 
 DEFAULT_TIMEOUT = 10.0          # seconds for HF HTTP calls
 SEARCH_CACHE_TTL = 300.0        # 5 minutes
+MODEL_CACHE_TTL = 900.0         # 15 minutes — on-demand detail changes rarely
 DEFAULT_CHUNK = 1 << 20         # 1 MiB read chunks
 _SORT_MAP = {"recent": "lastModified", "downloads": "downloads", "likes": "likes"}
 
-_QUANT_RE = re.compile(r"\b(I?Q\d+(?:_[A-Z0-9]+)*|BF16|F16|F32)\b", re.IGNORECASE)
+_QUANT_RE = re.compile(r"\b(I?Q\d+(?:_[A-Z0-9]+)*|BF16|FP16|F16|F32)\b", re.IGNORECASE)
 _SIZE_RE = re.compile(r"\b(\d+x\d+(?:\.\d+)?[Bb]|\d+(?:\.\d+)?[Bb])\b")
+# GGUF shards: "<name>-00001-of-00004.gguf" (Git LFS ~5GB/file cap splits big
+# weights). index/total are 1-based; every shard of a quant must be present
+# together to load it.
+_SHARD_RE = re.compile(r"-(\d+)-of-(\d+)\.gguf$", re.IGNORECASE)
+# cardData keys that honestly carry a context window (rare on GGUF repos).
+_CONTEXT_KEYS = (
+    "context_length", "max_context_length", "context_window",
+    "max_seq_len", "context",
+)
+_CONTEXT_TAG_RE = re.compile(r"context[-_ ]?length:(\d+)", re.IGNORECASE)
 
 
 class HubUpstreamError(Exception):
@@ -86,15 +97,50 @@ class HubValidationError(Exception):
 
 
 def parse_quant(filename: str) -> Optional[str]:
-    """Extract a GGUF quant tag (Q4_K_M, F16, IQ2_S, …) from a filename."""
+    """Extract a GGUF quant tag (Q4_K_M, F16, IQ2_S, …) from a filename.
+
+    ``fp16`` is normalised to the canonical ``F16`` (the unquantized family),
+    so an ``…-fp16.gguf`` file joins the same group — and the same honest
+    "unquantized, very large" label — as ``…-f16.gguf``.
+    """
     m = _QUANT_RE.search(filename or "")
-    return m.group(1).upper() if m else None
+    if not m:
+        return None
+    q = m.group(1).upper()
+    return "F16" if q == "FP16" else q
 
 
 def parse_size_label(text: str) -> Optional[str]:
     """Extract a parameter-size label (7B, 1.5B, 8X7B) from repo/file names."""
     m = _SIZE_RE.search(text or "")
     return m.group(1).upper() if m else None
+
+
+def parse_shard(filename: str) -> Optional[dict]:
+    """Extract shard ``{index, total}`` (1-based) from ``-NNNNN-of-MMMMM.gguf``.
+
+    Returns ``None`` for a single-file (non-sharded) weight. Honest: only the
+    trailing shard marker counts — an ``-of-`` anywhere else is ignored.
+    """
+    m = _SHARD_RE.search(filename or "")
+    if not m:
+        return None
+    return {"index": int(m.group(1)), "total": int(m.group(2))}
+
+
+def _shard_group_key(filename: str, quant: Optional[str], shard: Optional[dict]) -> tuple:
+    """Group key that keeps a single-file weight SEPARATE from a sharded set
+    that happens to share its quant + stem (some repos ship fp16 both as one
+    file and as ``-of-N`` shards). Merging them would make "download all N"
+    fetch two redundant copies — the exact confusion feedback #5 targets.
+
+    * sharded files → ``(quant, stem, total)`` so all parts of one split group;
+    * single files  → ``(quant, filename, None)`` so each is its own group.
+    """
+    if shard is not None:
+        stem = _SHARD_RE.sub(".gguf", filename)  # strip "-NNNNN-of-MMMMM"
+        return (quant, stem, shard["total"])
+    return (quant, filename, None)
 
 
 def _sanitize_filename(name: Any) -> str:
@@ -257,14 +303,19 @@ class DownloadManager:
         open_stream: Optional[Callable[[str, float], Any]] = None,
         timeout: float = DEFAULT_TIMEOUT,
         cache_ttl: float = SEARCH_CACHE_TTL,
+        model_cache_ttl: float = MODEL_CACHE_TTL,
         chunk_size: int = DEFAULT_CHUNK,
     ) -> None:
         self._fetch_json = fetch_json if fetch_json is not None else _default_fetch_json
         self._open_stream = open_stream if open_stream is not None else _default_open_stream
         self.timeout = timeout
         self.cache_ttl = cache_ttl
+        self.model_cache_ttl = model_cache_ttl
         self.chunk_size = chunk_size
-        self._cache: dict[tuple, tuple[float, list]] = {}
+        # Shared in-memory cache: search entries are keyed by a 3-tuple
+        # (q, sort, limit); detail entries by ("detail", repo_id). Both store
+        # (expiry_ts, payload). Opportunistically pruned on every read.
+        self._cache: dict[tuple, tuple[float, Any]] = {}
         self._tasks: dict[str, DownloadTask] = {}
         self._lock = threading.Lock()
         self._counter = 0
@@ -282,9 +333,13 @@ class DownloadManager:
         if cached is not None:
             return cached[1]
 
+        # expand[] asks HF to include these fields in the SAME search response
+        # (verified live: no extra request) so cards can be categorised without
+        # hitting the detail endpoint. `siblings` was already required for files.
         params = urllib.parse.urlencode(
             {"search": q or "", "filter": "gguf", "sort": sort_key,
-             "limit": limit, "expand[]": "siblings"},
+             "limit": limit, "expand[]": ["siblings", "tags", "pipeline_tag"]},
+            doseq=True,
         )
         url = f"{HF_API_BASE}?{params}"
         try:
@@ -316,15 +371,171 @@ class DownloadManager:
                         "quant": parse_quant(fname),
                         "size_label": parse_size_label(f"{repo_id} {fname}"),
                     })
+            # tags / pipeline_tag come straight from the (expanded) HF search
+            # response — pass through ONLY what HF actually returned. When HF
+            # omits them (older payloads) they stay [] / None; the frontend
+            # falls back to an honest "other" category rather than guessing.
+            raw_tags = m.get("tags")
+            tags = [str(t) for t in raw_tags] if isinstance(raw_tags, list) else []
             out.append({
                 "repo_id": repo_id,
+                "author": repo_id.split("/", 1)[0] if "/" in repo_id else None,
                 "downloads": m.get("downloads"),
                 "likes": m.get("likes"),
                 "last_modified": m.get("lastModified"),
+                "pipeline_tag": m.get("pipeline_tag"),
+                "tags": tags,
                 "gguf": True,
                 "files": files,
             })
         return out
+
+    # ── On-demand model detail (P5.1) ───────────────────────────────
+
+    def model_detail(self, repo_id: str) -> dict:
+        """Aggregate HF model detail + file tree into one structured payload.
+
+        On-demand (not on the hot search path), cached ~15 min per repo. Two
+        stdlib GETs: ``/api/models/{repo}`` (dates/tags/likes/cardData) and
+        ``/api/models/{repo}/tree/main`` (per-file byte sizes). HF failure on
+        either → ``HubUpstreamError`` (HTTP 502) — never a fake/empty 200.
+        Fields HF does not provide stay ``null`` (never filled in).
+        """
+        repo_id = (repo_id or "").strip()
+        if not repo_id:
+            raise HubValidationError("repo_id is required", status=400)
+        key = ("detail", repo_id)
+        now = time.time()
+        self._cache = {k: v for k, v in self._cache.items() if v[0] > now}
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached[1]
+
+        enc = urllib.parse.quote(repo_id, safe="/")
+        detail_url = f"{HF_API_BASE}/{enc}"
+        tree_url = f"{HF_API_BASE}/{enc}/tree/main"
+        try:
+            detail = self._fetch_json(detail_url, self.timeout)
+            tree = self._fetch_json(tree_url, self.timeout)
+        except Exception as e:  # network / HTTP / JSON errors → honest 502
+            raise HubUpstreamError(f"Hugging Face unreachable: {e}") from e
+
+        payload = self._build_detail(repo_id, detail, tree)
+        self._cache[key] = (now + self.model_cache_ttl, payload)
+        return payload
+
+    @staticmethod
+    def _build_detail(repo_id: str, detail: Any, tree: Any) -> dict:
+        """Merge the two HF responses into the documented payload shape."""
+        if not isinstance(detail, dict):
+            detail = {}
+        card = detail.get("cardData")
+        if not isinstance(card, dict):
+            card = {}
+        raw_tags = detail.get("tags")
+        tags = [str(t) for t in raw_tags] if isinstance(raw_tags, list) else []
+
+        # description: only cardData's, never invented. cardData descriptions
+        # are plain strings; anything else (or empty) → None.
+        desc = card.get("description")
+        if isinstance(desc, str):
+            desc = desc.strip() or None
+        else:
+            desc = None
+
+        files: list[dict] = []
+        non_gguf: list[dict] = []
+        for entry in tree if isinstance(tree, list) else []:
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("type") == "directory":
+                continue
+            path = entry.get("path")
+            if not isinstance(path, str) or not path:
+                continue
+            size = entry.get("size")
+            nbytes = int(size) if isinstance(size, (int, float)) and size >= 0 else None
+            if path.lower().endswith(".gguf"):
+                files.append({
+                    "filename": path,
+                    "bytes": nbytes,
+                    "quant": parse_quant(path),
+                    "size_label": parse_size_label(f"{repo_id} {path}"),
+                    "shard": parse_shard(path),
+                })
+            else:
+                non_gguf.append({
+                    "filename": path,
+                    "bytes": nbytes,
+                    "type": entry.get("type") or "file",
+                })
+
+        # Group GGUF files BY QUANT (and split-set) so a sharded quant reads
+        # as one unit, while a single-file weight sharing that quant stays a
+        # separate, independently downloadable group (see _shard_group_key).
+        groups: dict = {}
+        for f in files:
+            key = _shard_group_key(f["filename"], f["quant"], f["shard"])
+            groups.setdefault(key, []).append(f)
+        quants: list[dict] = []
+        for key, gfiles in groups.items():
+            quant = key[0]
+            sharded = key[2] is not None
+            gfiles.sort(key=lambda f: ((f["shard"] or {}).get("index", 0), f["filename"]))
+            sizes = [f["bytes"] for f in gfiles]
+            complete = all(b is not None for b in sizes)
+            quants.append({
+                "quant": quant,
+                "files": gfiles,
+                "total_bytes": sum(sizes) if complete else None,  # honest: null if any part unknown
+                "sharded": sharded,
+                "per_shard_bytes": list(sizes) if (sharded and complete) else None,
+            })
+        # Stable, readable order: known quants first (single before its sharded
+        # twin), "quant unknown" last.
+        quants.sort(key=lambda q: (
+            q["quant"] is None, q["quant"] or "", 0 if not q["sharded"] else 1,
+            q["files"][0]["filename"],
+        ))
+
+        base_model = card.get("base_model")
+        if not isinstance(base_model, (str, list)):
+            base_model = None
+
+        return {
+            "repo_id": repo_id,
+            "author": detail.get("author") or (
+                repo_id.split("/", 1)[0] if "/" in repo_id else None
+            ),
+            "published_at": detail.get("createdAt"),
+            "updated_at": detail.get("lastModified"),
+            "downloads": detail.get("downloads"),
+            "likes": detail.get("likes"),
+            "pipeline_tag": detail.get("pipeline_tag"),
+            "tags": tags,
+            "library": detail.get("library_name"),
+            "description": desc,
+            "base_model": base_model,
+            "context_length": DownloadManager._extract_context(card, tags),
+            "files": files,
+            "non_gguf": non_gguf,
+            "quants": quants,
+        }
+
+    @staticmethod
+    def _extract_context(card: dict, tags: list) -> Optional[int]:
+        """Context window ONLY if HF truly provides it (cardData/tag) — else None."""
+        for key in _CONTEXT_KEYS:
+            v = card.get(key)
+            if isinstance(v, (int, float)) and v > 0:
+                return int(v)
+            if isinstance(v, str) and v.strip().isdigit():
+                return int(v.strip())
+        for tag in tags:
+            m = _CONTEXT_TAG_RE.search(str(tag))
+            if m:
+                return int(m.group(1))
+        return None
 
     # ── Downloads ───────────────────────────────────────────────────
 

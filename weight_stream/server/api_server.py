@@ -801,6 +801,20 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             raise HTTPException(status_code=502, detail=str(e))
         return {"results": results, "count": len(results)}
 
+    @app.get("/v1/hub/model/{repo_id:path}")
+    async def hub_model(repo_id: str):
+        """
+        On-demand model detail (P5.1): aggregate HF model metadata + per-file
+        byte sizes + shard/quant grouping for one repo. Cached ~15 min. HF
+        unreachable → 502 (never a fake/empty 200). Fields HF omits are null.
+        """
+        try:
+            return hub_manager.model_detail(repo_id)
+        except HubValidationError as e:
+            raise HTTPException(status_code=e.status, detail=str(e))
+        except HubUpstreamError as e:
+            raise HTTPException(status_code=502, detail=str(e))
+
     @app.post("/v1/hub/download", status_code=202)
     async def hub_download(body: HubDownloadRequest):
         """

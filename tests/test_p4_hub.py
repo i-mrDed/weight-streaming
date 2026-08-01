@@ -22,6 +22,7 @@ from weight_stream.server.hub import (
     HubUpstreamError,
     HubValidationError,
     parse_quant,
+    parse_shard,
     parse_size_label,
     _sanitize_filename,
     _resolve_target_dir,
@@ -42,6 +43,40 @@ FAKE_SEARCH = [{
         {"rfilename": "qwen-7b-q8_0.gguf"},
     ],
 }]
+
+
+# P5.1 on-demand detail: the two HF responses the endpoint aggregates.
+FAKE_DETAIL = {
+    "id": "org/qwen-gguf",
+    "author": "org",
+    "createdAt": "2024-01-01T00:00:00.000Z",
+    "lastModified": "2024-02-01T00:00:00.000Z",
+    "downloads": 500,
+    "likes": 7,
+    "pipeline_tag": "text-generation",
+    "tags": ["gguf", "chat", "base_model:org/base", "function-calling"],
+    "cardData": {"description": "A test model", "base_model": "org/base"},
+}
+
+FAKE_TREE = [
+    {"path": "README.md", "type": "file", "size": 100},
+    {"path": "imatrix.dat", "type": "file", "size": 200},
+    # Q4_K_M split into 2 shards (2.0 GB + 1.5 GB = 3.5 GB total)
+    {"path": "qwen-7b-q4_k_m-00002-of-00002.gguf", "type": "file", "size": 1_500_000_000},
+    {"path": "qwen-7b-q4_k_m-00001-of-00002.gguf", "type": "file", "size": 2_000_000_000},
+    # Q2_K single file (0.9 GB)
+    {"path": "qwen-7b-q2_k.gguf", "type": "file", "size": 900_000_000},
+    # F16 unquantized, 4 shards
+    {"path": "qwen-7b-f16-00001-of-00004.gguf", "type": "file", "size": 3_900_000_000},
+    {"path": "qwen-7b-f16-00002-of-00004.gguf", "type": "file", "size": 3_900_000_000},
+    {"path": "qwen-7b-f16-00003-of-00004.gguf", "type": "file", "size": 3_900_000_000},
+    {"path": "qwen-7b-f16-00004-of-00004.gguf", "type": "file", "size": 3_900_000_000},
+]
+
+
+def detail_router(url, t):
+    """Fake HF: /tree/main → file tree, otherwise the model detail document."""
+    return FAKE_TREE if url.rstrip("/").endswith("/tree/main") else FAKE_DETAIL
 
 
 class FakeStream:
@@ -98,6 +133,8 @@ def _app(monkeypatch, tmp_path, fetch=None, stream=None):
     ("model-q4_0.gguf", "Q4_0"),
     ("llama-8x7b-q8_0.gguf", "Q8_0"),
     ("model-F16.gguf", "F16"),
+    ("model-fp16.gguf", "F16"),                       # fp16 → canonical F16
+    ("qwen-fp16-00001-of-00004.gguf", "F16"),
     ("mistral-bf16.gguf", "BF16"),
     ("phi.iq2_s.gguf", "IQ2_S"),
     ("no-quant-here.gguf", None),
@@ -114,6 +151,16 @@ def test_parse_quant(name, quant):
 ])
 def test_parse_size_label(text, size):
     assert parse_size_label(text) == size
+
+
+@pytest.mark.parametrize("name,shard", [
+    ("qwen-q4_0-00001-of-00002.gguf", {"index": 1, "total": 2}),
+    ("qwen-fp16-00004-of-00004.gguf", {"index": 4, "total": 4}),
+    ("qwen-q4_k_m.gguf", None),            # single file, not sharded
+    ("model-00001-of-00002.bin", None),     # not a .gguf shard marker
+])
+def test_parse_shard(name, shard):
+    assert parse_shard(name) == shard
 
 
 # ── Guard unit tests ──────────────────────────────────────────────────
@@ -389,3 +436,162 @@ def test_hub_progress_sse_streams_real_progress(models_dir, monkeypatch, tmp_pat
         assert frames[-1]["percent"] == 100.0
         assert frames[-1]["bytes_downloaded"] == 500
         assert (models_dir / "m-q4_0.gguf").read_bytes() == b"Z" * 500
+
+
+# ── P5.1 on-demand model detail ─────────────────────────────────────
+
+
+def test_model_detail_aggregates_shape_and_sizes():
+    mgr = DownloadManager(fetch_json=detail_router, open_stream=lambda u, t: FakeStream(b""))
+    d = mgr.model_detail("org/qwen-gguf")
+    # metadata straight from the HF detail doc (real values, nothing invented)
+    assert d["repo_id"] == "org/qwen-gguf"
+    assert d["author"] == "org"
+    assert d["published_at"] == "2024-01-01T00:00:00.000Z"
+    assert d["updated_at"] == "2024-02-01T00:00:00.000Z"
+    assert d["downloads"] == 500
+    assert d["likes"] == 7
+    assert d["pipeline_tag"] == "text-generation"
+    assert "function-calling" in d["tags"]
+    assert d["description"] == "A test model"
+    assert d["base_model"] == "org/base"
+    assert d["context_length"] is None  # HF gave none → honest null
+    # files carry REAL byte sizes; non-GGUF separated out
+    assert len(d["files"]) == 7  # 2 Q4_K_M shards + 1 Q2_K + 4 F16 shards
+    assert {f["filename"] for f in d["non_gguf"]} == {"README.md", "imatrix.dat"}
+
+
+def test_model_detail_shard_grouping_and_totals():
+    mgr = DownloadManager(fetch_json=detail_router, open_stream=lambda u, t: FakeStream(b""))
+    d = mgr.model_detail("org/qwen-gguf")
+    by_q = {q["quant"]: q for q in d["quants"]}
+    q4 = by_q["Q4_K_M"]
+    assert q4["sharded"] is True
+    assert q4["total_bytes"] == 3_500_000_000            # 2.0 + 1.5 GB
+    assert q4["per_shard_bytes"] == [2_000_000_000, 1_500_000_000]  # sorted by shard index
+    assert [f["filename"] for f in q4["files"]][0].endswith("00001-of-00002.gguf")
+    q2 = by_q["Q2_K"]
+    assert q2["sharded"] is False
+    assert q2["total_bytes"] == 900_000_000
+    assert q2["per_shard_bytes"] is None  # not sharded
+    assert len(by_q["F16"]["files"]) == 4
+    assert by_q["F16"]["total_bytes"] == 4 * 3_900_000_000
+
+
+def test_model_detail_single_and_sharded_same_quant_separate():
+    """A repo shipping fp16 as BOTH one file and an N-part split must yield two
+    independent F16 groups — otherwise "download all N" grabs two copies."""
+    detail = {"id": "org/m", "tags": [], "cardData": {}}
+    tree = [
+        {"path": "m-fp16.gguf", "type": "file", "size": 14_000_000_000},          # single complete file
+        {"path": "m-fp16-00001-of-00002.gguf", "type": "file", "size": 7_000_000_000},
+        {"path": "m-fp16-00002-of-00002.gguf", "type": "file", "size": 7_000_000_000},
+    ]
+    mgr = DownloadManager(
+        fetch_json=lambda u, t: tree if u.rstrip("/").endswith("/tree/main") else detail,
+        open_stream=lambda u, t: FakeStream(b""),
+    )
+    d = mgr.model_detail("org/m")
+    f16 = [q for q in d["quants"] if q["quant"] == "F16"]
+    assert len(f16) == 2  # NOT merged into one bogus group
+    single = [q for q in f16 if not q["sharded"]]
+    sharded = [q for q in f16 if q["sharded"]]
+    assert len(single) == 1 and len(sharded) == 1
+    assert single[0]["total_bytes"] == 14_000_000_000
+    assert single[0]["files"][0]["filename"] == "m-fp16.gguf"
+    assert sharded[0]["total_bytes"] == 14_000_000_000
+    assert len(sharded[0]["files"]) == 2
+    assert sharded[0]["per_shard_bytes"] == [7_000_000_000, 7_000_000_000]
+
+
+def test_model_detail_is_cached():
+    calls = {"n": 0}
+
+    def counting(url, t):
+        calls["n"] += 1
+        return detail_router(url, t)
+
+    mgr = DownloadManager(fetch_json=counting, open_stream=lambda u, t: FakeStream(b""))
+    mgr.model_detail("org/qwen-gguf")
+    mgr.model_detail("org/qwen-gguf")
+    mgr.model_detail("org/other")  # different repo → fresh fetch pair
+    assert calls["n"] == 4  # 2 repos x (detail + tree)
+
+
+def test_model_detail_upstream_failure_raises():
+    def boom(url, t):
+        raise RuntimeError("dns failure")
+
+    mgr = DownloadManager(fetch_json=boom, open_stream=lambda u, t: FakeStream(b""))
+    with pytest.raises(HubUpstreamError):
+        mgr.model_detail("org/x")
+
+
+def test_model_detail_missing_fields_are_null():
+    sparse_detail = {"id": "org/bare"}  # HF returned almost nothing
+    mgr = DownloadManager(
+        fetch_json=lambda u, t: [] if u.rstrip("/").endswith("/tree/main") else sparse_detail,
+        open_stream=lambda u, t: FakeStream(b""),
+    )
+    d = mgr.model_detail("org/bare")
+    assert d["published_at"] is None
+    assert d["updated_at"] is None
+    assert d["downloads"] is None
+    assert d["likes"] is None
+    assert d["description"] is None
+    assert d["context_length"] is None
+    assert d["files"] == []
+    assert d["quants"] == []
+
+
+def test_hub_model_endpoint_returns_payload(models_dir, monkeypatch, tmp_path):
+    app, _ = _app(monkeypatch, tmp_path, fetch=detail_router)
+    with TestClient(app) as c:
+        r = c.get("/v1/hub/model/org/qwen-gguf")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["repo_id"] == "org/qwen-gguf"
+        by_q = {q["quant"]: q for q in body["quants"]}
+        assert by_q["Q4_K_M"]["total_bytes"] == 3_500_000_000
+
+
+def test_hub_model_endpoint_502_when_upstream_down(models_dir, monkeypatch, tmp_path):
+    def boom(u, t):
+        raise RuntimeError("down")
+
+    app, _ = _app(monkeypatch, tmp_path, fetch=boom)
+    with TestClient(app) as c:
+        assert c.get("/v1/hub/model/org/x").status_code == 502
+
+
+def test_hub_model_endpoint_400_for_empty(models_dir, monkeypatch, tmp_path):
+    app, _ = _app(monkeypatch, tmp_path, fetch=detail_router)
+    with TestClient(app) as c:
+        # a path of only whitespace resolves to an empty repo_id → 400
+        assert c.get("/v1/hub/model/%20").status_code == 400
+
+
+# ── P5.1 search enrichment (pass-through of tags/pipeline_tag) ──────
+
+
+def test_search_passes_through_tags_and_pipeline_tag():
+    enriched = [{
+        "id": "org/m", "downloads": 1, "likes": None, "lastModified": None,
+        "pipeline_tag": "text-generation", "tags": ["gguf", "code"],
+        "siblings": [{"rfilename": "m-q4_0.gguf"}],
+    }]
+    res = DownloadManager(
+        fetch_json=lambda u, t: enriched, open_stream=lambda u, t: FakeStream(b"")
+    ).search("m")
+    assert res[0]["pipeline_tag"] == "text-generation"
+    assert res[0]["tags"] == ["gguf", "code"]
+    assert res[0]["author"] == "org"
+
+
+def test_search_without_tags_defaults_honest_empty():
+    # older HF payloads omit tags/pipeline_tag → [] / None, never a guess
+    res = DownloadManager(
+        fetch_json=lambda u, t: FAKE_SEARCH, open_stream=lambda u, t: FakeStream(b"")
+    ).search("q")
+    assert res[0]["tags"] == []
+    assert res[0]["pipeline_tag"] is None
