@@ -399,10 +399,10 @@ select.md-input { cursor: pointer; }
   border: 1px solid var(--ws-border-default);
   border-radius: var(--ws-radius-sm);
   background: var(--ws-surface-inset);
-  padding: 11px 12px;
+  padding: 12px 14px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
   transition: border-color var(--ws-dur-fast);
 }
 .md-result:hover { border-color: var(--ws-border-strong); }
@@ -1012,8 +1012,11 @@ select.md-input { cursor: pointer; }
 .ov-activity__model { max-width: 26ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 
 /* ── Models: P5 library view ────────────────────────────────────────── */
-.md-lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
-.md-lib__card { display: flex; flex-direction: column; gap: 8px; }
+.md-lib { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+/* 14px 16px = site card standard (cf .md-card/.hub-card). The base .card has
+   NO padding by design, so each card must set its own — the library card was
+   the last one whose folder path / buttons sat flush to the edge. */
+.md-lib__card { padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; }
 .md-lib__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .md-lib__path { font-family: var(--ws-font-mono); font-size: var(--ws-text-xs); color: var(--ws-text-secondary); word-break: break-all; }
 .md-lib__loaded { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-size: var(--ws-text-sm); }
@@ -1022,12 +1025,12 @@ select.md-input { cursor: pointer; }
 
 /* ── Hub page (P5, spec §9.6) ───────────────────────────────────────── */
 .hub-tagline { margin: 0 0 14px; max-width: 70ch; }
-.hub-search { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+.hub-search { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; padding: 14px 16px; }
 .hub-search__box { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 240px; color: var(--ws-text-tertiary); }
 .hub-search__input { flex: 1; }
 .hub-count { margin: 0 0 10px; font-size: var(--ws-text-xs); color: var(--ws-text-tertiary); }
 
-.hub-banner { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; border-left: 3px solid var(--ws-status-error); }
+.hub-banner { display: flex; gap: 12px; align-items: flex-start; margin-bottom: 14px; border-left: 3px solid var(--ws-status-error); padding: 14px 16px; }
 .hub-banner--offline { border-left-color: var(--ws-status-warn); }
 .hub-banner--offline > svg { color: var(--ws-status-warn); flex-shrink: 0; margin-top: 2px; }
 .hub-banner > svg { color: var(--ws-status-error); flex-shrink: 0; margin-top: 2px; }
