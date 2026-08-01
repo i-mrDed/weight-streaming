@@ -788,18 +788,37 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     # model dirs, written atomically, and size-guarded (see server/hub.py).
 
     @app.get("/v1/hub/search")
-    async def hub_search(q: str = "", sort: str = "downloads", limit: int = 20):
+    async def hub_search(
+        q: str = "",
+        sort: str = "downloads",
+        limit: int = 20,
+        cursor: str | None = None,
+        paginate: int = 0,
+    ):
         """
         Search Hugging Face for GGUF models (filtered to GGUF only), with
         quant + parameter-size parsed from each file's name. Results are
         cached in-memory for 5 minutes. HF unreachable → 502 (never a fake
         list). `sort` ∈ downloads|likes|recent.
+
+        Optional cursor pagination for the Hub "Latest" feed: pass
+        `paginate=1` (and optionally `cursor` for a page after the first) to
+        also receive `next_cursor` in the response, threaded through the real
+        HF `Link: rel="next"` header. The plain single-page path is unchanged.
         """
         try:
+            if paginate:
+                page = hub_manager.search_with_cursor(q=q, sort=sort, limit=limit, cursor=cursor)
+                results = page["results"]
+                return {
+                    "results": results,
+                    "count": len(results),
+                    "next_cursor": page["next_cursor"],
+                }
             results = hub_manager.search(q=q, sort=sort, limit=limit)
+            return {"results": results, "count": len(results), "next_cursor": None}
         except HubUpstreamError as e:
             raise HTTPException(status_code=502, detail=str(e))
-        return {"results": results, "count": len(results)}
 
     @app.get("/v1/hub/model/{repo_id:path}")
     async def hub_model(repo_id: str):

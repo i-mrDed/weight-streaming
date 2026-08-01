@@ -184,6 +184,43 @@ def _default_fetch_json(url: str, timeout: float) -> Any:
         return json.loads(resp.read().decode("utf-8"))
 
 
+def _default_fetch_json_headers(url: str, timeout: float) -> tuple[Any, dict]:
+    """Fetch JSON *and* the response headers (pagination reads ``Link``).
+
+    P5.2 Hub "Latest" uses Hugging Face cursor pagination: the next page
+    cursor lives in the ``Link: rel="next"`` header, so search-with-cursor
+    needs headers, unlike the plain search. Backwards-compatible — the plain
+    ``_default_fetch_json`` is untouched.
+    """
+    req = urllib.request.Request(url, headers={"User-Agent": "weight-streaming"})
+    with urllib.request.urlopen(req, timeout=timeout) as resp:
+        return json.loads(resp.read().decode("utf-8")), dict(resp.headers)
+
+
+def _parse_next_cursor(headers: Any) -> Optional[str]:
+    """Extract the ``cursor`` for the next page from a ``Link`` header.
+
+    HF returns ``<https://huggingface.co/api/models?...&cursor=XXXX>; rel="next"``
+    (comma-separated if several). Returns ``None`` when there is no next page or
+    the header is absent/misshapen — honest "no more results".
+    """
+    link = (headers or {}).get("Link") or (headers or {}).get("link")
+    if not link:
+        return None
+    for seg in link.split(","):
+        seg = seg.strip()
+        if not (seg.startswith("<")) or '"next"' not in seg and "rel=\"next\"" not in seg:
+            continue
+        end = seg.find(">")
+        if end < 0:
+            continue
+        qs = urllib.parse.urlparse(seg[1:end]).query
+        cur = urllib.parse.parse_qs(qs).get("cursor")
+        if cur:
+            return cur[0]
+    return None
+
+
 class _UrlStream:
     """Minimal wrapper giving a urllib response a stable read/content_length."""
 
@@ -305,8 +342,12 @@ class DownloadManager:
         cache_ttl: float = SEARCH_CACHE_TTL,
         model_cache_ttl: float = MODEL_CACHE_TTL,
         chunk_size: int = DEFAULT_CHUNK,
+        fetch_headers: Optional[Callable[[str, float], tuple[Any, dict]]] = None,
     ) -> None:
         self._fetch_json = fetch_json if fetch_json is not None else _default_fetch_json
+        self._fetch_json_headers = (
+            fetch_headers if fetch_headers is not None else _default_fetch_json_headers
+        )
         self._open_stream = open_stream if open_stream is not None else _default_open_stream
         self.timeout = timeout
         self.cache_ttl = cache_ttl
@@ -350,6 +391,45 @@ class DownloadManager:
         results = self._parse_search(data)
         self._cache[key] = (now + self.cache_ttl, results)
         return results
+
+    def search_with_cursor(
+        self,
+        q: str = "",
+        sort: str = "downloads",
+        limit: int = 20,
+        cursor: Optional[str] = None,
+    ) -> dict:
+        """Search with HF cursor pagination, returning ``{"results", "next_cursor"}``.
+
+        The next-page cursor comes from the ``Link`` header, so this uses the
+        header-aware fetch. ``cursor=None`` → first page. Returns
+        ``next_cursor=None`` when HF signals no further pages. Honest real
+        pagination — the ``search()`` path (single page) is left untouched.
+        """
+        sort_key = _SORT_MAP.get(sort, "downloads")
+        limit = max(1, min(int(limit), 100))
+        key = ("cursor-search", q or "", sort_key, limit, cursor or "")
+        now = time.time()
+        self._cache = {k: v for k, v in self._cache.items() if v[0] > now}
+        cached = self._cache.get(key)
+        if cached is not None:
+            return cached[1]
+
+        params = urllib.parse.urlencode(
+            {"search": q or "", "filter": "gguf", "sort": sort_key,
+             "limit": limit, "expand[]": ["siblings", "tags", "pipeline_tag"]},
+            doseq=True,
+        )
+        if cursor:
+            params += "&cursor=" + urllib.parse.quote(str(cursor), safe="")
+        url = f"{HF_API_BASE}?{params}"
+        try:
+            body, headers = self._fetch_json_headers(url, self.timeout)
+        except Exception as e:
+            raise HubUpstreamError(f"Hugging Face unreachable: {e}") from e
+        payload = {"results": self._parse_search(body), "next_cursor": _parse_next_cursor(headers)}
+        self._cache[key] = (now + self.cache_ttl, payload)
+        return payload
 
     @staticmethod
     def _parse_search(data: Any) -> list[dict]:

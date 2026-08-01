@@ -426,7 +426,7 @@ export function SettingsPage() {
       </header>
 
       {/* Appearance */}
-      <section class="md-section">
+      <section id="settings-appearance" class="md-section">
         <h2 class="md-section__title">{t('settings.appearance.title')}</h2>
         <Card class="set-card">
           <div class="set-themes">
@@ -487,7 +487,7 @@ export function SettingsPage() {
       </section>
 
       {/* Language */}
-      <section class="md-section">
+      <section id="settings-language" class="md-section">
         <h2 class="md-section__title">{t('settings.language.title')}</h2>
         <Card class="set-card">
           <div class="set-row">
@@ -524,7 +524,7 @@ export function SettingsPage() {
       </section>
 
       {/* Chat defaults */}
-      <section class="md-section">
+      <section id="settings-chatDefaults" class="md-section">
         <h2 class="md-section__title">{t('settings.chatDefaults.title')}</h2>
         <Card class="set-card">
           <p class="dialog-text--dim">{t('settings.chatDefaults.hint')}</p>
@@ -599,7 +599,7 @@ export function SettingsPage() {
       </section>
 
       {/* Server (live read + runtime edit + restart-only snippet) */}
-      <section class="md-section">
+      <section id="settings-server" class="md-section">
         <h2 class="md-section__title">{t('settings.server.title')}</h2>
         <Card class="set-card">
           <h3 class="set-subtitle">{t('settings.server.readTitle')}</h3>
@@ -864,7 +864,7 @@ export function SettingsPage() {
       </section>
 
       {/* Data */}
-      <section class="md-section">
+      <section id="settings-data" class="md-section">
         <h2 class="md-section__title">{t('settings.data.title')}</h2>
         <Card class="set-card">
           <div class="set-row">
@@ -892,7 +892,7 @@ export function SettingsPage() {
       </section>
 
       {/* Diagnostics */}
-      <section class="md-section">
+      <section id="settings-diagnostics" class="md-section">
         <h2 class="md-section__title">{t('settings.diagnostics.title')}</h2>
         <Card class="set-card">
           <div class="set-actions">
@@ -950,7 +950,7 @@ export function SettingsPage() {
       </section>
 
       {/* About */}
-      <section class="md-section">
+      <section id="settings-about" class="md-section">
         <h2 class="md-section__title">{t('settings.about.title')}</h2>
         <Card class="set-card set-about">
           <p class="set-about__tag">{t('settings.about.tagline')}</p>

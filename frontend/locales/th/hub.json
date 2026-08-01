@@ -106,5 +106,12 @@
   "downloadAll": "ดาวน์โหลดทั้ง {{n}} ไฟล์",
   "fp16Label": "ไม่ quantize — ใหญ่มาก",
   "nonGguf": "ไฟล์อื่น (ไม่ใช่ GGUF)",
-  "nonGgufNote": "ไม่ใช่โมเดล (เช่น README, imatrix) — เซิร์ฟเวอร์ดาวน์โหลดเฉพาะไฟล์ .gguf"
+  "nonGgufNote": "ไม่ใช่โมเดล (เช่น README, imatrix) — เซิร์ฟเวอร์ดาวน์โหลดเฉพาะไฟล์ .gguf",
+
+  "latestTitle": "ล่าสุดจาก Hugging Face",
+  "latestHint": "โมเดล GGUF ล่าสุดเรียงตามการอัปเดตล่าสุดจาก Hugging Face — ไม่ใช่การจัดอันดับหรือรับรองโดยทีม",
+  "latestLoading": "กำลังโหลดโมเดลล่าสุด…",
+  "pagePrev": "ก่อนหน้า",
+  "pageNext": "ถัดไป",
+  "pageCounter": "หน้า {{page}}"
 }

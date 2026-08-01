@@ -241,6 +241,33 @@ def test_search_upstream_failure_raises_honest_error():
     assert "dns failure" in str(ei.value)
 
 
+def test_search_with_cursor_parses_link_header_next_cursor():
+    FAKE_RECENT = [{"id": "org/recent", "siblings": [{"rfilename": "m-q4_k_m.gguf"}]}]
+
+    def with_link(url, t):
+        return FAKE_RECENT, {"Link": '<https://huggingface.co/api/models?a=1&cursor=abc123>; rel="next"'}
+
+    def no_link(url, t):
+        return FAKE_RECENT, {}
+
+    mgr_next = DownloadManager(
+        fetch_json=lambda u, t: FAKE_RECENT,
+        fetch_headers=with_link,
+        open_stream=lambda u, t: FakeStream(b""),
+    )
+    p1 = mgr_next.search_with_cursor("", sort="recent")
+    assert p1["results"][0]["repo_id"] == "org/recent"
+    assert p1["next_cursor"] == "abc123"
+
+    mgr_end = DownloadManager(
+        fetch_json=lambda u, t: FAKE_RECENT,
+        fetch_headers=no_link,
+        open_stream=lambda u, t: FakeStream(b""),
+    )
+    p2 = mgr_end.search_with_cursor("", sort="recent")
+    assert p2["next_cursor"] is None
+
+
 # ── Downloads (manager-level, deterministic) ──────────────────────────
 
 

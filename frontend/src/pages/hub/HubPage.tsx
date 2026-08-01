@@ -47,6 +47,7 @@ import {
   hubDownloads,
   hubModel,
   hubSearch,
+  hubSearchPage,
   modelCategory,
   modelFeatures,
   repoAuthor,
@@ -122,6 +123,15 @@ export function HubPage() {
 
   const downloadsOpen = useSignal(false) // downloads-panel drawer
 
+  // Latest GGUF feed (P5.2): a cursor-paginated "recent" browse shown on the
+  // idle Hub (before any search) so users discover new models directly.
+  // Real HF pagination — pages are cached so going back needs no refetch.
+  const latestPage = useSignal(0) // 0-based
+  const latestPages = useSignal<HubSearchResult[][]>([])
+  const latestNext = useSignal<(string | null)[]>([]) // next_cursor after each page
+  const latestLoading = useSignal(false)
+  const latestError = useSignal<SearchError | null>(null)
+
   const tasks = useSignal<Record<string, HubTask>>({})
   const taskOrder = useSignal<string[]>([])
   const loadTarget = useSignal<HubTask | null>(null) // "load now?" dialog
@@ -131,6 +141,33 @@ export function HubPage() {
   const subsRef = useRef<Map<string, () => void>>(new Map())
   const toastIds = useRef<Map<string, number>>(new Map())
   const fallbackTimers = useRef<Map<string, number>>(new Map())
+
+  const loadLatest = async (page: number): Promise<void> => {
+    if (latestPages.value[page]) {
+      latestPage.value = page
+      return
+    }
+    latestLoading.value = true
+    latestError.value = null
+    try {
+      const cursor = page === 0 ? null : latestNext.value[page - 1]
+      const res = await hubSearchPage('recent', cursor)
+      const pages = [...latestPages.value]
+      pages[page] = res.results
+      latestPages.value = pages
+      const nxt = [...latestNext.value]
+      nxt[page] = res.next_cursor ?? null
+      latestNext.value = nxt
+      latestPage.value = page
+    } catch (e) {
+      latestError.value = {
+        status: e instanceof ApiError ? e.status : undefined,
+        detail: e instanceof ApiError && e.detail ? e.detail : String(e),
+      }
+    } finally {
+      latestLoading.value = false
+    }
+  }
 
   const runSearch = async (q: string, s: HubSort) => {
     const seq = ++seqRef.current
@@ -183,6 +220,8 @@ export function HubPage() {
     if (focus) {
       hubFocusQuery.value = ''
       query.value = focus // the debounce effect above will fire the search
+    } else {
+      void loadLatest(0) // idle browse: surface the newest GGUF models
     }
     return () => {
       subsRef.current.forEach((stop) => stop())
@@ -524,6 +563,69 @@ export function HubPage() {
             </section>
           ))}
         </div>
+      ) : null}
+
+      {/* ── Latest GGUF feed (idle browse: newest models first) ── */}
+      {!searched.value && !searchError.value ? (
+        <section class="hub-latest">
+          <h2 class="hub-latest__title">
+            {t('hub.latestTitle')}
+            <Tip label={t('hub.latestHint')} />
+          </h2>
+          {latestError.value ? (
+            <Card class="hub-banner">
+              <XCircle size={18} aria-hidden="true" />
+              <div class="hub-banner__text">
+                <strong>{t('hub.errorTitle')}</strong>
+                <p>{latestError.value.detail}</p>
+              </div>
+              <Button variant="soft" size="sm" onClick={() => void loadLatest(latestPage.value)}>
+                <RefreshCw size={13} aria-hidden="true" /> {t('common.retry')}
+              </Button>
+            </Card>
+          ) : null}
+          {latestLoading.value && !latestPages.value[latestPage.value] ? (
+            <div class="hub-latest__loading">
+              <span class="btn__spinner" aria-hidden="true" />
+              <span class="dialog-text--dim">{t('hub.latestLoading')}</span>
+            </div>
+          ) : null}
+          {latestPages.value[latestPage.value]?.length ? (
+            <>
+              <div class="hub-grid">
+                {latestPages.value[latestPage.value].map((r) => (
+                  <HubCard
+                    key={r.repo_id}
+                    r={r}
+                    onViewDetail={() => openDetail(r.repo_id)}
+                    onViewFiles={() => openFiles(r.repo_id)}
+                  />
+                ))}
+              </div>
+              <div class="hub-latest__pager">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={latestPage.value === 0 || latestLoading.value}
+                  onClick={() => void loadLatest(latestPage.value - 1)}
+                >
+                  {t('hub.pagePrev')}
+                </Button>
+                <span class="hub-latest__page tnum">
+                  {t('hub.pageCounter', { page: latestPage.value + 1 })}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  disabled={!latestNext.value[latestPage.value] || latestLoading.value}
+                  onClick={() => void loadLatest(latestPage.value + 1)}
+                >
+                  {t('hub.pageNext')}
+                </Button>
+              </div>
+            </>
+          ) : null}
+        </section>
       ) : null}
 
       {/* ── Results ────────────────────────────────────────────── */}

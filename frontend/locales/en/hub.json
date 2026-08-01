@@ -106,5 +106,12 @@
   "downloadAll": "Download all {{n}}",
   "fp16Label": "unquantized — very large",
   "nonGguf": "Other files (not GGUF)",
-  "nonGgufNote": "These are not models (e.g. README, imatrix) — the server only downloads .gguf files."
+  "nonGgufNote": "These are not models (e.g. README, imatrix) — the server only downloads .gguf files.",
+
+  "latestTitle": "Latest from Hugging Face",
+  "latestHint": "Newest GGUF models by last update, straight from Hugging Face — not ranked or endorsed by us.",
+  "latestLoading": "Loading latest models…",
+  "pagePrev": "Previous",
+  "pageNext": "Next",
+  "pageCounter": "Page {{page}}"
 }

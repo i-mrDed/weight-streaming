@@ -346,6 +346,8 @@ select.md-input { cursor: pointer; }
    MODELS
    ═══════════════════════════════════════════════════════════════ */
 .md-section { margin-bottom: 24px; }
+/* Settings sidebar submenu anchors (P5.2): breathing room on scrollIntoView */
+.md-section[id^='settings-'] { scroll-margin-top: 20px; }
 .md-section__title {
   display: flex;
   align-items: center;
@@ -1046,6 +1048,14 @@ select.md-input { cursor: pointer; }
 .hub-shelf__chips { display: flex; gap: 8px; flex-wrap: wrap; }
 .hub-chip { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: var(--ws-radius-full); border: 1px solid var(--ws-border-default); background: var(--ws-surface-inset); color: var(--ws-text-secondary); font-size: var(--ws-text-sm); cursor: pointer; transition: border-color var(--ws-dur-fast, 120ms) var(--ws-ease-out); }
 .hub-chip:hover { border-color: var(--ws-accent-brand); color: var(--ws-text-primary); }
+
+/* Hub — Latest GGUF feed (P5.2, spec §9.6): newest-models browse, cursor-paged */
+.hub-latest { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--ws-border-subtle); padding-top: 16px; margin-top: 4px; }
+.hub-latest__title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--ws-text-base); font-weight: 700; color: var(--ws-text-primary); }
+.hub-latest__loading { display: flex; align-items: center; gap: 9px; padding: 22px 8px; }
+.hub-latest__loading .btn__spinner { width: 16px; height: 16px; }
+.hub-latest__pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 2px; }
+.hub-latest__page { font-size: var(--ws-text-xs); color: var(--ws-text-secondary); }
 
 .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
 

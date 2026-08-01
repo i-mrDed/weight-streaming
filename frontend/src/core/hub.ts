@@ -91,6 +91,8 @@ export function hubModel(repoId: string): Promise<HubModelDetail> {
 export interface HubSearchResponse {
   results: HubSearchResult[]
   count: number
+  /** HF cursor for the next page; null when unavailable / last page. */
+  next_cursor: string | null
 }
 
 export type HubTaskStatus = 'queued' | 'downloading' | 'done' | 'failed' | 'cancelled'
@@ -120,6 +122,22 @@ export type HubSort = 'downloads' | 'likes' | 'recent'
 export function hubSearch(q: string, sort: HubSort, limit = 20): Promise<HubSearchResponse> {
   const qs = new URLSearchParams({ q, sort, limit: String(limit) })
   // HF can be slow; the server itself times out at 10s.
+  return apiJSON<HubSearchResponse>(`/v1/hub/search?${qs}`, undefined, { timeoutMs: 20_000 })
+}
+
+/** Paged search used by the Hub "Latest" feed: asks the server for real HF
+    cursor pagination (paginate=1) and returns the ``next_cursor`` too. */
+export function hubSearchPage(
+  sort: HubSort,
+  cursor: string | null,
+  limit = 20,
+): Promise<HubSearchResponse> {
+  const qs = new URLSearchParams({
+    sort,
+    limit: String(limit),
+    paginate: '1',
+  })
+  if (cursor) qs.set('cursor', cursor)
   return apiJSON<HubSearchResponse>(`/v1/hub/search?${qs}`, undefined, { timeoutMs: 20_000 })
 }
 
