@@ -664,9 +664,13 @@ function HubCard({ r, onViewFiles }: { r: HubSearchResult; onViewFiles: () => vo
         <span title={t('hub.downloads')}>
           <Download size={12} aria-hidden="true" /> {fmtNumber(r.downloads ?? 0)}
         </span>
-        <span title={t('hub.likes')}>
-          <Heart size={12} aria-hidden="true" /> {fmtNumber(r.likes ?? 0)}
-        </span>
+        {/* honest telemetry: the live HF search returns downloads but may omit
+            likes entirely — hide the stat instead of showing a fabricated 0 */}
+        {r.likes != null ? (
+          <span title={t('hub.likes')}>
+            <Heart size={12} aria-hidden="true" /> {fmtNumber(r.likes)}
+          </span>
+        ) : null}
         <span title={t('hub.filesCount', { count: r.files.length })}>
           <FileBox size={12} aria-hidden="true" /> {r.files.length}
         </span>
