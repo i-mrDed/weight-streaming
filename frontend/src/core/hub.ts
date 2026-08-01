@@ -15,11 +15,77 @@ export interface HubFile {
 
 export interface HubSearchResult {
   repo_id: string
+  /** author (namespace) the server derived from repo_id; null for bare names */
+  author: string | null
   downloads: number | null
   likes: number | null
   last_modified: string | null
+  /** passed through from the (expanded) HF search response; null when absent */
+  pipeline_tag: string | null
+  /** passed through from the HF search response; [] when absent */
+  tags: string[]
   gguf: true
   files: HubFile[]
+}
+
+/* ── On-demand model detail (GET /v1/hub/model/{repo}) ──────────────
+   Every field mirrors weight_stream/server/hub.py::_build_detail. Fields HF
+   does not provide are null — this client NEVER fills them in (ADR-003). */
+
+export interface HubShard {
+  /** 1-based position within the quant's shard set */
+  index: number
+  total: number
+}
+
+export interface HubDetailFile {
+  filename: string
+  /** real byte size from HF tree/main; null if HF omitted it */
+  bytes: number | null
+  quant: string | null
+  size_label: string | null
+  shard: HubShard | null
+}
+
+export interface HubNonGguf {
+  filename: string
+  bytes: number | null
+  type: string
+}
+
+export interface HubQuantGroup {
+  quant: string | null
+  files: HubDetailFile[]
+  /** sum of the shard bytes; null if any part's size is unknown */
+  total_bytes: number | null
+  sharded: boolean
+  /** ordered per-shard byte sizes; null when not sharded / incomplete */
+  per_shard_bytes: number[] | null
+}
+
+export interface HubModelDetail {
+  repo_id: string
+  author: string | null
+  published_at: string | null
+  updated_at: string | null
+  downloads: number | null
+  likes: number | null
+  pipeline_tag: string | null
+  tags: string[]
+  library: string | null
+  description: string | null
+  base_model: string | string[] | null
+  /** only ever a real value from cardData/tags; otherwise null */
+  context_length: number | null
+  files: HubDetailFile[]
+  non_gguf: HubNonGguf[]
+  quants: HubQuantGroup[]
+}
+
+export function hubModel(repoId: string): Promise<HubModelDetail> {
+  // repo_id is server-sourced → encode each path segment, never interpolate raw
+  const enc = repoId.split('/').map(encodeURIComponent).join('/')
+  return apiJSON<HubModelDetail>(`/v1/hub/model/${enc}`, undefined, { timeoutMs: 20_000 })
 }
 
 export interface HubSearchResponse {
@@ -171,4 +237,70 @@ export function repoName(repoId: string): string {
     each path segment is URI-encoded; never interpolated raw). */
 export function hfRepoUrl(repoId: string): string {
   return `https://huggingface.co/${repoId.split('/').map(encodeURIComponent).join('/')}`
+}
+
+/* ── Category + feature derivation (pure; from REAL HF pipeline_tag/tags) ──
+   Honest: when HF gives no usable signal we return the neutral "other"
+   category and zero feature badges — we never invent a category. */
+
+export type HubCategoryId =
+  | 'embedding'
+  | 'vision'
+  | 'audio'
+  | 'code'
+  | 'moe'
+  | 'chat'
+  | 'other'
+
+export interface HubCategory {
+  id: HubCategoryId
+  emoji: string
+  labelKey: string
+}
+
+/** Unquantized weight families — real, but usually far too large to want. */
+const UNQUANTIZED = new Set(['F16', 'BF16', 'F32'])
+export function isUnquantized(quant: string | null): boolean {
+  return quant != null && UNQUANTIZED.has(quant.toUpperCase())
+}
+
+export function modelCategory(
+  pipelineTag: string | null | undefined,
+  tags: string[] | null | undefined,
+): HubCategory {
+  const pt = (pipelineTag || '').toLowerCase()
+  const t = (tags || []).map((x) => String(x).toLowerCase())
+  const has = (...needles: string[]) => t.some((tag) => needles.some((n) => tag.includes(n)))
+  if (pt.includes('embedding') || pt.includes('feature-extraction') || pt.includes('sentence-similarity') || has('embedding', 'embeddings')) {
+    return { id: 'embedding', emoji: '🔢', labelKey: 'hub.catEmbedding' }
+  }
+  if (pt.includes('image') || pt.includes('vision') || has('vision', 'image-to-text', 'multimodal')) {
+    return { id: 'vision', emoji: '👁️', labelKey: 'hub.catVision' }
+  }
+  if (pt.includes('audio') || pt.includes('speech') || has('audio', 'tts', 'asr', 'speech')) {
+    return { id: 'audio', emoji: '🎧', labelKey: 'hub.catAudio' }
+  }
+  if (pt.includes('code') || has('code')) {
+    return { id: 'code', emoji: '💻', labelKey: 'hub.catCode' }
+  }
+  if (has('moe', 'mixture-of-experts')) {
+    return { id: 'moe', emoji: '🧩', labelKey: 'hub.catMoe' }
+  }
+  if (pt.includes('text-generation') || pt.includes('conversational') || has('chat', 'conversational')) {
+    return { id: 'chat', emoji: '💬', labelKey: 'hub.catChat' }
+  }
+  return { id: 'other', emoji: '🤖', labelKey: 'hub.catOther' }
+}
+
+/** Relevant, decision-useful feature hints derived from tags (max 4). */
+export function modelFeatures(tags: string[] | null | undefined): string[] {
+  const t = (tags || []).map((x) => String(x).toLowerCase())
+  const out: string[] = []
+  if (t.some((x) => x.includes('function-calling') || x.includes('function_calling') || x.includes('tool'))) {
+    out.push('hub.featTools')
+  }
+  if (t.some((x) => x.includes('vision') || x.includes('image'))) out.push('hub.featVision')
+  if (t.some((x) => x === 'th' || x.includes('thai'))) out.push('hub.featThai')
+  if (t.some((x) => x.includes('moe') || x.includes('mixture-of-experts'))) out.push('hub.featMoe')
+  return out.slice(0, 4)
 }

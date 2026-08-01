@@ -2,16 +2,20 @@
    one-click download with REAL progress (SSE), downloads panel, curated
    client-side shelves, target-dir selector and an honest offline banner.
 
+   P5.1 (user-feedback round): roomier result cards with a colour+emoji
+   category chip and tag badges; an on-demand Model detail drawer (quick
+   guide + full details, RAM-per-quant computed from REAL bytes); and a
+   shard-aware, quant-grouped file picker that shows real MB/GB per file.
+
    Honest telemetry (ADR-003): every byte/percent/speed/ETA shown here comes
    straight from the server's SSE frames — this page never estimates,
    smooths, or fabricates. HF unreachable → a truthful banner, never a fake
-   list. Capabilities the server does not have (resume, file deletion) carry
-   truthful tooltips.
+   list. Fields HF does not provide render as n/a, never invented.
 
-   Drawer direction (cross-phase rule 6 + Drawer.tsx CONVENTION): the "view
-   files" and "downloads" triggers sit in the RIGHT-hand area of their cards /
-   the page header, so both drawers slide in from the RIGHT (explicit `side`,
-   not by accident of the default). */
+   Drawer direction (cross-phase rule 6 + Drawer.tsx CONVENTION): the detail
+   and file triggers sit in the RIGHT-hand area of their cards, so both
+   drawers slide in from the RIGHT (explicit `side`, not by accident of the
+   default). */
 import { useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import {
@@ -24,6 +28,7 @@ import {
   HardDriveDownload,
   Heart,
   Inbox,
+  Info,
   RefreshCw,
   Search,
   WifiOff,
@@ -40,10 +45,15 @@ import {
   hubCancel,
   hubDownload,
   hubDownloads,
+  hubModel,
   hubSearch,
+  modelCategory,
+  modelFeatures,
   repoAuthor,
   repoName,
   subscribeHubProgress,
+  type HubDetailFile,
+  type HubModelDetail,
   type HubSearchResult,
   type HubSort,
   type HubTask,
@@ -61,6 +71,8 @@ import { Tip } from '@/components/Tip'
 import { Segmented } from '@/components/Segmented'
 import { armDismiss, toast, updateToast } from '@/components/Toast'
 import { fmtNumber, fmtRelative, locale, t } from '@/i18n'
+import { ModelDetailDrawer, detailErrorMessage } from './ModelDetailDrawer'
+import { FilesDrawer } from './FilesDrawer'
 
 /* ── Curated shelves: a small hand-maintained list of SEARCH TERMS.
       Nothing here is fetched, ranked, or endorsed — clicking an item just
@@ -82,6 +94,12 @@ interface SearchError {
   detail: string
 }
 
+interface DetailError {
+  repo: string
+  status?: number
+  detail: string
+}
+
 export function HubPage() {
   locale.value // subscribe: relative times re-render on language switch
 
@@ -95,7 +113,13 @@ export function HubPage() {
   const cfg = useSignal<ServerConfigResponse | null>(null)
   const targetDir = useSignal('') // '' = server default (first allowed dir)
 
-  const filesFor = useSignal<HubSearchResult | null>(null) // file-picker drawer
+  const detailRepo = useSignal<string | null>(null) // model-detail drawer
+  const filesRepo = useSignal<string | null>(null) // file-picker drawer
+  // on-demand detail cache (server also caches ~15 min — repeat opens are instant)
+  const detailCache = useSignal<Record<string, HubModelDetail>>({})
+  const detailLoading = useSignal<string | null>(null)
+  const detailError = useSignal<DetailError | null>(null)
+
   const downloadsOpen = useSignal(false) // downloads-panel drawer
 
   const tasks = useSignal<Record<string, HubTask>>({})
@@ -309,6 +333,42 @@ export function HubPage() {
     }
   }
 
+  // Queue every shard of a quant one after another through the same
+  // download+SSE flow (the server has no batch endpoint — honest and simple).
+  const downloadGroup = async (repoId: string, files: HubDetailFile[]) => {
+    for (const f of files) {
+      // eslint-disable-next-line no-await-in-loop
+      await startDownload(repoId, f.filename)
+    }
+  }
+
+  /* ── On-demand model detail (lazy, cached) ─────────────────────── */
+
+  const ensureDetail = async (repoId: string) => {
+    if (detailCache.value[repoId]) return
+    if (detailLoading.value === repoId) return
+    detailLoading.value = repoId
+    detailError.value = null
+    try {
+      const d = await hubModel(repoId)
+      detailCache.value = { ...detailCache.value, [repoId]: d }
+    } catch (e) {
+      detailError.value = { repo: repoId, ...detailErrorMessage(e) }
+    } finally {
+      if (detailLoading.value === repoId) detailLoading.value = null
+    }
+  }
+
+  const openDetail = (repoId: string) => {
+    detailRepo.value = repoId
+    void ensureDetail(repoId)
+  }
+
+  const openFiles = (repoId: string) => {
+    filesRepo.value = repoId
+    void ensureDetail(repoId)
+  }
+
   const doCancel = async (taskId: string) => {
     try {
       const task = await hubCancel(taskId)
@@ -364,6 +424,12 @@ export function HubPage() {
     .map((id) => tasks.value[id])
     .filter((tk): tk is HubTask => !!tk)
   const liveCount = activeTasks.filter((tk) => !HUB_TERMINAL.includes(tk.status)).length
+
+  // detail-drawer view state
+  const dRepo = detailRepo.value
+  const fRepo = filesRepo.value
+  const detailErrFor = (repo: string | null): { status?: number; detail: string } | null =>
+    detailError.value && detailError.value.repo === repo ? detailError.value : null
 
   return (
     <div class="page">
@@ -471,7 +537,12 @@ export function HubPage() {
             <p class="hub-count tnum">{t('hub.resultsCount', { count: results.value.length })}</p>
             <div class="hub-grid">
               {results.value.map((r) => (
-                <HubCard key={r.repo_id} r={r} onViewFiles={() => (filesFor.value = r)} />
+                <HubCard
+                  key={r.repo_id}
+                  r={r}
+                  onViewDetail={() => openDetail(r.repo_id)}
+                  onViewFiles={() => openFiles(r.repo_id)}
+                />
               ))}
             </div>
           </>
@@ -482,61 +553,35 @@ export function HubPage() {
         <Tip label={t('hub.authNote')} /> {t('hub.authNote')}
       </p>
 
-      {/* ── File picker drawer (trigger = right side of a card → right sheet) ── */}
-      <Drawer open={filesFor.value !== null} onClose={() => (filesFor.value = null)} title={t('hub.filesTitle')} side="right">
-        {filesFor.value ? (
-          <div class="hub-files">
-            <p class="dialog-text--dim">{t('hub.filesHint')}</p>
-            <p class="hub-files__repo">
-              <a href={hfRepoUrl(filesFor.value.repo_id)} target="_blank" rel="noopener noreferrer">
-                {filesFor.value.repo_id} <ExternalLink size={11} aria-hidden="true" />
-              </a>
-            </p>
-            <label class="set-field hub-files__dir">
-              <span>
-                {t('hub.targetDir')} <Tip label={t('hub.targetDirHint')} />
-              </span>
-              <select
-                class="md-input md-select"
-                value={targetDir.value}
-                onChange={(e) => (targetDir.value = (e.target as HTMLSelectElement).value)}
-              >
-                <option value="">{t('hub.targetDefault')}</option>
-                {(cfg.value?.models_dirs ?? []).map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <Button variant="ghost" size="sm" onClick={onBrowseTarget}>
-              <FolderOpen size={13} aria-hidden="true" /> {t('hub.targetBrowse')}
-            </Button>
-            <ul class="hub-filelist">
-              {filesFor.value.files.map((f) => (
-                <li key={f.filename} class="hub-file">
-                  <div class="hub-file__meta">
-                    <span class="hub-file__name" title={f.filename}>
-                      {f.filename}
-                    </span>
-                    <span class="hub-file__badges">
-                      {f.quant ? <Badge tone="brand">{f.quant}</Badge> : <Badge tone="neutral">{t('hub.noQuant')}</Badge>}
-                      {f.size_label ? <Badge tone="neutral">{f.size_label}</Badge> : null}
-                    </span>
-                  </div>
-                  <Button
-                    variant="soft"
-                    size="sm"
-                    onClick={() => void startDownload(filesFor.value!.repo_id, f.filename)}
-                  >
-                    <Download size={13} aria-hidden="true" /> {t('hub.download')}
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </Drawer>
+      {/* ── Model detail drawer (trigger = card right → right sheet) ── */}
+      <ModelDetailDrawer
+        open={dRepo !== null}
+        onClose={() => (detailRepo.value = null)}
+        detail={dRepo ? detailCache.value[dRepo] ?? null : null}
+        loading={detailLoading.value === dRepo && dRepo !== null}
+        error={detailErrFor(dRepo)}
+        onRetry={() => {
+          if (dRepo) void ensureDetail(dRepo)
+        }}
+      />
+
+      {/* ── File picker drawer (trigger = card right → right sheet) ── */}
+      <FilesDrawer
+        open={fRepo !== null}
+        onClose={() => (filesRepo.value = null)}
+        detail={fRepo ? detailCache.value[fRepo] ?? null : null}
+        loading={detailLoading.value === fRepo && fRepo !== null}
+        error={detailErrFor(fRepo)}
+        onRetry={() => {
+          if (fRepo) void ensureDetail(fRepo)
+        }}
+        modelsDirs={cfg.value?.models_dirs ?? []}
+        targetDir={targetDir.value}
+        onTargetDir={(v) => (targetDir.value = v)}
+        onBrowse={() => void onBrowseTarget()}
+        onDownloadFile={(repo, file) => void startDownload(repo, file)}
+        onDownloadGroup={(repo, files) => void downloadGroup(repo, files)}
+      />
 
       {/* ── Downloads panel drawer (trigger = page header RIGHT → right sheet) ── */}
       <Drawer open={downloadsOpen.value} onClose={() => (downloadsOpen.value = false)} title={t('hub.dlTitle')} side="right">
@@ -629,17 +674,27 @@ export function HubPage() {
   )
 }
 
-function HubCard({ r, onViewFiles }: { r: HubSearchResult; onViewFiles: () => void }) {
+function HubCard({
+  r,
+  onViewDetail,
+  onViewFiles,
+}: {
+  r: HubSearchResult
+  onViewDetail: () => void
+  onViewFiles: () => void
+}) {
   const quants = Array.from(new Set(r.files.map((f) => f.quant).filter((q): q is string => !!q)))
   const shown = quants.slice(0, 4)
-  const author = repoAuthor(r.repo_id)
+  const author = r.author ?? repoAuthor(r.repo_id)
   const updated = r.last_modified ? new Date(r.last_modified).getTime() : null
+  const cat = modelCategory(r.pipeline_tag, r.tags)
+  const features = modelFeatures(r.tags)
   return (
     <Card hoverable class="hub-card">
       <div class="hub-card__head">
-        <span class="hub-card__name" title={r.repo_id}>
+        <button class="hub-card__name" onClick={onViewDetail} title={t('hub.detailTitle')}>
           {repoName(r.repo_id)}
-        </span>
+        </button>
         <a
           class="hub-card__ext"
           href={hfRepoUrl(r.repo_id)}
@@ -650,7 +705,12 @@ function HubCard({ r, onViewFiles }: { r: HubSearchResult; onViewFiles: () => vo
           <ExternalLink size={13} aria-hidden="true" />
         </a>
       </div>
-      {author ? <div class="hub-card__author dialog-text--dim">{author}</div> : null}
+      <div class="hub-card__sub">
+        <span class={`hub-cat hub-cat--${cat.id}`} title={t(cat.labelKey)}>
+          <span aria-hidden="true">{cat.emoji}</span> {t(cat.labelKey)}
+        </span>
+        {author ? <span class="hub-card__author dialog-text--dim">{author}</span> : null}
+      </div>
       <div class="hub-card__badges">
         {shown.map((q) => (
           <Badge key={q} tone="brand">
@@ -660,6 +720,15 @@ function HubCard({ r, onViewFiles }: { r: HubSearchResult; onViewFiles: () => vo
         {quants.length > shown.length ? <Badge tone="neutral">+{quants.length - shown.length}</Badge> : null}
         {r.files[0]?.size_label ? <Badge tone="neutral">{r.files[0].size_label}</Badge> : null}
       </div>
+      {features.length > 0 ? (
+        <div class="hub-card__feats">
+          {features.map((key) => (
+            <span key={key} class="hub-card__feat">
+              {t(key)}
+            </span>
+          ))}
+        </div>
+      ) : null}
       <div class="hub-card__stats tnum">
         <span title={t('hub.downloads')}>
           <Download size={12} aria-hidden="true" /> {fmtNumber(r.downloads ?? 0)}
@@ -678,9 +747,12 @@ function HubCard({ r, onViewFiles }: { r: HubSearchResult; onViewFiles: () => vo
           <span class="hub-card__updated">{t('hub.updated', { when: fmtRelative(updated) })}</span>
         ) : null}
       </div>
-      {/* trigger lives on the RIGHT edge of the card → the drawer slides
+      {/* triggers live on the RIGHT edge of the card → the drawers slide
           in from the right (Drawer CONVENTION, cross-phase rule 6) */}
       <div class="hub-card__actions">
+        <Button variant="ghost" size="sm" onClick={onViewDetail}>
+          <Info size={13} aria-hidden="true" /> {t('hub.details')}
+        </Button>
         <Button variant="soft" size="sm" onClick={onViewFiles}>
           <DownloadCloud size={13} aria-hidden="true" /> {t('hub.viewFiles')}
         </Button>
