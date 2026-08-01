@@ -961,6 +961,11 @@ select.md-input { cursor: pointer; }
 
 /* Settings */
 .set-card { padding: 16px; }
+/* P5.3c: the server setting is now 3 sub-cards in one section — stack them
+   with breathing room so each read/write/restart intent reads as its own unit. */
+.set-card + .set-card { margin-top: 14px; }
+.set-card__title { margin: 0 0 2px; font-size: var(--ws-text-base); font-weight: 700; color: var(--ws-text-primary); }
+.set-card__subtitle { margin: 14px 0 0; } /* inner section header inside Card C */
 .set-subtitle { margin: 4px 0 0; font-size: var(--ws-text-sm); font-weight: 700; color: var(--ws-text-primary); }
 .set-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
 .set-row > span { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ws-text-sm); color: var(--ws-text-primary); }
@@ -990,14 +995,31 @@ select.md-input { cursor: pointer; }
 
 /* ── Settings: P5 live config (GET/PATCH /v1/config) + log tail ─────── */
 .set-cfghead { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
-.set-dl--cfg { grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); margin-top: 8px; }
+/* P5.3c: effective config packs into a 2-column grid (~7 rows instead of 13).
+   min-width:0 + overflow-wrap:anywhere on cells/kv keep long labels from
+   pushing the card wide (see pitfalls/css-grid-definition-overflow). */
+.set-dl--cfg { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 8px; }
+@media (max-width: 640px) {
+  .set-dl--cfg { grid-template-columns: 1fr; }
+}
 .set-dl dt { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .set-src { vertical-align: middle; }
+/* subtle per-key source dot — the legend at the head of "Effective configuration"
+   maps each colour to its source; the dot's title/aria-label carry the full tip. */
+.set-src-dot { flex-shrink: 0; width: 8px; height: 8px; border-radius: 50%; }
+.set-src-dot.is-ok { background: var(--ws-status-ok); }
+.set-src-dot.is-info { background: var(--ws-status-info); }
+.set-src-dot.is-neutral { background: var(--ws-text-tertiary); }
+.set-cfglegend { margin: 8px 0 0; font-size: var(--ws-text-xs); color: var(--ws-text-tertiary); line-height: 1.5; }
 .set-dirs { margin-top: 10px; }
 .set-dirs__label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--ws-text-xs); font-weight: 600; color: var(--ws-text-primary); }
 .set-dirs ul { margin: 5px 0 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 3px; }
 .set-dirs li { min-width: 0; }
 .set-dirs code { font-family: var(--ws-font-mono); font-size: var(--ws-text-xs); color: var(--ws-text-secondary); word-break: break-all; overflow-wrap: anywhere; }
+/* collapse/expand for long model folder lists (P5.3c) */
+.set-dirs__toggle { display: inline-block; border: none; background: none; padding: 0; margin-top: 6px; font-size: var(--ws-text-xs); font-weight: 600; color: var(--ws-text-link); cursor: pointer; }
+.set-dirs__toggle:hover { text-decoration: underline; }
+.set-dirs__toggle:focus-visible { outline: 2px solid var(--ws-accent-brand); outline-offset: 2px; border-radius: 2px; }
 .set-note--warn { color: var(--ws-status-warn); }
 .set-restart { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; }
 .set-restart .set-field { min-width: 160px; }

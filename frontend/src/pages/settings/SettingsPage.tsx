@@ -144,6 +144,23 @@ const RESTART_KEYS = [
   'request_queue_depth',
 ] as const
 
+// "Model folders" show the first N, then a "Show {N} folders" toggle (P5.3c) —
+// Windows paths are long, so we do not cram every one into the card.
+const DIRS_COLLAPSED = 3
+
+// Tone + tooltip for a config key's true source dot (legend lives in the head
+// of Effective configuration; the dot keeps per-row honesty without a per-row
+// badge). Sourced from the real GET /v1/config `source` field.
+function srcDotTone(source: string): { tone: 'ok' | 'info' | 'neutral'; tip: string } {
+  if (source === 'runtime') {
+    return { tone: 'ok', tip: 'settings.server.srcRuntimeTip' }
+  }
+  if (source === 'env') {
+    return { tone: 'info', tip: 'settings.server.srcEnvTip' }
+  }
+  return { tone: 'neutral', tip: 'settings.server.srcDefaultTip' }
+}
+
 function fmtCfgValue(v: unknown): string {
   if (typeof v === 'boolean') return v ? 'true' : 'false'
   if (v == null) return '–'
@@ -188,6 +205,7 @@ export function SettingsPage() {
   // server config (P4 GET/PATCH /v1/config — wired in P5)
   const serverCfg = useSignal<ServerConfigResponse | null>(null)
   const cfgLoading = useSignal(false)
+  const dirsOpen = useSignal(false) // models_dirs collapse/expand (P5.3c)
   const rtIdle = useSignal('0') // idle_unload_timeout draft
   const rtMax = useSignal('4') // max_loaded_models draft
   const rtBuf = useSignal('64') // default_buffer_mb draft (gated)
@@ -598,11 +616,16 @@ export function SettingsPage() {
         </Card>
       </section>
 
-      {/* Server (live read + runtime edit + restart-only snippet) */}
+      {/* Server — three sub-cards, ONE clear intent each (P5.3c).
+           A · Status & Config  (read)      — live values + effective config + dirs
+           B · Live runtime edits (write)   — safe + gated form, applies live
+           C · For next start (restart)     — restart-only key→snippet + generator */}
       <section id="settings-server" class="md-section">
         <h2 class="md-section__title">{t('settings.server.title')}</h2>
+
+        {/* Card A · Status & Config (read-only) */}
         <Card class="set-card">
-          <h3 class="set-subtitle">{t('settings.server.readTitle')}</h3>
+          <h3 class="set-card__title">{t('settings.server.cardStatus')}</h3>
           <p class="dialog-text--dim">{t('settings.server.readHint')}</p>
           <dl class="set-dl">
             <div>
@@ -624,11 +647,12 @@ export function SettingsPage() {
               <dd class="tnum">{dbgLoading.value ? t('common.loading') : accurateVersion}</dd>
             </div>
           </dl>
-          <p class="set-note">
-            <Tip label={t('settings.server.healthVersionNote')} /> {t('settings.server.healthVersionNote')}
-          </p>
+          {/* single note — rendered once (P5.3c removed the duplicated Tip+text) */}
+          <p class="set-note">{t('settings.server.healthVersionNote')}</p>
 
-          {/* per-key live values with their TRUE source (GET /v1/config) */}
+          {/* per-key live values with their TRUE source (GET /v1/config).
+              One legend explains the sources; each row keeps a subtle per-key
+              dot (with tooltip) instead of a bulky per-row badge. */}
           <div class="set-cfghead">
             <h4 class="set-subtitle">{t('settings.server.configKeys')}</h4>
             <Button variant="ghost" size="sm" loading={cfgLoading.value} onClick={() => void loadConfig()}>
@@ -637,39 +661,46 @@ export function SettingsPage() {
           </div>
           {serverCfg.value ? (
             <>
+              <p class="set-cfglegend">{t('settings.server.srcLegend')}</p>
               <dl class="set-dl set-dl--cfg">
-                {Object.entries(serverCfg.value.config).map(([key, entry]) => (
-                  <div key={key}>
-                    <dt>
-                      {CONFIG_LABELS[key] ? t(CONFIG_LABELS[key]) : key}{' '}
-                      <Badge tone={entry.source === 'runtime' ? 'ok' : entry.source === 'env' ? 'info' : 'neutral'} class="set-src">
-                        {t(`settings.server.src_${entry.source}`)}
-                        <Tip
-                          label={
-                            entry.source === 'runtime'
-                              ? t('settings.server.srcRuntimeTip')
-                              : entry.source === 'env'
-                                ? t('settings.server.srcEnvTip')
-                                : t('settings.server.srcDefaultTip')
-                          }
+                {Object.entries(serverCfg.value.config).map(([key, entry]) => {
+                  const dot = srcDotTone(entry.source)
+                  const label = CONFIG_LABELS[key] ? t(CONFIG_LABELS[key]) : key
+                  return (
+                    <div key={key}>
+                      <dt>
+                        <span
+                          class={`set-src-dot is-${dot.tone}`}
+                          role="img"
+                          title={t(dot.tip)}
+                          aria-label={`${label} · ${t(dot.tip)}`}
+                          data-source={entry.source}
                         />
-                      </Badge>
-                    </dt>
-                    <dd class="tnum">{fmtCfgValue(entry.value)}</dd>
-                  </div>
-                ))}
+                        {label}
+                      </dt>
+                      <dd class="tnum">{fmtCfgValue(entry.value)}</dd>
+                    </div>
+                  )
+                })}
               </dl>
               <div class="set-dirs">
                 <span class="set-dirs__label">
                   {t('settings.server.modelsDirs')} <Tip label={t('settings.server.modelsDirsHint')} />
                 </span>
                 <ul>
-                  {serverCfg.value.models_dirs.map((d) => (
+                  {(dirsOpen.value ? serverCfg.value.models_dirs : serverCfg.value.models_dirs.slice(0, DIRS_COLLAPSED)).map((d) => (
                     <li key={d}>
                       <code>{d}</code>
                     </li>
                   ))}
                 </ul>
+                {serverCfg.value.models_dirs.length > DIRS_COLLAPSED ? (
+                  <button type="button" class="set-dirs__toggle" onClick={() => (dirsOpen.value = !dirsOpen.value)}>
+                    {dirsOpen.value
+                      ? t('settings.server.modelsDirsHide')
+                      : t('settings.server.modelsDirsShow', { count: serverCfg.value.models_dirs.length })}
+                  </button>
+                ) : null}
               </div>
               <div class="set-dirs">
                 <span class="set-dirs__label">{t('settings.server.issuesDir')}</span>
@@ -691,9 +722,11 @@ export function SettingsPage() {
           ) : (
             <p class="set-note">{cfgLoading.value ? t('common.loading') : t('common.notAvailable')}</p>
           )}
+        </Card>
 
-          {/* runtime edits (PATCH /v1/config) */}
-          <h3 class="set-subtitle">{t('settings.server.runtimeTitle')}</h3>
+        {/* Card B · Live runtime edits (write) */}
+        <Card class="set-card">
+          <h3 class="set-card__title">{t('settings.server.runtimeTitle')}</h3>
           <p class="dialog-text--dim">{t('settings.server.runtimeHint')}</p>
           <p class="set-note set-note--warn">⚠️ {t('settings.server.gatedWarn')}</p>
           <div class="set-env">
@@ -767,9 +800,11 @@ export function SettingsPage() {
               {t('settings.server.apply')}
             </Button>
           </div>
+        </Card>
 
-          {/* restart-only keys → honest 409 + snippet (not an error toast) */}
-          <h3 class="set-subtitle">{t('settings.server.restartTitle')}</h3>
+        {/* Card C · For next start (restart-only) */}
+        <Card class="set-card">
+          <h3 class="set-card__title">{t('settings.server.cardRestart')}</h3>
           <p class="dialog-text--dim">{t('settings.server.restartHint')}</p>
           <div class="set-restart">
             <label class="set-field">
@@ -826,7 +861,7 @@ export function SettingsPage() {
             </div>
           ) : null}
 
-          <h3 class="set-subtitle">{t('settings.server.applyTitle')}</h3>
+          <h4 class="set-subtitle set-card__subtitle">{t('settings.server.applyTitle')}</h4>
           <p class="dialog-text--dim">{t('settings.server.applyHint')}</p>
           <div class="set-env">
             {ENV_FIELDS.map((f) => (
@@ -859,7 +894,7 @@ export function SettingsPage() {
             </Button>
           </div>
           <pre class="set-snippet">{snippet()}</pre>
-          <p class="set-note">⚠️ {t('settings.server.restartNote')}</p>
+          <p class="set-note set-note--warn">⚠️ {t('settings.server.restartNote')}</p>
         </Card>
       </section>
 
