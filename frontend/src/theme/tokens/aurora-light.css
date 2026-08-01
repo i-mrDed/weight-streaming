@@ -1,0 +1,85 @@
+/* ─────────────────────────────────────────────────────────────
+   THEME: Aurora Light (spec §5.3) — designed separately, NOT a
+   dark invert. More opaque glass, less blur, soft diffuse
+   shadows, brand gradient kept with reduced glow.
+   ───────────────────────────────────────────────────────────── */
+[data-theme='aurora-light'] {
+  color-scheme: light;
+
+  /* L1 — primitives */
+  --ws-p-canvas: #f6f7fb;
+  --ws-p-violet: #7c3aed;
+  --ws-p-indigo: #6366f1;
+  --ws-p-brand: #6366f1;
+  --ws-p-cyan: #0891b2;
+  --ws-p-teal: #0d9488;
+  --ws-p-ink-1: #101828;
+  --ws-p-ink-2: #475467;
+  --ws-p-ink-3: #667085;
+
+  /* L2 — semantic */
+  --ws-surface-canvas: var(--ws-p-canvas);
+  --ws-canvas-glow:
+    radial-gradient(1100px 780px at 12% -8%, rgba(99, 102, 241, 0.07), transparent 60%),
+    radial-gradient(950px 700px at 104% 108%, rgba(13, 148, 136, 0.06), transparent 55%);
+  --ws-surface-sidebar: rgba(255, 255, 255, 0.78);
+  --ws-surface-card: rgba(255, 255, 255, 0.66);
+  --ws-surface-card-hover: rgba(255, 255, 255, 0.88);
+  --ws-surface-raised: rgba(255, 255, 255, 0.95);
+  --ws-surface-overlay: rgba(248, 249, 253, 0.92);
+  --ws-surface-input: rgba(255, 255, 255, 0.85);
+  --ws-surface-inset: rgba(15, 23, 42, 0.045);
+
+  --ws-border-subtle: rgba(15, 23, 42, 0.06);
+  --ws-border-default: rgba(15, 23, 42, 0.10);
+  --ws-border-strong: rgba(15, 23, 42, 0.20);
+  --ws-border-focus: var(--ws-p-indigo);
+  --ws-border-gradient: linear-gradient(180deg, rgba(15, 23, 42, 0.10), rgba(15, 23, 42, 0.02));
+
+  --ws-accent-brand: var(--ws-p-brand);
+  --ws-accent-brand-hover: #4f46e5;
+  --ws-accent-brand-soft: rgba(99, 102, 241, 0.10);
+  --ws-accent-glow: rgba(99, 102, 241, 0.22);
+  --ws-accent-secondary: var(--ws-p-cyan);
+  --ws-gradient-brand: linear-gradient(100deg, var(--ws-p-violet), var(--ws-p-indigo) 38%, #06b6d4 72%, var(--ws-p-teal));
+  --ws-gradient-primary: linear-gradient(120deg, var(--ws-p-violet), var(--ws-p-indigo) 55%, var(--ws-p-cyan));
+
+  --ws-status-ok: #059669;
+  --ws-status-warn: #d97706;
+  --ws-status-error: #dc2626;
+  --ws-status-info: #0284c7;
+  --ws-status-ok-soft: rgba(5, 150, 105, 0.10);
+  --ws-status-warn-soft: rgba(217, 119, 6, 0.10);
+  --ws-status-error-soft: rgba(220, 38, 38, 0.10);
+  --ws-status-info-soft: rgba(2, 132, 199, 0.10);
+
+  --ws-text-primary: var(--ws-p-ink-1);
+  --ws-text-secondary: var(--ws-p-ink-2);
+  --ws-text-tertiary: var(--ws-p-ink-3);
+  --ws-text-inverse: #ffffff;
+  --ws-text-link: #4f46e5;
+
+  --ws-radius-xs: 4px;
+  --ws-radius-sm: 8px;
+  --ws-radius-md: 12px;
+  --ws-radius-lg: 16px;
+  --ws-radius-xl: 24px;
+  --ws-radius-full: 9999px;
+
+  --ws-shadow-sm: 0 1px 3px rgba(16, 24, 40, 0.08);
+  --ws-shadow-md: 0 8px 24px -8px rgba(16, 24, 40, 0.14);
+  --ws-shadow-lg: 0 20px 48px -16px rgba(16, 24, 40, 0.18);
+  --ws-shadow-glow: 0 0 20px rgba(99, 102, 241, 0.16);
+  --ws-glass-blur: blur(8px);
+
+  --ws-particle-node: rgba(99, 102, 241, 0.40);
+  --ws-particle-line: rgba(99, 102, 241, 0.10);
+
+  /* L3 — component (shell) */
+  --ws-nav-bg: rgba(255, 255, 255, 0.72);
+  --ws-nav-item-hover: rgba(15, 23, 42, 0.05);
+  --ws-nav-item-active-bg: rgba(99, 102, 241, 0.12);
+  --ws-nav-item-active-text: #101828;
+  --ws-dialog-backdrop: rgba(16, 24, 40, 0.45);
+  --ws-toast-bg: rgba(255, 255, 255, 0.96);
+}

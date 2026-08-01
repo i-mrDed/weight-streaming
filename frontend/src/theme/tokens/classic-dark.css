@@ -1,0 +1,93 @@
+/* ─────────────────────────────────────────────────────────────
+   THEME: Classic Dark — pixel-faithful port of the legacy SPA
+   "Deep Space Glassmorphism" (static/index.html :root, v0.13)
+   Values below are EXACT legacy extractions — do not "improve".
+   EXCEPTION (P5.3 a11y, user-approved): `--ws-p-text-3` was raised to
+   `#858d9c` so tertiary small text passes WCAG AA (was 3.67–3.96:1 on
+   dark surfaces). All other values remain verbatim legacy.
+   ───────────────────────────────────────────────────────────── */
+[data-theme='classic-dark'] {
+  color-scheme: dark;
+
+  /* L1 — primitives (legacy :root, verbatim) */
+  --ws-p-bg-dark: #0b0f19;
+  --ws-p-bg-sidebar: #111827;
+  --ws-p-bg-card: rgba(17, 24, 39, 0.75);
+  --ws-p-bg-card-hover: rgba(31, 41, 55, 0.85);
+  --ws-p-bg-input: #1f293d;
+  --ws-p-border: rgba(255, 255, 255, 0.08);
+  --ws-p-indigo: #6366f1;
+  --ws-p-indigo-hover: #4f46e5;
+  --ws-p-indigo-glow: rgba(99, 102, 241, 0.3);
+  --ws-p-cyan: #06b6d4;
+  --ws-p-green: #10b981;
+  --ws-p-amber: #f59e0b;
+  --ws-p-red: #ef4444;
+  --ws-p-text-1: #f3f4f6;
+  --ws-p-text-2: #9ca3af;
+  --ws-p-text-3: #858d9c; /* P5.3 a11y: raised from #6b7280 (was 3.67-3.96:1 on dark surfaces → fails WCAG AA small-text). #858d9c ≈ 4.6-5.3:1. The rest stays pixel-faithful. */
+
+  /* L2 — semantic */
+  --ws-surface-canvas: var(--ws-p-bg-dark);
+  --ws-canvas-glow: none;
+  --ws-surface-sidebar: var(--ws-p-bg-sidebar);
+  --ws-surface-card: var(--ws-p-bg-card);
+  --ws-surface-card-hover: var(--ws-p-bg-card-hover);
+  --ws-surface-raised: #1c2536;
+  --ws-surface-overlay: rgba(17, 24, 39, 0.92);
+  --ws-surface-input: var(--ws-p-bg-input);
+  --ws-surface-inset: rgba(0, 0, 0, 0.25);
+
+  --ws-border-subtle: rgba(255, 255, 255, 0.05);
+  --ws-border-default: var(--ws-p-border);
+  --ws-border-strong: rgba(255, 255, 255, 0.15);
+  --ws-border-focus: var(--ws-p-indigo);
+  --ws-border-gradient: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.03));
+
+  --ws-accent-brand: var(--ws-p-indigo);
+  --ws-accent-brand-hover: var(--ws-p-indigo-hover);
+  --ws-accent-brand-soft: rgba(99, 102, 241, 0.12);
+  --ws-accent-glow: var(--ws-p-indigo-glow);
+  --ws-accent-secondary: var(--ws-p-cyan);
+  --ws-gradient-brand: linear-gradient(135deg, var(--ws-p-indigo), var(--ws-p-cyan));
+  --ws-gradient-primary: linear-gradient(135deg, var(--ws-p-indigo), var(--ws-p-indigo-hover));
+
+  --ws-status-ok: var(--ws-p-green);
+  --ws-status-warn: var(--ws-p-amber);
+  --ws-status-error: var(--ws-p-red);
+  --ws-status-info: var(--ws-p-cyan);
+  --ws-status-ok-soft: rgba(16, 185, 129, 0.12);
+  --ws-status-warn-soft: rgba(245, 158, 11, 0.12);
+  --ws-status-error-soft: rgba(239, 68, 68, 0.12);
+  --ws-status-info-soft: rgba(6, 182, 212, 0.12);
+
+  --ws-text-primary: var(--ws-p-text-1);
+  --ws-text-secondary: var(--ws-p-text-2);
+  --ws-text-tertiary: var(--ws-p-text-3);
+  --ws-text-inverse: var(--ws-p-bg-dark);
+  --ws-text-link: #a5b4fc;
+
+  --ws-radius-xs: 4px;
+  --ws-radius-sm: 6px;   /* legacy --radius-sm */
+  --ws-radius-md: 10px;  /* legacy --radius-md */
+  --ws-radius-lg: 16px;  /* legacy --radius-lg */
+  --ws-radius-xl: 16px;
+  --ws-radius-full: 9999px;
+
+  --ws-shadow-sm: 0 2px 8px -2px rgba(0, 0, 0, 0.35);
+  --ws-shadow-md: 0 6px 16px -6px rgba(0, 0, 0, 0.4);
+  --ws-shadow-lg: 0 10px 25px -5px rgba(0, 0, 0, 0.5); /* legacy exact */
+  --ws-shadow-glow: 0 0 12px var(--ws-p-indigo-glow);  /* legacy brand-icon glow */
+  --ws-glass-blur: blur(16px); /* legacy --glass-backdrop */
+
+  --ws-particle-node: rgba(0, 0, 0, 0);
+  --ws-particle-line: rgba(0, 0, 0, 0);
+
+  /* L3 — component (shell) */
+  --ws-nav-bg: rgba(17, 24, 39, 0.7);
+  --ws-nav-item-hover: rgba(255, 255, 255, 0.06);
+  --ws-nav-item-active-bg: rgba(99, 102, 241, 0.14);
+  --ws-nav-item-active-text: #ffffff;
+  --ws-dialog-backdrop: rgba(0, 0, 0, 0.7);
+  --ws-toast-bg: #1c2536;
+}

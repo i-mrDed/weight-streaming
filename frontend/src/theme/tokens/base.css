@@ -1,0 +1,118 @@
+/* ─────────────────────────────────────────────────────────────
+   Base layer — shared structure, theme-independent.
+   Motion tokens, focus policy, scrollbars, canvas glow host.
+   ───────────────────────────────────────────────────────────── */
+:root {
+  --ws-font-sans: 'Inter Variable', 'Inter', 'Noto Sans Thai', system-ui, -apple-system, sans-serif;
+  --ws-font-mono: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+
+  --ws-dur-fast: 120ms;
+  --ws-dur-base: 200ms;
+  --ws-dur-slow: 320ms;
+  --ws-ease-out: cubic-bezier(0.2, 0.7, 0.3, 1);
+  --ws-ease-spring: cubic-bezier(0.2, 0.9, 0.3, 1);
+
+  --ws-nav-height: 56px;
+  --ws-sidebar-width: 260px;
+  --ws-rail-width: 64px;
+
+  --ws-text-xs: 0.75rem; /* P5.3 a11y: raised from 0.72rem (11.5px → 12px) for legibility */
+  --ws-text-sm: 0.85rem;
+  --ws-text-base: 0.925rem;
+  --ws-text-lg: 1.05rem;
+  --ws-text-xl: clamp(1.2rem, 1.1rem + 0.5vw, 1.45rem);
+  --ws-text-2xl: clamp(1.5rem, 1.3rem + 1vw, 2rem);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --ws-dur-fast: 1ms;
+    --ws-dur-base: 1ms;
+    --ws-dur-slow: 1ms;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--ws-font-sans);
+  font-size: var(--ws-text-base);
+  color: var(--ws-text-primary);
+  background-color: var(--ws-surface-canvas);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow: hidden;
+}
+
+/* Ambient canvas glow (aurora themes); 'none' in classic */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: var(--ws-canvas-glow, none);
+  pointer-events: none;
+  z-index: 0;
+}
+
+::selection {
+  background: var(--ws-accent-brand-soft);
+  color: var(--ws-text-primary);
+}
+
+/* Visible focus in every theme (spec §7.2) */
+:focus-visible {
+  outline: 2px solid var(--ws-border-focus);
+  outline-offset: 2px;
+  border-radius: var(--ws-radius-xs);
+}
+
+/* Scrollbars — quiet, theme-aware */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--ws-border-strong) transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--ws-border-strong);
+  border-radius: var(--ws-radius-full);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* tabular figures for live metrics */
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+button {
+  font-family: inherit;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

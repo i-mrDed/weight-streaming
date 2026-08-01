@@ -130,7 +130,7 @@
 
 .kbd {
   font-family: var(--ws-font-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--ws-text-tertiary);
   border: 1px solid var(--ws-border-default);
   border-bottom-width: 2px;
@@ -449,7 +449,7 @@
 .menu__item.is-active { color: var(--ws-text-primary); }
 .menu__item-icon { display: grid; place-items: center; width: 18px; }
 .menu__item-label { flex: 1; }
-.menu__item-hint { font-size: 10px; color: var(--ws-text-tertiary); }
+.menu__item-hint { font-size: 11px; color: var(--ws-text-tertiary); }
 .menu__check { color: var(--ws-accent-brand); }
 .swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1px solid var(--ws-border-strong); }
 
@@ -517,7 +517,7 @@
 .palette__list { max-height: 340px; overflow-y: auto; padding: 6px; }
 .palette__group {
   padding: 8px 10px 4px;
-  font-size: 10.5px;
+  font-size: 11.5px;
   text-transform: uppercase;
   letter-spacing: 0.09em;
   font-weight: 600;
