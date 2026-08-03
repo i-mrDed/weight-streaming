@@ -3,7 +3,7 @@
 > แผนสร้าง **dashboard/console** ใหม่ (frontend redesign) ของเซิร์ฟเวอร์ local-LLM
 > แยกจาก `docs/ROADMAP.md` ซึ่งเป็นแผนของ *ตัวไลบรารี Python/ผลิตภัณฑ์*
 > **Source of truth รายเฟส/เกณฑ์จบ** = `docs/DASHBOARD_THEME_SPEC.md` §13 (ถ้าขัดกัน spec ชนะ)
-> **สถานะอัปเดต**: 2026-07-31 · branch `feature/dashboard-theme` (git worktree) · ทดสอบที่พอร์ต **8799** · main **8765 ห้ามแตะ**จนกว่าจะ P6
+> **สถานะอัปเดต**: 2026-08-03 · branch `feature/dashboard-theme` (git worktree) · ทดสอบที่พอร์ต **8799** · main **8765 ห้ามแตะ**จนกว่าจะ P6
 
 ---
 
@@ -11,17 +11,19 @@
 
 ทุกเฟสเดินวงจร **Dev สร้าง → QA ตรวจอิสระ → PM ตรวจ spec → วนแก้จน gate ผ่าน → PM checkpoint รายงานผู้ใช้** แล้วจึงไปเฟสถัดไป
 
-| เฟส | เนื้อหา | สถานะ (2026-07-31) |
+| เฟส | เนื้อหา | สถานะ (2026-08-03) |
 |-----|---------|--------------------|
 | **P0** | PM สำรวจ + ออก spec + ผู้ใช้อนุมัติ R1–R3 (Preact+Vite / backend แบ่งเฟส / worktree) | ✅ เสร็จ |
 | **P1** | ฐาน: core/theme/i18n/router/shell/particles/components + **โลโก้ใหม่** + boot splash + i18n batch-1 (TH) | ✅ เสร็จ + QA PASS |
 | **P2** | 4 หน้าจริง: **Overview / Chat / Live Stats / Models** (markdown XSS-safe, SSE streaming+Stop, honest hit-rate 0%+caveat, scan/load/unload) | ✅ เสร็จ + QA PASS + ผู้ใช้ตรวจรับ |
 | **P3** | 3 หน้าจริง: **Issues** (9-state lifecycle + transition matrix + verify loop + maintainer panel) / **API Docs** (markdown-driven + code tabs + copy + honest notes) / **Settings** (runtime+persist · server read-only · apply-on-restart snippet · honest n/a) | ✅ เสร็จ + QA PASS + ผู้ใช้ตรวจรับ (รวมรอบ polish `bf512fd`: drawer→ซ้าย, toolbar, card, mobile left-sheet) |
-| **P4** | **backend endpoint ใหม่** (spec §10): hub search/download+progress SSE, `/v1/usage/history`, `/v1/logs/tail`, `/v1/config` (+`PATCH` v1.1) + pytest — **backend ล้วน ห้ามแตะ frontend (หน้าที่ใช้ = P5)** | 🔧 **Dev เสร็จ** (`a58ae8b`) — endpoint §10 ครบ 9 ตัว + pytest +66 (รวม 164/6/9) + mypy clean (47 ไฟล์) → **รอ QA ตรวจอิสระ** |
-| **P5** | หน้า **Hub** (search-first, one-click download) + polish (light theme, palette, notifications, export) + **i18n batch สุดท้าย = full TH sweep** + native check | ⬜ ยังไม่เริ่ม |
-| **P6** | **Promote Console ขึ้นproduction** — PM สรุป+demo → **ผู้ใช้อนุมัติสุดท้าย** → merge `feature→main` (`--no-ff`) + route swap (`/`→console, ของเก่า→`/app-legacy` หนึ่ง release) + CHANGELOG + **ลบ `dashboard_server.py` (มติผู้ใช้)** | ⬜ ยังไม่เริ่ม |
+| **P4** | **backend endpoint ใหม่** (spec §10): hub search/download+progress SSE, `/v1/usage/history`, `/v1/logs/tail`, `/v1/config` (+`PATCH` v1.1) + pytest — **backend ล้วน ห้ามแตะ frontend (หน้าที่ใช้ = P5)** | ✅ **เสร็จ + QA PASS** (`a58ae8b`) — endpoint §10 ครบ 9 ตัว + pytest +66 (รวม 164/6/9) + mypy clean (47 ไฟล์) · QA อิสระผ่าน (contract + security adversarial + offline hub) · `/app` 0 diff vs main |
+| **P5** | หน้า **Hub** (search-first, one-click download) + polish (light theme, palette, notifications, export) + **i18n batch สุดท้าย = full TH sweep** + native check | 🔧 **Dev เสร็จ** (ถึง `79d944a` P5.3c) — ทุกหน้า implement ครบ (8 หน้าใน RouterView) + backend hub/usage/logs/config ครบ · **หลักฐาน QA (2026-08-03):** build reproducible (git clean) · bundle 131.93 kB gzip (< 150 kB) · i18n:verify PASS (661 keys) · pytest 177 passed / 13 skipped / 9 pre-existing GGUF-fixture errors · screenshots ใน `docs/artifacts/phase-5*` → **รอ QA ตรวจอิสระ + ผู้ใช้ตรวจรับ** |
+| **P6** | **Promote Console ขึ้นproduction** — PM สรุป+demo → **ผู้ใช้อนุมัติสุดท้าย** → merge `feature→main` (`--no-ff`) + route swap (`/`→console, ของเก่า→`/app-legacy` หนึ่ง release) + CHANGELOG + **ลบ `dashboard_server.py` (มติผู้ใช้)** | ⬜ ยังไม่เริ่ม — **ผู้ใช้เลือกตัวเลือก A (ทำ P5 ให้จบดีก่อน) 2026-08-03** |
 
-> หมายเหตุสถานะ P4: **Dev สร้างเสร็จแล้ว** (`a58ae8b`, 2026-07-31) ตาม **`docs/P4_BRIEF.md`** — endpoint §10 ครบ 9 ตัว (config GET/PATCH, usage/history, logs/tail, hub search/download/progress SSE/downloads/cancel) + module ใหม่ `server/{usage,logs,hub}.py` + pytest +66 (contract/manager/offline-hub/security) · suite **164 passed / 6 skipped / 9 pre-existing GGUF-fixture errors** · mypy clean (47 ไฟล์) · hub = stdlib urllib ล้วน (0 runtime dep ใหม่; httpx = test extra เท่านั้น) · แก้ dead `recent_errors` + dead `WS_LOG_LEVEL` · `/health`+`FastAPI(version)` = 0.13.0 แล้ว · `/app` 0 diff vs main, ไม่แตะ frontend · **รอ QA ตรวจอิสระ** (contract tests + security adversarial + offline hub) ตามเกณฑ์ §13 · frontend ที่ใช้ endpoint P4 ทั้งหมดเลื่อนไป P5
+> หมายเหตุสถานะ P4: **Dev สร้างเสร็จแล้ว** (`a58ae8b`, 2026-07-31) ตาม **`docs/P4_BRIEF.md`** — endpoint §10 ครบ 9 ตัว (config GET/PATCH, usage/history, logs/tail, hub search/download/progress SSE/downloads/cancel) + module ใหม่ `server/{usage,logs,hub}.py` + pytest +66 (contract/manager/offline-hub/security) · suite **164 passed / 6 skipped / 9 pre-existing GGUF-fixture errors** · mypy clean (47 ไฟล์) · hub = stdlib urllib ล้วน (0 runtime dep ใหม่; httpx = test extra เท่านั้น) · แก้ dead `recent_errors` + dead `WS_LOG_LEVEL` · `/health`+`FastAPI(version)` = 0.13.0 แล้ว · `/app` 0 diff vs main, ไม่แตะ frontend · **QA ตรวจอิสระผ่านแล้ว** (contract tests + security adversarial + offline hub) ตามเกณฑ์ §13 — อัปเดตสถานะ 2026-08-03
+
+> หมายเหตุสถานะ P5: **Dev เสร็จ** (HEAD `79d944a` P5.3c, 2026-08-02) — งาน P5.1 (Hub enrichment + shard-aware grouping จาก feedback ผู้ใช้), P5.2 (settings submenu + hub latest feed), P5.3 (a11y contrast + settings-server card) + i18n full TH sweep (batch-3, 661 keys) · **หลักฐาน QA ที่รันใหม่ 2026-08-03:** `npm run build` reproducible (git clean หลัง build) · bundle **131.93 kB gzip** (< 150 kB) · `npm run i18n:verify` **PASS** · `pytest` **177 passed / 13 skipped / 9 pre-existing GGUF-fixture errors** (9 ตัว = fixture ต้องการไฟล์ GGUF ที่ git-ignored — ไม่ใช่ regression) · screenshots: `docs/artifacts/phase-5/`, `phase-5-2/`, `polish/` · **งานที่เหลือก่อน P6:** QA ตรวจอิสระ (E2E Hub download + honest-telemetry audit + responsive/i18n sweep) + ผู้ใช้ตรวจรับ
 
 ## 🧭 มติผู้ใช้ (2026-07-31) — รูปแบบการย้ายระบบ (migration model)
 1. **ทดลองใช้ก่อน โปรโมททีหลัง (trial-first / promote-later)**:
@@ -64,3 +66,25 @@ pytest เขียว · ไม่มี console error · honest-telemetry audi
 - P2 brief: `docs/P2_BRIEF.md` · หลักฐาน P2: `docs/verification-p2/` + `docs/verification-p2-qa/`
 - Project memory (cross-run): note `dashboard-console-phases`
 - แผนผลิตภัณฑ์/ไลบรารี (คนละอัน): `docs/ROADMAP.md`
+
+---
+
+## 📝 บันทึกการทำงาน (Session Log)
+
+> **กรอบ:** บันทึกการทำงานทุกครั้งที่ดำเนินการ — หลักฐาน/วัดผล/ย้อนกลับได้/ตรวจสอบได้
+
+### 2026-08-03 — ปิดงาน worktree (ตัวเลือก A: ทำ P5 ให้จบก่อน P6)
+- **ผู้ใช้ตัดสินใจ:** ตัวเลือก A (ทำ P5 ให้จบดีทั้งหมดก่อน) + เก็บธีม classic ไว้เป็นตัวเลือก (มีใน registry แล้ว) + merge แทน replace
+- **งานที่ทำ:**
+  - Deep Research สถานะจริง: P4 QA ผ่าน, P5 Dev ทำถึง P5.3c, P6 ยังไม่เริ่ม
+  - ตรวจสอบ ii8n: `npm run i18n:verify` PASS (661 keys, 20 strings > 45% = warning)
+  - ตรวจสอบ build: `npm run build` reproducible (git status สะอาดหลัง build) · bundle **131.93 kB gzip** (< 150 kB)
+  - ตรวจสอบ test: `pytest` **177 passed / 13 skipped / 9 pre-existing GGUF-fixture errors** (9 ตัว = fixture ต้องการไฟล์ GGUF ที่ git-ignored)
+  - อัปเดตเอกสาร roadmap นี้ให้ทันสถานะจริง (P4 QA ผ่าน, P5 Dev เสร็จ + หลักฐาน)
+- **หลักฐาน (evidence):** ไฟล์นี้ + `docs/artifacts/phase-5*` + ผล test/build/i18n ที่รันจริง
+- **งานที่เหลือ (ก่อน P6):**
+  1. ✅ อัปเดตเอกสาร roadmap (ทำแล้ว)
+  2. ⬜ QA ตรวจอิสระ P5 (E2E Hub download + honest-telemetry audit + responsive/i18n sweep)
+  3. ⬜ ผู้ใช้ตรวจรับ P5
+  4. ⬜ P6: sync main → backup tag → merge --no-ff → route swap → ลบ dashboard_server.py → CHANGELOG
+- **ย้อนกลับได้:** branch `feature/dashboard-theme` ยังไม่ merge — ตรวจสอบได้ทุกขั้นตอน
