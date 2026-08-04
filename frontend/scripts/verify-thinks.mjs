@@ -83,6 +83,8 @@ console.log('=== tag-based blocks (regression) ===')
 check('completed block', parseThinks('Hello ' + TAG_OPEN + ' secret ' + TAG_CLOSE + ' world', false), { main: 'Hello  world', thinks: [' secret '], partial: null })
 check('open block streaming', parseThinks('Hello ' + TAG_OPEN + ' secret', true), { main: 'Hello ', thinks: [], partial: ' secret' })
 check('no tags passthrough', parseThinks('plain text', false), { main: 'plain text', thinks: [], partial: null })
+check('leading tag (no space before)', parseThinks(TAG_OPEN + '\nreason here\n' + TAG_CLOSE + '\nAnswer: 42', false), { main: '\nAnswer: 42', thinks: ['\nreason here\n'], partial: null })
+check('leading tag streaming', parseThinks(TAG_OPEN + '\nstill thinking', true), { main: '', thinks: [], partial: '\nstill thinking' })
 
 console.log('=== verbal "Thinking Process:" fallback ===')
 check('verbal completed with answer', parseThinks('Thinking Process: let me reason\nFinal answer: 42', false), { main: '\nFinal answer: 42', thinks: ['Thinking Process: let me reason'], partial: null })

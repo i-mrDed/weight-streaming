@@ -16,6 +16,8 @@ import {
   ChevronDown,
   CircleStop,
   Copy,
+  Eye,
+  EyeOff,
   PanelLeftClose,
   PanelLeftOpen,
   Send,
@@ -93,6 +95,45 @@ export function ChatPage() {
       try { localStorage.setItem(`ws-effort:${id}`, v) } catch { /* non-fatal */ }
     }
   }
+  // Reasoning mode (P7.1c) — auto/on/off, per-model, persisted. Only shown
+  // for reasoning-capable models (like Jan). Sent to server as reasoning_mode.
+  const reasoningMode = useSignal<'auto' | 'on' | 'off'>('auto')
+  const reasoningModel = useSignal<string | null>(null)
+  const readReasoning = (modelId: string): 'auto' | 'on' | 'off' => {
+    try {
+      const v = localStorage.getItem(`ws-reasoning:${modelId}`)
+      if (v === 'auto' || v === 'on' || v === 'off') return v
+    } catch { /* non-fatal */ }
+    return 'auto'
+  }
+  const cycleReasoning = () => {
+    const next = reasoningMode.value === 'auto' ? 'on' : reasoningMode.value === 'on' ? 'off' : 'auto'
+    reasoningMode.value = next
+    const id = activeConv.value?.model
+    if (id) {
+      reasoningModel.value = id
+      try { localStorage.setItem(`ws-reasoning:${id}`, next) } catch { /* non-fatal */ }
+    }
+  }
+  // Thinking budget (P7.1c) — 5 levels like Jan: low/medium/high/xhigh/
+  // unlimited. Per-model, persisted. Sent to server as thinking_budget.
+  const thinkingBudget = useSignal<'low' | 'medium' | 'high' | 'xhigh' | 'unlimited'>('unlimited')
+  const budgetModel = useSignal<string | null>(null)
+  const readBudget = (modelId: string): 'low' | 'medium' | 'high' | 'xhigh' | 'unlimited' => {
+    try {
+      const v = localStorage.getItem(`ws-budget:${modelId}`)
+      if (v === 'low' || v === 'medium' || v === 'high' || v === 'xhigh' || v === 'unlimited') return v
+    } catch { /* non-fatal */ }
+    return 'unlimited'
+  }
+  const setBudget = (v: 'low' | 'medium' | 'high' | 'xhigh' | 'unlimited') => {
+    thinkingBudget.value = v
+    const id = activeConv.value?.model
+    if (id) {
+      budgetModel.value = id
+      try { localStorage.setItem(`ws-budget:${id}`, v) } catch { /* non-fatal */ }
+    }
+  }
   // User toggle: show/hide completed thinking accordions (persisted).
   const showThinking = useSignal<boolean>(() => {
     try {
@@ -139,6 +180,19 @@ export function ChatPage() {
     effortModel.value = conv.model
     effort.value = readEffort(conv.model)
   }
+  // Sync per-model reasoning mode (P7.1c) — same pattern as effort.
+  if (conv?.model && conv.model !== reasoningModel.value) {
+    reasoningModel.value = conv.model
+    reasoningMode.value = readReasoning(conv.model)
+  }
+  // Sync per-model thinking budget (P7.1c) — same pattern.
+  if (conv?.model && conv.model !== budgetModel.value) {
+    budgetModel.value = conv.model
+    thinkingBudget.value = readBudget(conv.model)
+  }
+  // Is the active model reasoning-capable? (from backend capabilities)
+  const activeModel = loaded.find((m) => m.id === conv?.model) ?? null
+  const reasoningCapable = activeModel?.capabilities?.reasoning ?? false
 
   useEffect(() => () => abortRef.current?.(), [])
 
@@ -230,6 +284,8 @@ export function ChatPage() {
       top_p: c.params.top_p,
       max_tokens: c.params.max_tokens,
       reasoning_effort: effort.value,
+      reasoning_mode: reasoningCapable ? reasoningMode.value : undefined,
+      thinking_budget: reasoningCapable ? thinkingBudget.value : undefined,
     })
     abortRef.current = abort
 
@@ -467,6 +523,39 @@ export function ChatPage() {
             <Tip label={t('chat.effort.tip')} />
           </span>
 
+          {/* Reasoning mode (P7.1c) — 3-state Auto/On/Off, only for
+              reasoning-capable models (like Jan). Cycles on click. */}
+          {reasoningCapable ? (
+            <button
+              class={`icon-btn${reasoningMode.value !== 'auto' ? ' is-active' : ''}`}
+              aria-label={t('chat.reasoning.label')}
+              aria-pressed={reasoningMode.value !== 'auto'}
+              title={`${t('chat.reasoning.label')}: ${t(`chat.reasoning.${reasoningMode.value}`)}`}
+              onClick={cycleReasoning}
+            >
+              <Brain size={16} />
+              <span class="icon-btn__badge">{reasoningMode.value === 'auto' ? 'A' : reasoningMode.value === 'on' ? '1' : '0'}</span>
+            </button>
+          ) : null}
+
+          {/* Thinking budget (P7.1c) — 5 levels like Jan, only for reasoning
+              models. Compact select. */}
+          {reasoningCapable ? (
+            <select
+              class="icon-btn thinking-budget"
+              aria-label={t('chat.budget.label')}
+              title={t('chat.budget.label')}
+              value={thinkingBudget.value}
+              onChange={(e) => setBudget((e.target as HTMLSelectElement).value as typeof thinkingBudget.value)}
+            >
+              <option value="low">{t('chat.budget.low')}</option>
+              <option value="medium">{t('chat.budget.medium')}</option>
+              <option value="high">{t('chat.budget.high')}</option>
+              <option value="xhigh">{t('chat.budget.xhigh')}</option>
+              <option value="unlimited">{t('chat.budget.unlimited')}</option>
+            </select>
+          ) : null}
+
           {/* Thinking visibility toggle (user feedback: show/hide thinking) */}
           <button
             class={`icon-btn${showThinking.value ? ' is-active' : ''}`}
@@ -475,7 +564,7 @@ export function ChatPage() {
             title={t('chat.thinkingToggle')}
             onClick={toggleThinking}
           >
-            <Brain size={16} />
+            {showThinking.value ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
 
           <span class="chat__toolbar-spacer" />

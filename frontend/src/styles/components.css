@@ -130,6 +130,37 @@
 /* Active/toggled state — used by the chat thinking-visibility toggle (and
    any future on/off icon button). Gives clear visual feedback on click. */
 .icon-btn.is-active { background: var(--ws-accent-brand-soft); color: var(--ws-accent-brand); }
+/* Small state badge on tool buttons (e.g. reasoning A/1/0) */
+.icon-btn__badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 2px;
+  border-radius: var(--ws-radius-full);
+  background: var(--ws-accent-brand);
+  color: #fff;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 12px;
+  text-align: center;
+}
+.icon-btn { position: relative; }
+/* Thinking budget select (P7.1c) — compact, matches icon-btn height */
+.thinking-budget {
+  height: 28px;
+  padding: 0 6px;
+  border-radius: var(--ws-radius-sm);
+  border: 1px solid var(--ws-border-subtle);
+  background: var(--ws-surface-inset);
+  color: var(--ws-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 84px;
+}
+.thinking-budget:hover { border-color: var(--ws-accent-brand); color: var(--ws-text-primary); }
 
 .kbd {
   font-family: var(--ws-font-mono);

@@ -81,6 +81,15 @@ export interface ModelStatus {
   n_experts: number
   buffer_mb: number
   last_used: string | null
+  capabilities?: {
+    reasoning: boolean
+    tools: boolean
+    vision: boolean
+    arch: string
+    name: string
+    detection: string
+    hints: string[]
+  }
 }
 
 export interface ServerStatus {

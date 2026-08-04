@@ -72,7 +72,9 @@ export function parseThinks(src: string, streaming: boolean): ThinkParse {
   }
 
   for (;;) {
-    const open = src.indexOf(' thinking', i)
+    // Match ` thinking` at start-of-string OR after a space (the server
+    // emits a leading ` thinking` with no preceding space).
+    const open = src.search(/(?:^|\s) thinking(?=\s)/)
     if (open === -1) {
       main += src.slice(i)
       break

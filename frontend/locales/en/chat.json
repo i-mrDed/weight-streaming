@@ -6,6 +6,20 @@
   "thinking": "Thinking",
   "thinkingLive": "Thinking…",
   "thinkingToggle": "Show/hide thinking blocks",
+  "reasoning": {
+    "label": "Reasoning mode",
+    "auto": "Auto",
+    "on": "On",
+    "off": "Off"
+  },
+  "budget": {
+    "label": "Thinking budget",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "xhigh": "XHigh",
+    "unlimited": "Unlimited"
+  },
   "genFailed": "Generation failed",
   "copyFailed": "Copy failed",
   "notif": {
