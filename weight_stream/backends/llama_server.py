@@ -252,6 +252,8 @@ class LlamaServerBackend(WeightStreamBackend):
         temperature: float = 0.7,
         top_p: float = 0.9,
         reasoning_mode: str = "auto",
+        tools: Optional[List[dict]] = None,
+        tool_choice: Optional[Any] = None,
         **kwargs,
     ) -> Iterator[str]:
         """Stream chat via llama-server's OpenAI-compatible API.
@@ -259,6 +261,10 @@ class LlamaServerBackend(WeightStreamBackend):
         reasoning_mode: auto|on|off → passed to the server as `reasoning`.
         The server itself handles thinking extraction (message.reasoning_content),
         so content deltas are the final answer only.
+
+        tools/tool_choice (P7.3): passed through to llama-server, which
+        natively supports tool calling. tool_calls are returned via the
+        ``tool_calls`` attribute on this instance after generation.
         """
         if not self.is_loaded:
             self.start()
@@ -283,6 +289,13 @@ class LlamaServerBackend(WeightStreamBackend):
             # reasoning tags still return their answer in content.
             "reasoning_format": "none",
         }
+        if tools:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+
+        # Reset accumulated tool_calls from any previous generation.
+        self._tool_calls: List[dict] = []
 
         start_time = time.time()
         token_count = 0
@@ -304,6 +317,10 @@ class LlamaServerBackend(WeightStreamBackend):
                 if text:
                     token_count += 1
                     yield text
+                # Tool calls (P7.3): accumulate across delta chunks.
+                tc = delta.get("tool_calls")
+                if tc:
+                    self._accumulate_tool_calls(tc)
         except GeneratorExit:
             raise
         finally:
@@ -315,6 +332,7 @@ class LlamaServerBackend(WeightStreamBackend):
                 "prompt": self._summarize_messages(messages),
                 "backend": "llama-server",
                 "reasoning_chars": sum(len(c) for c in reasoning_chunks),
+                "tool_calls": len(self._tool_calls),
             }
 
     def stream_prompt(
@@ -379,3 +397,33 @@ class LlamaServerBackend(WeightStreamBackend):
         if not last and messages:
             last = messages[-1].get("content") or ""
         return str(last)[:50] + ("..." if len(str(last)) > 50 else "")
+
+    # ── Tool calling (P7.3) ─────────────────────────────────────────
+    def _accumulate_tool_calls(self, tool_calls: List[dict]) -> None:
+        """Accumulate streaming tool-call deltas into complete calls.
+
+        OpenAI streaming sends tool_calls as incremental fragments:
+          [{"index":0,"id":"call_x","function":{"name":"f","arguments":""}}]
+          [{"index":0,"function":{"arguments":"{\"a\":"}}]
+          [{"index":0,"function":{"arguments":"1}"}}]
+        We merge fragments by index into ``self._tool_calls``.
+        """
+        if not hasattr(self, "_tool_calls"):
+            self._tool_calls = []
+        for frag in tool_calls:
+            idx = frag.get("index", 0)
+            while len(self._tool_calls) <= idx:
+                self._tool_calls.append({"id": "", "type": "function", "function": {"name": "", "arguments": ""}})
+            target = self._tool_calls[idx]
+            if frag.get("id"):
+                target["id"] = frag["id"]
+            fn = frag.get("function") or {}
+            if fn.get("name"):
+                target["function"]["name"] = fn["name"]
+            if fn.get("arguments"):
+                target["function"]["arguments"] += fn["arguments"]
+
+    @property
+    def tool_calls(self) -> List[dict]:
+        """Completed tool calls from the last generation (P7.3)."""
+        return list(getattr(self, "_tool_calls", []))

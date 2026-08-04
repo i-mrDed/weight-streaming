@@ -80,10 +80,19 @@ async def _complete_response(
         temperature=request.temperature,
         top_p=request.top_p,
         reasoning_mode=request.reasoning_mode or "auto",
+        tools=request.tools,
     )
-    
+
     completion_tokens = result.get("tokens_generated", 0)
-    
+    # P7.3: if the model requested tool calls, surface them in the message.
+    tool_calls = result.get("tool_calls") or []
+    message = ChatMessage(
+        role="assistant",
+        content=result["output"],
+    )
+    if tool_calls:
+        message.tool_calls = tool_calls
+
     return ChatCompletionResponse(
         id=f"chatcmpl-{uuid.uuid4().hex[:12]}",
         created=int(time.time()),
@@ -91,11 +100,8 @@ async def _complete_response(
         choices=[
             ChatCompletionChoice(
                 index=0,
-                message=ChatMessage(
-                    role="assistant",
-                    content=result["output"],
-                ),
-                finish_reason="stop",
+                message=message,
+                finish_reason="tool_calls" if tool_calls else "stop",
             )
         ],
         usage=ChatCompletionUsage(

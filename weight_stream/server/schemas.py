@@ -171,8 +171,9 @@ class StreamToken(BaseModel):
 
 class ChatMessage(BaseModel):
     """OpenAI-compatible chat message."""
-    role: str = Field(..., pattern="^(system|user|assistant)$")
-    content: str = Field(..., min_length=1)
+    role: str = Field(..., pattern="^(system|user|assistant|tool)$")
+    content: str = Field(default="", min_length=0)
+    tool_calls: Optional[List[Dict[str, Any]]] = Field(default=None, description="Tool calls requested by the model (P7.3)")
 
 
 class ChatCompletionRequest(BaseModel):

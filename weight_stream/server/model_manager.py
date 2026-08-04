@@ -543,6 +543,7 @@ class ModelManager:
                     "tokens_generated": token_count,
                     "elapsed_seconds": round(elapsed, 3),
                     "tokens_per_second": round(token_count / elapsed, 2) if elapsed > 0 else 0,
+                    "tool_calls": list(getattr(model, "tool_calls", [])),
                 }
             finally:
                 self._generating[model_id] = False
