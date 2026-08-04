@@ -43,6 +43,10 @@ server = [
 ]
 gradio = ["gradio>=5.0.0"]
 tui = ["textual>=1.0.0", "rich>=13.0.0"]
+# MCP host (P7.4): official MCP Python SDK for connecting to MCP servers
+# (stdio/SSE). Optional — the server works without it (tool-calling via
+# the OpenAI-compatible API still works; only self-hosted MCP is affected).
+mcp = ["mcp>=1.0.0"]
 # Test-only (P4): httpx enables fastapi.testclient.TestClient for the API
 # contract tests. Does NOT affect the runtime install footprint.
 test = ["httpx>=0.27", "pytest>=8.0"]

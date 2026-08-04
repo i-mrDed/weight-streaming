@@ -66,6 +66,7 @@ from .schemas import (
     HubDownloadRequest,
     AssistantCreate,
     AssistantUpdate,
+    MCPServerCreate,
 )
 from .streaming import sse_stream, ws_stream
 
@@ -950,6 +951,58 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         if not _astore.delete(assistant_id):
             raise HTTPException(status_code=404, detail=f"Assistant {assistant_id} not found")
         return {"status": "deleted", "id": assistant_id}
+
+    # ── MCP (P7.4): manage MCP servers + list/call tools ───────────────
+    from .mcp_host import get_mcp_store, get_mcp_host
+    from .schemas import MCPServerCreate
+
+    _mcpstore = get_mcp_store()
+    _mcp = get_mcp_host()
+
+    @app.get("/v1/mcp/servers")
+    async def list_mcp_servers():
+        """List configured MCP servers."""
+        return _mcpstore.list()
+
+    @app.post("/v1/mcp/servers", status_code=201)
+    async def add_mcp_server(body: MCPServerCreate):
+        import uuid as _uuid
+        server = {
+            "id": _uuid.uuid4().hex[:12],
+            "name": body.name,
+            "transport": body.transport,
+            "command": body.command,
+            "args": body.args or [],
+            "url": body.url,
+            "enabled": body.enabled,
+            "auto_approve": body.auto_approve,
+        }
+        return _mcpstore.upsert(server)
+
+    @app.delete("/v1/mcp/servers/{server_id}")
+    async def delete_mcp_server(server_id: str):
+        """Delete an MCP server config."""
+        if not _mcpstore.delete(server_id):
+            raise HTTPException(status_code=404, detail=f"MCP server {server_id} not found")
+        return {"status": "deleted", "id": server_id}
+
+    @app.get("/v1/mcp/tools")
+    async def list_mcp_tools(server_id: str | None = None):
+        """List tools from enabled MCP servers (connects to servers)."""
+        try:
+            tools = await _mcp.list_tools(server_id)
+            return tools
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
+    @app.post("/v1/mcp/tools/{server_id}/{tool_name}/call")
+    async def call_mcp_tool(server_id: str, tool_name: str, body: Dict[str, Any]):
+        """Call a tool on an MCP server."""
+        try:
+            result = await _mcp.call_tool(server_id, tool_name, body)
+            return {"server_id": server_id, "tool": tool_name, "result": result}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
 
     return app, manager
 

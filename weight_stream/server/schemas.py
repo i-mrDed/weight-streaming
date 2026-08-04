@@ -119,6 +119,17 @@ class AssistantUpdate(BaseModel):
     params: Optional[Dict[str, Any]] = None
 
 
+class MCPServerCreate(BaseModel):
+    """Add/update an MCP server config (P7.4)."""
+    name: str = Field(..., min_length=1)
+    transport: str = Field(default="stdio", pattern="^(stdio|sse)$")
+    command: Optional[str] = None
+    args: Optional[List[str]] = None
+    url: Optional[str] = None
+    enabled: bool = True
+    auto_approve: bool = False
+
+
 class GenerationResult(BaseModel):
     """Result from a generation request (non-streaming)."""
     model: str = "default"
