@@ -8,20 +8,24 @@ import { t } from '@/i18n'
 interface Props {
   text: string
   streaming?: boolean
+  /** user toggle: hide thinking (both completed and live) when off */
+  showThinking?: boolean
 }
 
-export function RichText({ text, streaming }: Props) {
+export function RichText({ text, streaming, showThinking = true }: Props) {
   const { main, thinks, partial } = parseThinks(text, !!streaming)
 
   return (
     <div class="rich">
-      {thinks.map((th, i) => (
-        <details key={i} class="think">
-          <summary>💭 {t('chat.thinking')}</summary>
-          <div class="msg__md" dangerouslySetInnerHTML={{ __html: renderMarkdown(th) }} />
-        </details>
-      ))}
-      {partial !== null ? (
+      {showThinking
+        ? thinks.map((th, i) => (
+            <details key={i} class="think">
+              <summary>💭 {t('chat.thinking')}</summary>
+              <div class="msg__md" dangerouslySetInnerHTML={{ __html: renderMarkdown(th) }} />
+            </details>
+          ))
+        : null}
+      {showThinking && partial !== null ? (
         <details class="think think--live" open>
           <summary>
             💭 {t('chat.thinkingLive')}

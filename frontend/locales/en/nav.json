@@ -13,6 +13,7 @@
   "modelsLoaded_other": "{{count}} models loaded",
   "openIssues_one": "{{count}} open",
   "openIssues_other": "{{count}} open",
+  "serverStatus": "Server status",
   "section": {
     "main": "Workspace",
     "system": "System"

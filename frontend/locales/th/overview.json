@@ -31,6 +31,11 @@
   },
   "widgets": {
     "title": "สุขภาพระบบ",
+    "genSpeed": {
+      "title": "ความเร็วการ generate",
+      "tip": "ความเร็วการ generate ล่าสุด (tok/s) ของโมเดลที่โหลดอยู่",
+      "idle": "ยังไม่มีการ generate"
+    },
     "paging": {
       "title": "ความต้องการ paging",
       "tip": "page fault ของ OS ต่อโทเคนที่สร้างจากการ generate ครั้งล่าสุด ต่ำกว่าหมายถึงโมเดลยัง warm อยู่ใน RAM/page cache",

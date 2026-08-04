@@ -12,6 +12,7 @@ import { useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import {
   Bot,
+  Brain,
   ChevronDown,
   CircleStop,
   Copy,
@@ -73,7 +74,39 @@ export function ChatPage() {
   const sideDrawer = useSignal(false) // mobile sidebar sheet
   const sideCollapsed = useSignal(false) // desktop rail
   const agentMode = useSignal<'default' | 'agent'>('default')
+  // Reasoning effort — per-model override persisted in localStorage, because
+  // models support different effort levels (user feedback). Default medium.
   const effort = useSignal<'low' | 'medium' | 'high'>('medium')
+  const effortModel = useSignal<string | null>(null) // model the override belongs to
+  const readEffort = (modelId: string): 'low' | 'medium' | 'high' => {
+    try {
+      const v = localStorage.getItem(`ws-effort:${modelId}`)
+      if (v === 'low' || v === 'medium' || v === 'high') return v
+    } catch { /* non-fatal */ }
+    return 'medium'
+  }
+  const setEffort = (v: 'low' | 'medium' | 'high') => {
+    effort.value = v
+    const id = activeConv.value?.model
+    if (id) {
+      effortModel.value = id
+      try { localStorage.setItem(`ws-effort:${id}`, v) } catch { /* non-fatal */ }
+    }
+  }
+  // User toggle: show/hide completed thinking accordions (persisted).
+  const showThinking = useSignal<boolean>(() => {
+    try {
+      return localStorage.getItem('ws-show-thinking') !== '0'
+    } catch {
+      return true
+    }
+  })
+  const toggleThinking = () => {
+    showThinking.value = !showThinking.value
+    try {
+      localStorage.setItem('ws-show-thinking', showThinking.value ? '1' : '0')
+    } catch { /* non-fatal */ }
+  }
 
   const scrollRef = useRef<HTMLDivElement>(null)
   const stickRef = useRef(true)
@@ -99,6 +132,13 @@ export function ChatPage() {
   }
 
   const conv = activeConv.value
+
+  // Sync per-model effort: when the active model changes, load its saved
+  // override (honest per-model preference). Must run after `conv` exists.
+  if (conv?.model && conv.model !== effortModel.value) {
+    effortModel.value = conv.model
+    effort.value = readEffort(conv.model)
+  }
 
   useEffect(() => () => abortRef.current?.(), [])
 
@@ -417,7 +457,7 @@ export function ChatPage() {
               ariaLabel={t('chat.effort.label')}
               size="sm"
               value={effort.value}
-              onChange={(v) => (effort.value = v as 'low' | 'medium' | 'high')}
+              onChange={(v) => setEffort(v as 'low' | 'medium' | 'high')}
               options={[
                 { value: 'low', label: t('chat.effort.low') },
                 { value: 'medium', label: t('chat.effort.med') },
@@ -426,6 +466,17 @@ export function ChatPage() {
             />
             <Tip label={t('chat.effort.tip')} />
           </span>
+
+          {/* Thinking visibility toggle (user feedback: show/hide thinking) */}
+          <button
+            class={`icon-btn${showThinking.value ? ' is-active' : ''}`}
+            aria-label={t('chat.thinkingToggle')}
+            aria-pressed={showThinking.value}
+            title={t('chat.thinkingToggle')}
+            onClick={toggleThinking}
+          >
+            <Brain size={16} />
+          </button>
 
           <span class="chat__toolbar-spacer" />
 
@@ -463,7 +514,7 @@ export function ChatPage() {
                       {m.role === 'user' ? (
                         <div class="msg__md" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />
                       ) : (
-                        <RichText text={m.content} streaming={streaming} />
+                        <RichText text={m.content} streaming={streaming} showThinking={showThinking.value} />
                       )}
                       {m.error ? <p class="msg__error">⚠️ {m.error}</p> : null}
                       {streaming && !m.content ? <span class="msg__dots" aria-hidden="true" /> : null}

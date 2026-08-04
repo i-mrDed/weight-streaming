@@ -26,7 +26,7 @@ export const THEMES: ThemeDefinition[] = [
     nameKey: 'settings.theme.classicDark',
     descriptionKey: 'settings.theme.classicDarkDesc',
     mode: 'dark',
-    particles: 'none',
+    particles: 'constellation',
     builtin: true,
     preview: { canvas: '#0b0f19', accent: '#6366f1', text: '#f3f4f6' },
   },

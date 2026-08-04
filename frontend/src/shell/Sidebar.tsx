@@ -16,7 +16,7 @@ import {
 } from 'lucide-preact'
 import { route, navigate, type PageId } from '@/core/router'
 import { t } from '@/i18n'
-import { openIssueCount, primaryModel, extraModelCount } from '@/core/store'
+import { openIssueCount, primaryModel, extraModelCount, health, serverVersion, serverHostPort } from '@/core/store'
 
 interface NavDef {
   id: PageId
@@ -149,6 +149,18 @@ export function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <span class="model-chip__id model-chip__id--empty">{t('nav.noModelLoaded')}</span>
           )}
         </button>
+        {/* Server status — always visible at the bottom of the sidebar
+            (user feedback: IP:port / version / uptime should be glanceable
+            without opening Overview). */}
+        <div class="sidebar__server" title={t('nav.serverStatus')}>
+          <span class={`status-dot status-dot--${health.value}`} aria-hidden="true" />
+          <span class="sidebar__server-text">
+            <span class="sidebar__server-line tnum">{serverHostPort.value || '—'}</span>
+            <span class="sidebar__server-line sidebar__server-line--sub">
+              {serverVersion.value ? `v${serverVersion.value}` : t('common.health.checking')}
+            </span>
+          </span>
+        </div>
       </div>
     </div>
   )

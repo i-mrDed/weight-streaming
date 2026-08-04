@@ -127,6 +127,9 @@
   transition: background-color var(--ws-dur-fast), color var(--ws-dur-fast);
 }
 .icon-btn:hover { background: var(--ws-nav-item-hover); color: var(--ws-text-primary); }
+/* Active/toggled state — used by the chat thinking-visibility toggle (and
+   any future on/off icon button). Gives clear visual feedback on click. */
+.icon-btn.is-active { background: var(--ws-accent-brand-soft); color: var(--ws-accent-brand); }
 
 .kbd {
   font-family: var(--ws-font-mono);

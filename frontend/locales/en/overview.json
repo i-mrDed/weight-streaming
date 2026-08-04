@@ -31,6 +31,11 @@
   },
   "widgets": {
     "title": "Health",
+    "genSpeed": {
+      "title": "Generation speed",
+      "tip": "Latest generation speed (tok/s) across loaded models.",
+      "idle": "No generation yet"
+    },
     "paging": {
       "title": "Paging demand",
       "tip": "OS page faults per generated token from the last generation. Lower means the model stays warmer in RAM/page cache.",

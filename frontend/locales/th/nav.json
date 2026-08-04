@@ -13,6 +13,7 @@
   "modelsLoaded_other": "โหลด {{count}} โมเดล",
   "openIssues_one": "{{count}} รายการเปิดอยู่",
   "openIssues_other": "{{count}} รายการเปิดอยู่",
+  "serverStatus": "สถานะเซิร์ฟเวอร์",
   "section": {
     "main": "พื้นที่ทำงาน",
     "system": "ระบบ"

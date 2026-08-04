@@ -9,11 +9,14 @@ import { useSignal } from '@preact/signals'
 import {
   Bug,
   FolderSearch,
+  Gauge as GaugeIcon,
   HardDriveDownload,
+  MemoryStick,
   MessageSquare,
   Plus,
   Server,
   XCircle,
+  Zap,
 } from 'lucide-preact'
 import { Card } from '@/components/Card'
 import { Button } from '@/components/Button'
@@ -21,6 +24,7 @@ import { Badge } from '@/components/Badge'
 import { EmptyState } from '@/components/EmptyState'
 import { Dialog } from '@/components/Dialog'
 import { Tip } from '@/components/Tip'
+import { Gauge } from '@/components/Gauge'
 import { toast } from '@/components/Toast'
 import { ApiError } from '@/core/api'
 import { navigate } from '@/core/router'
@@ -91,6 +95,22 @@ export function Overview() {
   const hostPort = srv ? `${srv.host}:${srv.port}` : window.location.host
   const paging = pickPaging(stats.value)
   const pagingVal = paging?.ms.generation.paging
+  // Latest generation speed (tok/s) across loaded models — honest "latest".
+  const genSpeed = (() => {
+    let latest: number | null = null
+    let latestTs = 0
+    for (const ms of Object.values(stats.value?.models ?? {})) {
+      const g = ms.generation
+      if (g && typeof g.tokens_per_sec === 'number') {
+        const ts = g.elapsed ? Date.now() - g.elapsed * 1000 : 0
+        if (ts >= latestTs) {
+          latestTs = ts
+          latest = g.tokens_per_sec
+        }
+      }
+    }
+    return latest
+  })()
   const residency = (() => {
     for (const ms of Object.values(stats.value?.models ?? {})) {
       if (typeof ms.page_cache?.resident_ratio === 'number' && Object.keys(ms.page_cache).length > 0) {
@@ -302,60 +322,62 @@ export function Overview() {
 
         {/* ── Health widgets ────────────────────────────────────── */}
         <section class="ov-section">
-          <h2 class="ov-section__title">{t('overview.widgets.title')}</h2>
+          <h2 class="ov-section__title">
+            <GaugeIcon size={14} aria-hidden="true" /> {t('overview.widgets.title')}
+          </h2>
           <div class="ov-widgets">
-            <Card class="ov-widget">
-              <div class="ov-widget__head">
-                <span>{t('overview.widgets.paging.title')}</span>
-                <Tip label={t('overview.widgets.paging.tip')} />
-              </div>
-              {pagingVal ? (
-                <>
-                  <div class="ov-widget__value tnum">
-                    {fmtNumber(pagingVal.faults_per_token, { maximumFractionDigits: 1 })}
-                    <small>{t('overview.widgets.paging.unit')}</small>
-                  </div>
-                  {typeof pagingVal.disk_mb_per_token === 'number' ? (
-                    <div class="ov-widget__sub tnum">
-                      {t('overview.widgets.paging.disk', {
-                        mb: fmtNumber(pagingVal.disk_mb_per_token, { maximumFractionDigits: 3 }),
-                      })}
-                    </div>
-                  ) : null}
-                </>
-              ) : (
-                <div class="ov-widget__na">{t('overview.widgets.paging.idle')}</div>
-              )}
-            </Card>
-
-            <Card class="ov-widget">
-              <div class="ov-widget__head">
-                <span>{t('overview.widgets.residency.title')}</span>
-                <Tip label={t('overview.widgets.residency.tip')} />
-              </div>
-              {residency ? (
-                <>
-                  <div class="ov-widget__value tnum">
-                    {fmtNumber((residency.resident_ratio ?? 0) * 100, { maximumFractionDigits: 0 })}
-                    <small>%</small>
-                  </div>
-                  <div class="ov-widget__sub tnum">
-                    {fmtNumber(residency.resident_gb ?? 0, { maximumFractionDigits: 1 })} /{' '}
-                    {fmtNumber(residency.total_gb ?? 0, { maximumFractionDigits: 1 })} GB
-                  </div>
-                </>
-              ) : (
-                <div class="ov-widget__na">
-                  {loaded.length === 0
-                    ? t('overview.widgets.residency.noModel')
-                    : t('overview.widgets.residency.unavailable')}
+            <Gauge
+              label={t('overview.widgets.genSpeed.title')}
+              tip={t('overview.widgets.genSpeed.tip')}
+              value={genSpeed}
+              fraction={genSpeed != null ? Math.min(1, genSpeed / 20) : null}
+              format={(n) => fmtNumber(n, { maximumFractionDigits: 1 })}
+              unit="tok/s"
+              tone="brand"
+              idle={t('overview.widgets.genSpeed.idle')}
+            />
+            <Gauge
+              label={t('overview.widgets.paging.title')}
+              tip={t('overview.widgets.paging.tip')}
+              value={pagingVal ? pagingVal.faults_per_token : null}
+              fraction={pagingVal ? Math.min(1, pagingVal.faults_per_token / 1000) : null}
+              format={(n) => fmtNumber(n, { maximumFractionDigits: 1 })}
+              unit={t('overview.widgets.paging.unit')}
+              tone="warn"
+              idle={t('overview.widgets.paging.idle')}
+            >
+              {pagingVal && typeof pagingVal.disk_mb_per_token === 'number' ? (
+                <div class="ov-widget__sub tnum">
+                  {t('overview.widgets.paging.disk', {
+                    mb: fmtNumber(pagingVal.disk_mb_per_token, { maximumFractionDigits: 3 }),
+                  })}
                 </div>
-              )}
-            </Card>
-
-            <Card class="ov-widget">
+              ) : null}
+            </Gauge>
+            <Gauge
+              label={t('overview.widgets.residency.title')}
+              tip={t('overview.widgets.residency.tip')}
+              value={residency ? (residency.resident_ratio ?? 0) * 100 : null}
+              fraction={residency?.resident_ratio ?? null}
+              format={(n) => fmtNumber(n, { maximumFractionDigits: 0 })}
+              unit="%"
+              tone="ok"
+              idle={
+                loaded.length === 0
+                  ? t('overview.widgets.residency.noModel')
+                  : t('overview.widgets.residency.unavailable')
+              }
+            >
+              {residency ? (
+                <div class="ov-widget__sub tnum">
+                  {fmtNumber(residency.resident_gb ?? 0, { maximumFractionDigits: 1 })} /{' '}
+                  {fmtNumber(residency.total_gb ?? 0, { maximumFractionDigits: 1 })} GB
+                </div>
+              ) : null}
+            </Gauge>
+            <Card class="ov-widget ov-widget--issues">
               <div class="ov-widget__head">
-                <span>{t('overview.widgets.issues.title')}</span>
+                <Bug size={13} aria-hidden="true" /> {t('overview.widgets.issues.title')}
                 <Tip label={t('overview.widgets.issues.tip')} />
               </div>
               <div class="ov-widget__value tnum">

@@ -1032,9 +1032,13 @@ select.md-input { cursor: pointer; }
 .set-log { max-height: 320px; overflow: auto; }
 
 /* ── Overview: P5 activity feed ─────────────────────────────────────── */
-.ov-activity { width: 100%; border-collapse: collapse; font-size: var(--ws-text-sm); }
-.ov-activity th { text-align: left; font-size: var(--ws-text-xs); color: var(--ws-text-tertiary); font-weight: 600; padding: 4px 10px 6px 0; border-bottom: 1px solid var(--ws-border-subtle); }
-.ov-activity td { padding: 7px 10px 7px 0; border-bottom: 1px solid var(--ws-border-subtle); color: var(--ws-text-primary); }
+/* The base .card has NO padding by design, so the activity table needs its
+   own gutters to avoid sitting flush to the card edge (user feedback). */
+.ov-activity { width: 100%; border-collapse: collapse; font-size: var(--ws-text-sm); padding: 2px 14px 6px; }
+.ov-activity th { text-align: left; font-size: var(--ws-text-xs); color: var(--ws-text-tertiary); font-weight: 600; padding: 4px 10px 6px; border-bottom: 1px solid var(--ws-border-subtle); }
+.ov-activity td { padding: 7px 10px; border-bottom: 1px solid var(--ws-border-subtle); color: var(--ws-text-primary); }
+/* numeric columns (tokens / speed / when) centered — reads better as a table */
+.ov-activity th.tnum, .ov-activity td.tnum { text-align: center; }
 .ov-activity tbody tr:last-child td { border-bottom: none; }
 .ov-activity__model { max-width: 26ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 

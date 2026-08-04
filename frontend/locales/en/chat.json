@@ -5,6 +5,7 @@
   "stopped": "stopped",
   "thinking": "Thinking",
   "thinkingLive": "Thinking…",
+  "thinkingToggle": "Show/hide thinking blocks",
   "genFailed": "Generation failed",
   "copyFailed": "Copy failed",
   "notif": {
@@ -49,7 +50,7 @@
     "low": "Low",
     "med": "Med",
     "high": "High",
-    "tip": "Sent to the server as reasoning_effort, but the server does not act on it yet — it has no effect on generation."
+    "tip": "Per-model setting (saved when you change it). Sent to the server as reasoning_effort, but the server does not act on it yet — models also support different levels, so this is a UI-level preference for now."
   },
   "composer": {
     "placeholder": "Message… (Enter to send, Shift+Enter for a new line)",
