@@ -79,6 +79,7 @@ async def _complete_response(
         max_tokens=request.max_tokens,
         temperature=request.temperature,
         top_p=request.top_p,
+        reasoning_mode=request.reasoning_mode or "auto",
     )
     
     completion_tokens = result.get("tokens_generated", 0)
@@ -122,6 +123,7 @@ async def _stream_response(
             max_tokens=request.max_tokens,
             temperature=request.temperature,
             top_p=request.top_p,
+            reasoning_mode=request.reasoning_mode or "auto",
         )
         
         async for event in gen:

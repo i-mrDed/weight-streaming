@@ -369,6 +369,7 @@ class WeightStreamModel(WeightStreamBackend):
         temperature: float = 0.7,
         top_p: float = 0.9,
         repeat_penalty: float = 1.15,
+        reasoning_mode: str = "auto",
         **kwargs,
     ) -> Iterator[str]:
         """
@@ -381,6 +382,14 @@ class WeightStreamModel(WeightStreamBackend):
         Uses the GGUF-native chat template first (``create_chat_completion``);
         GGUFs without a usable template fall back to the architecture-aware
         prompt formatter.
+
+        Reasoning mode (P7.1b): auto/on/off controls thinking via system
+        prompt injection (llama.cpp has no reasoning flag in this binding).
+        - auto: no change (model decides)
+        - on:   instruct the model to reason step-by-step first
+        - off:  instruct the model to answer directly + strip thinking blocks
+        Honest: this is software control, not a C++ flag — a reasoning
+        model may still emit some thinking; "off" strips it from output.
 
         Records generation stats (``_last_gen_stats``) on completion, on
         error, and on early close (client cancellation), and samples the OS
@@ -401,6 +410,15 @@ class WeightStreamModel(WeightStreamBackend):
                 "Model not loaded",
                 details={"model_path": self._model_path},
             )
+
+        # Inject current date so the model doesn't hallucinate the date
+        # (models don't know today — Jan does this via {{current_date}}).
+        import datetime as _dt
+        _date_str = _dt.datetime.now().strftime("%B %d, %Y")
+        messages = [{"role": "system", "content": f"Current date: {_date_str}."}] + list(messages)
+
+        # Apply reasoning mode to the system message (P7.1b).
+        messages = self._apply_reasoning_mode(messages, reasoning_mode)
 
         use_native = True
         try:
@@ -442,6 +460,7 @@ class WeightStreamModel(WeightStreamBackend):
         # Cached residency sample (free — no new QueryWorkingSetEx call).
         res_before = (self._page_monitor.get_resident_bytes()
                       if self._page_monitor else None)
+        strip_thinking = (reasoning_mode or "auto").lower() == "off"
         try:
             for chunk in stream:
                 choices = chunk.get("choices") or []
@@ -454,6 +473,10 @@ class WeightStreamModel(WeightStreamBackend):
                     text = choice.get("text", "")
                 if not text:
                     continue
+                if strip_thinking:
+                    text = self._strip_thinking(text)
+                    if not text:
+                        continue
                 token_count += 1
                 yield text
 
@@ -598,6 +621,57 @@ class WeightStreamModel(WeightStreamBackend):
             )
             if paging is not None:
                 self._last_gen_stats["paging"] = paging
+
+    # ── Reasoning mode (P7.1b) ────────────────────────────────────────
+    _REASON_ON = (
+        "You are a reasoning model. Think step-by-step and show your "
+        "reasoning before giving the final answer."
+    )
+    _REASON_OFF = (
+        "Answer directly and concisely without any reasoning or "
+        "step-by-step thinking. Do not include a thinking section."
+    )
+
+    def _apply_reasoning_mode(self, messages: List[dict], mode: str) -> List[dict]:
+        """Inject a system prompt based on reasoning mode (auto/on/off).
+
+        Returns a new message list (does not mutate the caller's). 'auto'
+        leaves messages unchanged. 'on'/'off' append/replace the system
+        message with an instruction. Honest: software control, not a C++
+        flag — 'off' is best-effort + the output strip in `stream_chat`.
+        """
+        mode = (mode or "auto").lower()
+        if mode not in ("on", "off"):
+            return messages
+        instruction = self._REASON_ON if mode == "on" else self._REASON_OFF
+        out = list(messages)
+        # Prepend a system instruction (keep any existing system message).
+        out.insert(0, {"role": "system", "content": instruction})
+        return out
+
+    def _strip_thinking(self, text: str) -> str:
+        """Strip thinking blocks from output when reasoning_mode=off.
+
+        Removes common thinking markers: ` thinking… response`,
+        `<|thinking|>…</|thinking|>`, and prose "Thinking Process:"
+        preamble up to an answer separator. Line-based, tolerant.
+        """
+        if not text:
+            return text
+        #  thinking … response (space-tag convention, this project)
+        import re as _re
+        text = _re.sub(r"[\s]* thinking(.*?) response", "", text, flags=_re.DOTALL)
+        # <|thinking|> … </|thinking|>
+        text = _re.sub(r"<\|thinking\|>.*?</\|thinking\|>", "", text, flags=_re.DOTALL)
+        # prose preamble "Thinking Process:" … up to an answer separator
+        text = _re.sub(
+            r"^\s*(thinking process|chain of thought|reasoning)\b[^\n]*.*?"
+            r"(?=\n\s*(?:final answer|answer|conclusion|สรุป|คำตอบ|ตอบ)\s*[:：#]|$)",
+            "",
+            text,
+            flags=_re.DOTALL | _re.IGNORECASE,
+        )
+        return text.strip()
 
     @staticmethod
     def _format_chat_prompt(messages: List[dict], arch: str = "") -> str:
@@ -781,6 +855,19 @@ class WeightStreamModel(WeightStreamBackend):
             "general.architecture", 
             self._metadata.get("architecture", "unknown")
         )
+
+    def get_capabilities(self) -> dict:
+        """Detect model capabilities (reasoning/tools/vision) — P7.1a.
+
+        Heuristic detection from GGUF metadata (arch + name). Honest
+        labels: "detected", never "guaranteed" — a model may be capable
+        but weak at a task.
+        """
+        from ..server.capabilities import detect_capabilities
+        arch = self._get_arch()
+        name = str(self._metadata.get("general.name", ""))
+        caps = detect_capabilities(arch=arch, name=name)
+        return caps.to_dict()
     
     def _warm_up_buffer(self):
         """Preload initial shards into buffer"""

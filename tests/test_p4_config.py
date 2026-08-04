@@ -79,10 +79,11 @@ def test_get_config_source_env_when_var_set(monkeypatch, tmp_path):
 
 
 def test_get_config_includes_dirs_and_version(monkeypatch, tmp_path):
+    from weight_stream import __version__
     app, _ = _app(monkeypatch, tmp_path)
     with TestClient(app) as c:
         d = c.get("/v1/config").json()
-    assert d["version"] == "0.13.0"
+    assert d["version"] == __version__
     assert isinstance(d["models_dirs"], list) and d["models_dirs"]
     assert d["issues_dir"]  # real path from the issue store
 

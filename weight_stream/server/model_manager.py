@@ -29,6 +29,7 @@ import time
 from typing import Any, AsyncIterator, Callable, Dict, Iterator, Optional
 
 from ..backends.llama_cpp import WeightStreamModel
+from ..backends.llama_server import LlamaServerBackend
 from ..core.exceptions import WeightStreamError, ModelError, GenerationError
 from ..io.process_priority import (
     describe_process_priority,
@@ -75,6 +76,45 @@ class ModelManager:
         self._usage = usage_recorder
 
     # ── Model lifecycle ─────────────────────────────────────────────
+
+    def _create_backend(
+        self,
+        model_path: str,
+        buffer_mb: int = 64,
+        n_ctx: int = 2048,
+        n_threads: Optional[int] = None,
+        verbose: bool = False,
+        **kwargs,
+    ):
+        """Create the inference backend for a model.
+
+        P7.1b: prefer LlamaServerBackend (GPU + reasoning flags + tools)
+        when a llama-server binary is available; fall back to the
+        llama-cpp-python binding (CPU) otherwise. The binding remains the
+        fallback so the server keeps working on machines without a
+        llama-server binary or GPU.
+        """
+        use_server = kwargs.pop("use_llama_server", True)
+        if use_server and LlamaServerBackend.is_available():
+            try:
+                logger.info("Using LlamaServerBackend (GPU) for %s", model_path)
+                return LlamaServerBackend(
+                    model_path=model_path,
+                    n_ctx=n_ctx,
+                    n_threads=n_threads,
+                    **kwargs,
+                )
+            except Exception as e:
+                logger.warning("LlamaServerBackend failed (%s); falling back to binding", e)
+        logger.info("Using WeightStreamModel (CPU binding) for %s", model_path)
+        return WeightStreamModel(
+            model_path=model_path,
+            buffer_mb=buffer_mb,
+            n_ctx=n_ctx,
+            n_threads=n_threads,
+            verbose=verbose,
+            **kwargs,
+        )
 
     async def load(self, model_id: str, model_path: str, **kwargs) -> dict:
         """
@@ -131,7 +171,7 @@ class ModelManager:
             loop = asyncio.get_running_loop()
             model = await loop.run_in_executor(
                 None,
-                lambda: WeightStreamModel(
+                lambda: self._create_backend(
                     model_path=model_path,
                     buffer_mb=buffer_mb,
                     n_ctx=n_ctx,
@@ -594,6 +634,11 @@ class ModelManager:
             for mid in self._models:
                 config = self._configs.get(mid, {})
                 model = self._models[mid]
+                caps = None
+                try:
+                    caps = getattr(model, "get_capabilities", lambda: None)()
+                except Exception:
+                    caps = None
                 models.append(ModelStatus(
                     id=mid,
                     path=config.get("model_path", ""),
@@ -608,6 +653,7 @@ class ModelManager:
                         )
                         if mid in self._last_used else None
                     ),
+                    capabilities=caps,
                 ))
         return models
 

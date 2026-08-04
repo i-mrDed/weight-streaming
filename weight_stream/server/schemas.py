@@ -98,6 +98,7 @@ class ModelStatus(BaseModel):
     n_experts: int = 0
     buffer_mb: int = 64
     last_used: Optional[str] = None
+    capabilities: Optional[Dict[str, Any]] = None
 
 
 class GenerationResult(BaseModel):
@@ -164,7 +165,8 @@ class ChatCompletionRequest(BaseModel):
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     top_p: float = Field(default=1.0, ge=0.0, le=1.0)
     stream: bool = Field(default=False)
-    reasoning_effort: Optional[str] = Field(default="medium", description="Reasoning effort level: low, medium, high")
+    reasoning_effort: Optional[str] = Field(default="medium", description="Reasoning effort level: low, medium, high (legacy)")
+    reasoning_mode: Optional[str] = Field(default=None, description="Reasoning mode: auto, on, off (P7 — controls thinking)")
     tools: Optional[List[Dict[str, Any]]] = Field(default=None, description="Available agent tools")
 
     model_config = {"extra": "allow"}
