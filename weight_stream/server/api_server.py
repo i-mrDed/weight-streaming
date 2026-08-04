@@ -64,6 +64,8 @@ from .schemas import (
     ErrorResponse,
     ChatCompletionRequest,
     HubDownloadRequest,
+    AssistantCreate,
+    AssistantUpdate,
 )
 from .streaming import sse_stream, ws_stream
 
@@ -897,6 +899,57 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         if task is None:
             raise HTTPException(status_code=404, detail=f"download task {task_id} not found")
         return task.to_dict()
+
+    # ── Assistants (P7.2): named chat personas (system prompt + model + params)
+    from .assistants import get_assistant_store
+
+    _astore = get_assistant_store()
+
+    @app.get("/v1/assistants")
+    async def list_assistants():
+        """List all assistants."""
+        return _astore.list()
+
+    @app.get("/v1/assistants/{assistant_id}")
+    async def get_assistant(assistant_id: str):
+        """Get a single assistant."""
+        a = _astore.get(assistant_id)
+        if not a:
+            raise HTTPException(status_code=404, detail=f"Assistant {assistant_id} not found")
+        return a
+
+    @app.post("/v1/assistants", status_code=201)
+    async def create_assistant(body: AssistantCreate):
+        """Create a new assistant."""
+        return _astore.create(
+            name=body.name,
+            system_prompt=body.system_prompt,
+            description=body.description,
+            model_id=body.model_id,
+            params=body.params,
+        )
+
+    @app.patch("/v1/assistants/{assistant_id}")
+    async def update_assistant(assistant_id: str, body: AssistantUpdate):
+        """Update an assistant."""
+        a = _astore.update(
+            assistant_id,
+            name=body.name,
+            system_prompt=body.system_prompt,
+            description=body.description,
+            model_id=body.model_id,
+            params=body.params,
+        )
+        if not a:
+            raise HTTPException(status_code=404, detail=f"Assistant {assistant_id} not found")
+        return a
+
+    @app.delete("/v1/assistants/{assistant_id}")
+    async def delete_assistant(assistant_id: str):
+        """Delete an assistant."""
+        if not _astore.delete(assistant_id):
+            raise HTTPException(status_code=404, detail=f"Assistant {assistant_id} not found")
+        return {"status": "deleted", "id": assistant_id}
 
     return app, manager
 

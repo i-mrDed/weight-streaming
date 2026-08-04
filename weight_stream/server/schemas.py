@@ -101,6 +101,24 @@ class ModelStatus(BaseModel):
     capabilities: Optional[Dict[str, Any]] = None
 
 
+class AssistantCreate(BaseModel):
+    """Create an assistant (P7.2)."""
+    name: str = Field(..., min_length=1, max_length=100)
+    system_prompt: str = ""
+    description: str = ""
+    model_id: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
+
+
+class AssistantUpdate(BaseModel):
+    """Update an assistant (P7.2)."""
+    name: Optional[str] = None
+    system_prompt: Optional[str] = None
+    description: Optional[str] = None
+    model_id: Optional[str] = None
+    params: Optional[Dict[str, Any]] = None
+
+
 class GenerationResult(BaseModel):
     """Result from a generation request (non-streaming)."""
     model: str = "default"
