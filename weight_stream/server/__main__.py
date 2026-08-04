@@ -94,7 +94,7 @@ def main():
     logger.info(f"Weight Streaming API Server v0.11.0")
     logger.info(f"Listening on http://{args.host}:{args.port}")
     logger.info(f"API docs: http://{args.host}:{args.port}/docs")
-    logger.info(f"Web app:  http://{args.host}:{args.port}/app")
+    logger.info(f"Web app:  http://{args.host}:{args.port}/console")
     
     if args.model:
         logger.info(f"Auto-loading model: {args.model} (id={args.model_id})")

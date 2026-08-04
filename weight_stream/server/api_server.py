@@ -154,11 +154,12 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     # Mount static files (SPA)
     static_dir = os.path.join(os.path.dirname(__file__), "static")
     if os.path.isdir(static_dir):
-        app.mount("/app", StaticFiles(directory=static_dir, html=True), name="static")
+        # Legacy SPA — kept at /app-legacy for one release after the P6
+        # promote (rollback path). The Console is now the primary UI.
+        app.mount("/app-legacy", StaticFiles(directory=static_dir, html=True), name="static-legacy")
 
     # Console — new dashboard (frontend/ built with Vite, prebuilt assets
-    # committed so the server needs no Node toolchain). ADDITIVE mount:
-    # the legacy /app SPA above stays byte-untouched until approved swap.
+    # committed so the server needs no Node toolchain). PRIMARY UI since P6.
     console_dir = os.path.join(static_dir, "console")
     if os.path.isdir(console_dir):
         app.mount("/console", StaticFiles(directory=console_dir, html=True), name="console")
@@ -174,11 +175,11 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     async def health():
         return {"status": "ok", "version": __version__}
     
-    # Root → SPA (product frontend for end users)
+    # Root → Console (primary UI since P6 promote; legacy at /app-legacy)
     @app.get("/")
     async def root():
         from fastapi.responses import RedirectResponse
-        return RedirectResponse(url="/app/", status_code=302)
+        return RedirectResponse(url="/console/", status_code=302)
     
     # API info (for developers / health dashboards)
     @app.get("/api")
@@ -187,7 +188,7 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         return {
             "message": f"Weight Streaming API v{__version__}",
             "docs": "/docs",
-            "app": "/app",
+            "app": "/app-legacy",
             "console": "/console",
             "health": "/health",
             "issues": "/v1/issues",

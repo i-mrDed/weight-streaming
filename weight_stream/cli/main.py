@@ -91,14 +91,6 @@ def main():
     server_p.add_argument("--verbose", "-v", action="store_true",
                           help="Enable debug logging")
 
-    # ── dashboard ─────────────────────────────────────────────────────
-    dash_p = sub.add_parser("dashboard", help="Start Live Streaming Web Dashboard",
-                            epilog="Example: python -m weight_stream dashboard --port 8766")
-    dash_p.add_argument("--port", type=int, default=8766,
-                        help="Web server port (default: 8766)")
-    dash_p.add_argument("--host", type=str, default="127.0.0.1",
-                        help="Host address (default: 127.0.0.1)")
-
     # ── auto-tune ─────────────────────────────────────────────────────
     tune_p = sub.add_parser("auto-tune", help="Hardware profiler — recommend optimal streaming config")
     tune_p.add_argument("--model-size-gb", type=float, default=14.0, help="Model size in GB")
@@ -169,8 +161,6 @@ def main():
     try:
         if args.command in ("server", "serve"):
             cmd_server(args)
-        elif args.command == "dashboard":
-            cmd_dashboard(args)
         elif args.command == "auto-tune":
             cmd_auto_tune(args)
         elif args.command == "repack":
@@ -498,12 +488,6 @@ def cmd_server(args):
         port=args.port,
         log_level="debug" if getattr(args, "verbose", False) else "info",
     )
-
-
-def cmd_dashboard(args):
-    """Start Live Streaming Web Dashboard."""
-    from weight_stream.server.dashboard_server import run_dashboard_server
-    run_dashboard_server(port=args.port)
 
 
 def cmd_auto_tune(args):

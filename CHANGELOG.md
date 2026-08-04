@@ -7,6 +7,17 @@
 
 ## [Unreleased]
 
+### 🎉 Console Promoted to Production (P6) — 2026-08-04
+- **Console (dashboard UI) กลายเป็น UI หลัก** — merge `feature/dashboard-theme` → `main` (`--no-ff`, HEAD `1dba698`) ตามมติผู้ใช้ trial-first
+- **Route swap**: `/` → `/console/` (Console ใหม่), `/app` → `/app-legacy` (เก็บของเก่า 1 release เป็น rollback path)
+- **ลบ `dashboard_server.py`** (CLI dashboard พอร์ต 8766 — เสิร์ฟค่าปลอม ขัด honest-telemetry) + call sites ใน `cli/main.py` + `cli/__init__.py`
+- **Console ฟีเจอร์ครบ (P0–P5)**: Overview/Chat/Live Stats/Models/Issues/Hub/API Docs/Settings + i18n TH/EN (666 keys) + theme registry (classic/aurora) + constellation particles
+- **P4 backend endpoints**: hub search/download+SSE progress, `/v1/usage/history`, `/v1/logs/tail`, `/v1/config` (+PATCH) — pytest +66
+- **QA round-2 fixes**: activity table layout, sidebar server status, health gauges, classic particles, thinking prose fallback ("Thinking Process:"), per-model effort, thinking visibility toggle
+- **Backup tag**: `feature/dashboard-theme-v1` (HEAD `27c6239`) — ย้อนกลับได้
+- **Tests**: 192 passed / 7 skipped (GGUF fixture errors หายเพราะมี model จริงใน research/models)
+- **P7 วางแผนแล้ว**: `docs/P7_PLAN.md` — Jan-style chat controls + Assistant + MCP + offline-first
+
 ### 🛠️ Local Server Reliability
 - Server CLI configuration now reaches `ModelManager`, so `--n-threads` applies to models loaded later from the SPA.
 - Default inference threads use half of logical CPU cores, preserving headroom for the API server, browser, and operating system.

@@ -17,12 +17,7 @@ def main():
     repack_parser.add_argument("output", help="Output repacked model path")
     repack_parser.add_argument("--shard-size-mb", type=float, default=4.0, help="Shard size in MB (default: 4.0)")
 
-    # 2. Dashboard subcommand
-    dash_parser = subparsers.add_parser("dashboard", help="Start Live Streaming Web Dashboard")
-    dash_parser.add_argument("--port", type=int, default=8766, help="Web server port (default 8766)")
-    dash_parser.add_argument("--host", type=str, default="127.0.0.1", help="Host address (default 127.0.0.1)")
-
-    # 3. Auto-tune subcommand
+    # 2. Auto-tune subcommand
     tune_parser = subparsers.add_parser("auto-tune", help="Hardware profiler — recommend optimal streaming config")
     tune_parser.add_argument("--model-size-gb", type=float, default=14.0, help="Model size in GB")
     tune_parser.add_argument("--json", action="store_true", help="Output raw JSON")
@@ -51,10 +46,6 @@ def main():
         repacker = ShardRepacker(args.input, args.output, shard_size_mb=args.shard_size_mb)
         res = repacker.repack()
         print("Repack Completed:", res)
-
-    elif args.command == "dashboard":
-        from weight_stream.server.dashboard_server import run_dashboard_server
-        run_dashboard_server(args.port)
 
     elif args.command == "auto-tune":
         from weight_stream.tools.auto_tune import get_system_profile, recommend_config, print_recommendation
