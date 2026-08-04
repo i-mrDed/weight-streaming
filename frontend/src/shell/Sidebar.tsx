@@ -8,6 +8,7 @@ import {
   Boxes,
   Bug,
   Globe,
+  Bot,
   BookOpen,
   Settings,
   Cpu,
@@ -33,6 +34,7 @@ const WORKSPACE: NavDef[] = [
 const SYSTEM: NavDef[] = [
   { id: 'issues', icon: <Bug size={17} />, emoji: '🐛' },
   { id: 'hub', icon: <Globe size={17} />, emoji: '🌐' },
+  { id: 'assistants', icon: <Bot size={17} />, emoji: '🤖' },
   { id: 'docs', icon: <BookOpen size={17} />, emoji: '📖' },
   { id: 'settings', icon: <Settings size={17} />, emoji: '⚙️' },
 ]
@@ -45,6 +47,7 @@ const SETTING_SECTIONS = [
   'language',
   'chatDefaults',
   'server',
+  'mcp',
   'data',
   'diagnostics',
   'about',

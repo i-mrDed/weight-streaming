@@ -92,6 +92,69 @@ export interface ModelStatus {
   }
 }
 
+/* ── Assistants (P7.2) ── */
+export interface Assistant {
+  id: string
+  name: string
+  description: string
+  system_prompt: string
+  model_id: string | null
+  params: Record<string, unknown>
+  created_at: number
+  updated_at: number
+}
+
+export function listAssistants(): Promise<Assistant[]> {
+  return apiJSON('/v1/assistants')
+}
+export function createAssistant(body: Partial<Assistant>): Promise<Assistant> {
+  return apiJSON('/v1/assistants', {
+    method: 'POST',
+    body: JSON.stringify(body),
+  })
+}
+export function updateAssistant(id: string, body: Partial<Assistant>): Promise<Assistant> {
+  return apiJSON(`/v1/assistants/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+  })
+}
+export function deleteAssistant(id: string): Promise<{ status: string }> {
+  return apiJSON(`/v1/assistants/${id}`, { method: 'DELETE' })
+}
+
+/* ── MCP (P7.4) ── */
+export interface MCPServer {
+  id: string
+  name: string
+  transport: 'stdio' | 'sse'
+  command: string | null
+  args: string[]
+  url: string | null
+  enabled: boolean
+  auto_approve: boolean
+}
+export interface MCPTool {
+  server_id: string
+  server_name: string
+  name: string
+  description: string
+  inputSchema: Record<string, unknown>
+}
+
+export function listMCPServers(): Promise<MCPServer[]> {
+  return apiJSON('/v1/mcp/servers')
+}
+export function addMCPServer(body: Partial<MCPServer>): Promise<MCPServer> {
+  return apiJSON('/v1/mcp/servers', { method: 'POST', body: JSON.stringify(body) })
+}
+export function deleteMCPServer(id: string): Promise<{ status: string }> {
+  return apiJSON(`/v1/mcp/servers/${id}`, { method: 'DELETE' })
+}
+export function listMCPTools(): Promise<MCPTool[]> {
+  return apiJSON('/v1/mcp/tools')
+}
+
 export interface ServerStatus {
   models_loaded: number
   max_models: number

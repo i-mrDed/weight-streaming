@@ -1,0 +1,14 @@
+{
+  "title": "ผู้ช่วย (Assistants)",
+  "subtitle": "บุคลิกแชท — ชุด system prompt + โมเดล + พารามิเตอร์ที่สลับได้เร็ว (local-first, ใช้ได้แบบ offline)",
+  "new": "สร้างผู้ช่วยใหม่",
+  "empty": "ยังไม่มีผู้ช่วย สร้างรายแรกเพื่อเริ่มใช้งาน",
+  "name": "ชื่อ",
+  "nameRequired": "กรุณากรอกชื่อ",
+  "description": "คำอธิบาย",
+  "systemPrompt": "System prompt",
+  "created": "สร้างผู้ช่วยแล้ว",
+  "updated": "อัปเดตผู้ช่วยแล้ว",
+  "deleted": "ลบผู้ช่วยแล้ว",
+  "edit": "แก้ไขผู้ช่วย"
+}

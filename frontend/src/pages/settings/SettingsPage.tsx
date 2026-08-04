@@ -28,6 +28,7 @@ import {
   type Density,
 } from '@/theme/manager'
 import { THEMES } from '@/theme/registry'
+import { MCPSection } from './MCPSection'
 import {
   availableLocales,
   fmtNumber,
@@ -896,6 +897,12 @@ export function SettingsPage() {
           <pre class="set-snippet">{snippet()}</pre>
           <p class="set-note set-note--warn">⚠️ {t('settings.server.restartNote')}</p>
         </Card>
+      </section>
+
+      {/* MCP (P7.4) */}
+      <section id="settings-mcp" class="md-section">
+        <h2 class="md-section__title">{t('settings.mcp.title')}</h2>
+        <MCPSection />
       </section>
 
       {/* Data */}

@@ -97,6 +97,23 @@
       "logLevel": "Log level"
     }
   },
+  "mcp": {
+    "title": "🔌 MCP Servers",
+    "subtitle": "Model Context Protocol servers",
+    "note": "Connect MCP servers (stdio/SSE) so the model can call their tools. Local-first, offline-friendly.",
+    "add": "Add server",
+    "name": "Name",
+    "nameRequired": "Name is required",
+    "transport": "Transport",
+    "command": "Command",
+    "args": "Arguments",
+    "url": "URL",
+    "added": "MCP server added",
+    "deleted": "MCP server deleted",
+    "empty": "No MCP servers configured",
+    "enabled": "enabled",
+    "disabled": "disabled"
+  },
   "data": {
     "title": "🗃️ Data",
     "clearHistory": "Clear chat history",

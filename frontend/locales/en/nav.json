@@ -5,6 +5,7 @@
   "models": "Models",
   "issues": "Issues",
   "hub": "Hub",
+  "assistants": "Assistants",
   "docs": "API Docs",
   "settings": "Settings",
   "activeModel": "Active model",

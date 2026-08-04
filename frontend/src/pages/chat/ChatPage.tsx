@@ -23,7 +23,7 @@ import {
   Send,
   Settings2,
 } from 'lucide-preact'
-import { sseRequest } from '@/core/api'
+import { sseRequest, listAssistants, type Assistant } from '@/core/api'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/Button'
 import { Drawer } from '@/components/Drawer'
@@ -76,6 +76,25 @@ export function ChatPage() {
   const sideDrawer = useSignal(false) // mobile sidebar sheet
   const sideCollapsed = useSignal(false) // desktop rail
   const agentMode = useSignal<'default' | 'agent'>('default')
+  // Assistant (P7.2): select a persona → apply its system prompt to the conv.
+  const assistants = useSignal<Assistant[]>([])
+  const assistantLoaded = useSignal(false)
+  const loadAssistants = async () => {
+    if (assistantLoaded.value) return
+    try {
+      assistants.value = await listAssistants()
+    } catch { /* non-fatal — offline */ }
+    assistantLoaded.value = true
+  }
+  loadAssistants()
+  const applyAssistant = async (id: string) => {
+    if (!id) return
+    const a = assistants.value.find((x) => x.id === id)
+    if (a && conv) {
+      mutateConv((c) => { c.systemPrompt = a.system_prompt })
+      toast('success', a.name)
+    }
+  }
   // Reasoning effort — per-model override persisted in localStorage, because
   // models support different effort levels (user feedback). Default medium.
   const effort = useSignal<'low' | 'medium' | 'high'>('medium')
@@ -566,6 +585,22 @@ export function ChatPage() {
           >
             {showThinking.value ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
+
+          {/* Assistant selector (P7.2) — apply a persona's system prompt */}
+          {assistants.value.length > 0 ? (
+            <select
+              class="icon-btn assistant-select"
+              aria-label={t('chat.assistant')}
+              title={t('chat.assistant')}
+              value=""
+              onChange={(e) => applyAssistant((e.target as HTMLSelectElement).value)}
+            >
+              <option value="">{t('chat.assistant')}</option>
+              {assistants.value.map((a) => (
+                <option key={a.id} value={a.id}>{a.name}</option>
+              ))}
+            </select>
+          ) : null}
 
           <span class="chat__toolbar-spacer" />
 

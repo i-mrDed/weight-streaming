@@ -161,6 +161,35 @@
   max-width: 84px;
 }
 .thinking-budget:hover { border-color: var(--ws-accent-brand); color: var(--ws-text-primary); }
+/* Assistant selector (P7.2) — compact, matches icon-btn height */
+.assistant-select {
+  height: 28px;
+  padding: 0 6px;
+  border-radius: var(--ws-radius-sm);
+  border: 1px solid var(--ws-border-subtle);
+  background: var(--ws-surface-inset);
+  color: var(--ws-text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  max-width: 110px;
+}
+.assistant-select:hover { border-color: var(--ws-accent-primary); color: var(--ws-text-primary); }
+/* MCP settings list (P7.4) */
+.mcp-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+.mcp-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--ws-border-subtle); border-radius: var(--ws-radius-sm); background: var(--ws-surface-inset); }
+.mcp-item__info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mcp-item__name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.mcp-item__cmd { font-size: 11px; color: var(--ws-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Assistants grid (P7.2) */
+.assistants-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.assistant-card { display: flex; flex-direction: column; gap: 10px; }
+.assistant-card__head { display: flex; align-items: center; gap: 10px; }
+.assistant-card__icon { font-size: 24px; }
+.assistant-card__name { font-size: 15px; font-weight: 700; margin: 0; }
+.assistant-card__desc { font-size: 12px; color: var(--ws-text-tertiary); margin: 0; }
+.assistant-card__prompt { padding: 8px 10px; border-radius: var(--ws-radius-sm); background: var(--ws-surface-inset); font-size: 11px; color: var(--ws-text-secondary); max-height: 80px; overflow: auto; }
+.assistant-card__actions { display: flex; gap: 8px; margin-top: auto; }
 
 .kbd {
   font-family: var(--ws-font-mono);

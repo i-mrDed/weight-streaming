@@ -8,6 +8,7 @@ import { IssuesPage } from './issues/IssuesPage'
 import { HubPage } from './hub/HubPage'
 import { DocsPage } from './docs/DocsPage'
 import { SettingsPage } from './settings/SettingsPage'
+import { AssistantsPage } from './assistants/AssistantsPage'
 
 /* P2: Overview / Chat / Live Stats / Models. P3: Issues / API Docs / Settings.
    P5: Hub (search-first GGUF discovery + real-progress downloads). */
@@ -30,6 +31,8 @@ export function RouterView() {
       return <DocsPage />
     case 'settings':
       return <SettingsPage />
+    case 'assistants':
+      return <AssistantsPage />
     default:
       return <Placeholder page={r.path as PageId} />
   }

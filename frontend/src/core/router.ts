@@ -17,6 +17,7 @@ export const VALID_PAGES = [
   'hub',
   'docs',
   'settings',
+  'assistants',
 ] as const
 
 export type PageId = (typeof VALID_PAGES)[number]

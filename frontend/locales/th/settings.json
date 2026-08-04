@@ -97,6 +97,23 @@
       "logLevel": "ระดับ log"
     }
   },
+  "mcp": {
+    "title": "🔌 เซิร์ฟเวอร์ MCP",
+    "subtitle": "เซิร์ฟเวอร์ Model Context Protocol",
+    "note": "เชื่อมต่อเซิร์ฟเวอร์ MCP (stdio/SSE) เพื่อให้โมเดลเรียกใช้เครื่องมือของมันได้ local-first ใช้ได้แบบ offline",
+    "add": "เพิ่มเซิร์ฟเวอร์",
+    "name": "ชื่อ",
+    "nameRequired": "กรุณากรอกชื่อ",
+    "transport": "Transport",
+    "command": "คำสั่ง",
+    "args": "อาร์กิวเมนต์",
+    "url": "URL",
+    "added": "เพิ่มเซิร์ฟเวอร์ MCP แล้ว",
+    "deleted": "ลบเซิร์ฟเวอร์ MCP แล้ว",
+    "empty": "ยังไม่ได้ตั้งค่าเซิร์ฟเวอร์ MCP",
+    "enabled": "เปิดใช้งาน",
+    "disabled": "ปิดใช้งาน"
+  },
   "data": {
     "title": "🗃️ ข้อมูล",
     "clearHistory": "ล้างประวัติแชท",

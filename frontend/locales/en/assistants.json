@@ -1,0 +1,14 @@
+{
+  "title": "Assistants",
+  "subtitle": "Chat personas — system prompt + model + params you can switch quickly (local-first, offline-friendly)",
+  "new": "New assistant",
+  "empty": "No assistants yet. Create one to get started.",
+  "name": "Name",
+  "nameRequired": "Name is required",
+  "description": "Description",
+  "systemPrompt": "System prompt",
+  "created": "Assistant created",
+  "updated": "Assistant updated",
+  "deleted": "Assistant deleted",
+  "edit": "Edit assistant"
+}
