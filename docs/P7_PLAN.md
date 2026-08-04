@@ -1,7 +1,7 @@
 # 🗺️ P7 Plan — Jan-style Chat Controls + Assistant + MCP + Offline-First
 
-> **Status:** 📋 วางแผน (ยังไม่เริ่ม) · **Date:** 2026-08-04
-> **ที่มา:** Research Jan desktop (jan.ai/docs) + มติผู้ใช้ 2026-08-04
+> **Status:** 🔄 **P7.1–P7.5 backend เสร็จ** (เอกสารทันสมัย 2026-08-04) · **Date:** 2026-08-04
+> **ที่มา:** Research Jan desktop (jan.ai/docs + source code จริง) + มติผู้ใช้ 2026-08-04
 > **ลำดับ:** หลัง P6 (merge worktree → main) เสร็จ
 > **หลักการ:** เอาแบบ Jan ที่ทำงานจริง + **ดีกว่า Jan ตรง offline-first**
 
@@ -129,13 +129,19 @@ frontend:
 
 ## 📋 ขอบเขต P7 (แบ่งเป็น sub-phases)
 
-| Sub-phase | เนื้อหา | ขึ้นกับ |
-|-----------|---------|--------|
-| **P7.1** | Model capabilities API + Reasoning Mode จริง (Auto/On/Off) | backend llama.cpp |
-| **P7.2** | Assistant management (CRUD + UI) | P7.1 |
-| **P7.3** | Tool-calling protocol (tools/tool_calls/tool role) | P7.1 |
-| **P7.4** | MCP host (จัดการ MCP servers + execute + permission) | P7.3 |
-| **P7.5** | Offline-first audit + hardening (ทุกหน้า/ฟีเจอร์) | ทั้งหมด |
+| Sub-phase | เนื้อหา | ขึ้นกับ | สถานะ |
+|-----------|---------|--------|--------|
+| **P7.1** | Model capabilities API + Reasoning Mode จริง (Auto/On/Off) + GPU server | backend llama.cpp | ✅ **เสร็จ** (LlamaServerBackend, 48 tok/s) |
+| **P7.2** | Assistant management (CRUD + UI) | P7.1 | ✅ **backend เสร็จ** (`docs/P7.2_BRIEF.md`) — UI ยังไม่ทำ |
+| **P7.3** | Tool-calling protocol (tools/tool_calls/tool role) | P7.1 | ✅ **backend เสร็จ** (`docs/P7.3_BRIEF.md`) |
+| **P7.4** | MCP host (จัดการ MCP servers + execute + permission) | P7.3 | ✅ **backend เสร็จ** (`docs/P7.4_BRIEF.md`) — E2E รอ QA |
+| **P7.5** | Offline-first audit + hardening (ทุกหน้า/ฟีเจอร์) | ทั้งหมด | ✅ **เสร็จ** (`docs/P7.5_BRIEF.md`) — offline-first อยู่แล้ว |
+
+### 📌 งานที่เหลือ (frontend — ยังไม่ทำ)
+- [ ] **P7.2 UI**: หน้า/panel จัดการ assistants + เลือกใน chat toolbar
+- [ ] **P7.4 UI**: หน้า MCP servers (Settings) + tool call cards ใน chat
+- [ ] **P7.4 QA**: ทดสอบ MCP E2E (เชื่อม stdio server จริง)
+- [ ] **P7.5 QA**: ทดสอบตัดเน็ตจริง (mock network)
 
 ---
 

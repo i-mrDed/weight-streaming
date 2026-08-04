@@ -352,7 +352,11 @@ def test_stream_chat_native_template_yields_deltas_and_records_stats():
     assert chunks == ["Hello", " world"]
     request = engine.chat_requests[0]
     assert request["stream"] is True
-    assert request["messages"] == [{"role": "user", "content": "Hi"}]
+    # Date injection (P7.1b) prepends a system message with the current date
+    # so the model doesn't hallucinate the date.
+    assert request["messages"][0]["role"] == "system"
+    assert "Current date:" in request["messages"][0]["content"]
+    assert request["messages"][1] == {"role": "user", "content": "Hi"}
     assert request["top_p"] == 0.85
     stats = model._last_gen_stats
     assert stats["token_count"] == 2
@@ -463,7 +467,7 @@ def test_load_coalesces_none_n_threads_to_configured_default(monkeypatch):
     manager = ModelManager(ServerConfig(default_n_threads=7))
 
     asyncio.run(
-        manager.load("m", "fake.gguf", buffer_mb=64, n_ctx=512, n_threads=None)
+        manager.load("m", "fake.gguf", buffer_mb=64, n_ctx=512, n_threads=None, use_llama_server=False)
     )
 
     assert captured["n_threads"] == 7
