@@ -30,12 +30,22 @@ MODEL_ID = os.environ.get("WS_TEST_MODEL_ID", "qwen36a3b")
 # name → extra args (the FULL WS_LLAMA_EXTRA_ARGS value for each config).
 # NOTE: keep the first entry a --cpu-moe baseline so the same-server
 # apples-to-apples comparison is explicit.
-EXTRA_ARGS = {
+# Override via WS_MATRIX_CONFIGS='{"name": "--flags ..."}' (JSON) for
+# custom sweeps (e.g. KV cache f16 vs q8_0 at a fixed n-cpu-moe).
+_DEFAULT_EXTRA_ARGS = {
     "cpu-moe (all experts CPU)": "--cpu-moe -fa on",
     "n-cpu-moe 10": "--n-cpu-moe 10 -fa on",
     "n-cpu-moe 20": "--n-cpu-moe 20 -fa on",
     "n-cpu-moe 0 (all experts GPU)": "--n-cpu-moe 0 -fa on",
 }
+_override = os.environ.get("WS_MATRIX_CONFIGS", "").strip()
+if _override:
+    try:
+        EXTRA_ARGS = json.loads(_override)
+    except json.JSONDecodeError as e:
+        raise SystemExit(f"WS_MATRIX_CONFIGS is not valid JSON: {e}")
+else:
+    EXTRA_ARGS = _DEFAULT_EXTRA_ARGS
 
 
 def req(method, path, body=None, timeout=600):
@@ -139,18 +149,37 @@ def measure_one(extra):
     time.sleep(1)
     cmd = llama_cmdline()
     # Verify the ACTUAL flags on the spawned server (not just the model).
+    # TOKEN-EXACT match: a bare substring check would let '--cpu-moe' pass
+    # when the cmdline actually has '--n-cpu-moe 0' (substring match!) —
+    # the same class of blindness as the EXP-008 orphan contamination.
+    cmd_toks = cmd.split()
     expected = [t for t in extra.split() if t.startswith("-")]
-    if expected and not all(e in cmd for e in expected):
+    if expected and not all(e in cmd_toks for e in expected):
         raise RuntimeError(
             f"spawned llama-server missing expected flags {expected}:\n{cmd}"
         )
-    # Run the ctx harness for the real numbers.
+    # Run the ctx harness for the real numbers. The harness is a
+    # SUB-HARNESS here: a llama-server is deliberately running (we just
+    # spawned it), so its clean-room gate must be skipped or it would
+    # false-FAIL. Delete the previous output FIRST so a harness crash
+    # raises FileNotFoundError instead of silently re-reading stale data.
     harness = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                            "measure_ctx_scaling.py")
-    env = dict(os.environ, WS_CTX="2048")
-    subprocess.run([sys.executable, harness], cwd=os.getcwd(), env=env,
-                   timeout=600, capture_output=True)
-    with open("scripts/.ctx_scaling_out.json", encoding="utf-8") as f:
+    env = dict(os.environ, WS_CTX="2048", WS_SKIP_GATE="1")
+    out_json = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                            ".ctx_scaling_out.json")
+    try:
+        os.remove(out_json)
+    except OSError:
+        pass
+    p = subprocess.run([sys.executable, harness], cwd=os.getcwd(), env=env,
+                       timeout=600, capture_output=True)
+    if p.returncode != 0:
+        raise RuntimeError(
+            f"ctx harness failed (rc={p.returncode}):\n"
+            f"{p.stdout[-2000:]}\n{p.stderr[-2000:]}"
+        )
+    with open(out_json, encoding="utf-8") as f:
         r = json.load(f)[0]
     try:
         req("POST", "/v1/models/unload", {"model_id": MODEL_ID}, timeout=30)
@@ -178,7 +207,7 @@ def main():
         print(f"\n=== {name}: {extra} ===", flush=True)
         restart_server(extra)
         cmd, r = measure_one(extra)
-        has_flag = extra.split()[0] in cmd
+        has_flag = extra.split()[0] in cmd.split()
         print(f"  cmdline has '{extra.split()[0]}': {has_flag}")
         print(f"  tok_s={r['server_tok_s']:.1f}  vram_after_gen={r['vram_after_gen_mib']} MiB"
               f"  p95={r['per_token_ms_p95']} ms")

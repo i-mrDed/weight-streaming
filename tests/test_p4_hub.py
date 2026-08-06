@@ -10,6 +10,7 @@ import io
 import json
 import os
 import threading
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -102,6 +103,37 @@ class FailAfterStream(FakeStream):
         return self._buf.read(n)
 
 
+class CancelAtStream(FakeStream):
+    """Delivers bytes then flips the task's cancel flag mid-stream, so a
+    cancel can be tested deterministically (no sleeping)."""
+
+    def __init__(self, data, task, at):
+        super().__init__(data)
+        self._task = task
+        self._at = at
+
+    def read(self, n):
+        if self._buf.tell() >= self._at:
+            self._task._cancel.set()
+        return self._buf.read(n)
+
+
+class RangeStream:
+    """A fake upstream for the resume path: honors ``Range`` (206, returns
+    only the remaining bytes) or ignores it (200, returns the whole file)."""
+
+    def __init__(self, data: bytes, start: int = 0, status: int = 206):
+        self.status = status
+        self._buf = io.BytesIO(data[start:] if status == 206 else data)
+        self.content_length = (len(data) - start) if status == 206 else len(data)
+
+    def read(self, n):
+        return self._buf.read(n)
+
+    def close(self):
+        pass
+
+
 @pytest.fixture
 def models_dir(tmp_path, monkeypatch):
     d = tmp_path / "models"
@@ -112,16 +144,16 @@ def models_dir(tmp_path, monkeypatch):
 
 def _mgr(fetch=None, stream=None):
     return DownloadManager(
-        fetch_json=fetch or (lambda url, t: FAKE_SEARCH),
-        open_stream=stream or (lambda url, t: FakeStream(b"G" * 3000)),
+        fetch_json=fetch or (lambda url, t, start=0: FAKE_SEARCH),
+        open_stream=stream or (lambda url, t, start=0: FakeStream(b"G" * 3000)),
     )
 
 
 def _app(monkeypatch, tmp_path, fetch=None, stream=None):
     monkeypatch.setenv("WS_USAGE_HISTORY_FILE", str(tmp_path / "u.jsonl"))
     monkeypatch.setenv("WS_LOG_FILE", str(tmp_path / "s.log"))
-    monkeypatch.setattr(hubmod, "_default_fetch_json", fetch or (lambda u, t: FAKE_SEARCH))
-    monkeypatch.setattr(hubmod, "_default_open_stream", stream or (lambda u, t: FakeStream(b"Z" * 500)))
+    monkeypatch.setattr(hubmod, "_default_fetch_json", fetch or (lambda u, t, start=0: FAKE_SEARCH))
+    monkeypatch.setattr(hubmod, "_default_open_stream", stream or (lambda u, t, start=0: FakeStream(b"Z" * 500)))
     return create_app(ServerConfig())
 
 
@@ -271,8 +303,46 @@ def test_search_with_cursor_parses_link_header_next_cursor():
 # ── Downloads (manager-level, deterministic) ──────────────────────────
 
 
+def test_stream_uses_larger_timeout_than_json(monkeypatch, models_dir):
+    """A slow/stalling network must PAUSE a multi-GB download, not kill it:
+    the download stream gets its own per-read timeout (default 300s) while
+    the JSON calls keep the fast 10s timeout. Regression for the repeated
+    mid-stream "read operation timed out" failures on slow connections."""
+    import weight_stream.server.hub as hubmod
+    from weight_stream.server.hub import DEFAULT_STREAM_TIMEOUT, DEFAULT_TIMEOUT
+
+    assert DEFAULT_STREAM_TIMEOUT > DEFAULT_TIMEOUT  # the whole point
+    seen = {}
+
+    def capturing_stream(url, t, start=0):
+        seen["timeout"] = t
+        return FakeStream(b"G" * 1000)
+
+    def capturing_fetch(url, t, start=0):
+        seen["json_timeout"] = t
+        return FAKE_SEARCH
+
+    mgr = DownloadManager(fetch_json=capturing_fetch, open_stream=capturing_stream)
+    mgr.search("q")  # JSON path — must use the fast timeout
+    task = mgr.create_download("org/qwen-gguf", "qwen-7b-q4_k_m.gguf", str(models_dir))
+    mgr.run_download(task)  # stream path — must use the patient timeout
+    assert task.status == "done"
+    assert seen["json_timeout"] == DEFAULT_TIMEOUT          # fast for JSON
+    assert seen["timeout"] == DEFAULT_STREAM_TIMEOUT        # patient for streams
+
+    # a custom stream_timeout is honored too
+    mgr2 = DownloadManager(
+        fetch_json=capturing_fetch,
+        open_stream=capturing_stream,
+        stream_timeout=1234.0,
+    )
+    t2 = mgr2.create_download("org/m", "q.gguf", str(models_dir))
+    mgr2.run_download(t2)
+    assert seen["timeout"] == 1234.0
+
+
 def test_download_is_atomic_with_real_progress(models_dir):
-    mgr = _mgr(stream=lambda u, t: FakeStream(b"G" * 3000, content_length=3000))
+    mgr = _mgr(stream=lambda u, t, start=0: FakeStream(b"G" * 3000, content_length=3000))
     task = mgr.create_download("org/qwen-gguf", "qwen-7b-q4_k_m.gguf", str(models_dir))
     mgr.run_download(task)
     final = models_dir / "qwen-7b-q4_k_m.gguf"
@@ -286,14 +356,19 @@ def test_download_is_atomic_with_real_progress(models_dir):
     assert d["speed_bps"] and d["speed_bps"] > 0  # real, not fabricated
 
 
-def test_download_failure_cleans_up_part(models_dir):
-    mgr = _mgr(stream=lambda u, t: FailAfterStream(b"X" * 3000, fail_at=1000))
+def test_download_failure_keeps_part_for_resume(models_dir):
+    """v1.1: a failed download KEEPS its partial so a resume can append the
+    remaining bytes instead of re-downloading from byte 0."""
+    mgr = _mgr(stream=lambda u, t, start=0: FailAfterStream(b"X" * 3000, fail_at=1000))
+    mgr.chunk_size = 500  # deterministic cut: exactly 1000 bytes before the raise
     task = mgr.create_download("org/m", "fail.gguf", str(models_dir))
     mgr.run_download(task)
     assert task.status == "failed"
     assert "net died" in task.error
-    assert not (models_dir / "fail.gguf").exists()       # no corrupt final
-    assert not (models_dir / "fail.gguf.part").exists()  # part removed
+    assert not (models_dir / "fail.gguf").exists()      # no corrupt final
+    part = models_dir / "fail.gguf.part"
+    assert part.exists() and part.read_bytes() == b"X" * 1000  # partial kept
+    assert task.bytes_downloaded == 1000
 
 
 def test_download_cancel_while_queued(models_dir):
@@ -307,6 +382,22 @@ def test_download_cancel_while_queued(models_dir):
     assert not (models_dir / "c.gguf").exists()
 
 
+def test_download_cancel_keeps_part_for_resume(models_dir):
+    """v1.1: cancelling mid-stream keeps the downloaded bytes on disk as
+    ``.part`` — the whole point of the Resume button."""
+    mgr = _mgr(stream=lambda u, t, start=0: None)  # replaced below
+    mgr.chunk_size = 500
+    task = mgr.create_download("org/m", "c.gguf", str(models_dir))
+    mgr._open_stream = lambda u, t, start=0: CancelAtStream(b"X" * 3000, task, at=1000)
+    mgr.run_download(task)
+    assert task.status == "cancelled"
+    # reads: 0-500, 500-1000 (cancel armed), 1000-1500 delivered; loop sees
+    # the flag on the NEXT iteration → exactly 1500 bytes kept
+    part = models_dir / "c.gguf.part"
+    assert part.exists() and part.read_bytes() == b"X" * 1500
+    assert not (models_dir / "c.gguf").exists()  # atomic: no final until done
+
+
 def test_download_rejected_target_writes_nothing(models_dir):
     mgr = _mgr()
     with pytest.raises(HubValidationError):
@@ -316,7 +407,7 @@ def test_download_rejected_target_writes_nothing(models_dir):
 
 def test_size_guard_max_bytes(monkeypatch, models_dir):
     monkeypatch.setenv("WS_HUB_MAX_BYTES", "100")
-    mgr = _mgr(stream=lambda u, t: FakeStream(b"X" * 3000, content_length=3000))
+    mgr = _mgr(stream=lambda u, t, start=0: FakeStream(b"X" * 3000, content_length=3000))
     task = mgr.create_download("org/m", "big.gguf", str(models_dir))
     mgr.run_download(task)
     assert task.status == "failed"
@@ -337,8 +428,8 @@ def test_size_guard_without_content_length(monkeypatch, models_dir):
             self.content_length = None  # header absent → total unknown
 
     mgr = DownloadManager(
-        fetch_json=lambda u, t: FAKE_SEARCH,
-        open_stream=lambda u, t: UnknownLengthStream(b"X" * 3000),
+        fetch_json=lambda u, t, start=0: FAKE_SEARCH,
+        open_stream=lambda u, t, start=0: UnknownLengthStream(b"X" * 3000),
         chunk_size=100,  # small chunks so the guard trips early
     )
     task = mgr.create_download("org/m", "sneaky.gguf", str(models_dir))
@@ -348,7 +439,224 @@ def test_size_guard_without_content_length(monkeypatch, models_dir):
     # the real byte count never ran past the ceiling by more than one chunk
     assert task.bytes_downloaded <= 100 + 100
     assert not (models_dir / "sneaky.gguf").exists()
-    assert not (models_dir / "sneaky.gguf.part").exists()  # part cleaned up
+    assert (models_dir / "sneaky.gguf.part").exists()  # partial kept for resume
+
+
+def test_truncated_stream_is_never_marked_done(models_dir):
+    """A stream that ends early (EOF before Content-Length) must FAIL
+    honestly and keep the ``.part`` — a truncated file must never be renamed
+    into place as "done". Regression: the loop used to treat EOF as success,
+    so a connection cut mid-stream produced a ``done`` task whose file was
+    missing the tail (10.05 GB advertised vs 3.8 GB on disk)."""
+    mgr = _mgr(stream=lambda u, t, start=0: FakeStream(b"G" * 1500, content_length=3000))
+    mgr.chunk_size = 500
+    task = mgr.create_download("org/m", "cut.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "failed"
+    assert "truncated" in (task.error or "")
+    assert not (models_dir / "cut.gguf").exists()  # no renamed final file
+    assert (models_dir / "cut.gguf.part").exists()  # partial kept for resume
+    assert task.bytes_downloaded == 1500  # honest count, not faked
+
+
+def test_resume_appends_remaining_bytes_from_part(models_dir):
+    """v1.1 happy path: a failed download's kept ``.part`` is resumed via
+    ``Range`` (206) — only the remaining bytes are fetched and the final file
+    is byte-identical to a fresh download."""
+    data = b"X" * 3000
+    mgr = _mgr(stream=lambda u, t, start=0: FailAfterStream(data, fail_at=1000))
+    mgr.chunk_size = 500
+    task = mgr.create_download("org/m", "r.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "failed"
+    part = models_dir / "r.gguf.part"
+    assert part.exists() and part.read_bytes() == b"X" * 1000
+
+    # resume: upstream honors Range → only 2000 remaining bytes transferred
+    seen = {"starts": []}
+
+    def range_opener(url, t, start=0):
+        seen["starts"].append(start)
+        return RangeStream(data, start=start, status=206)
+
+    task2 = mgr.resume(task.id)  # resume on the SAME manager that owns it
+    mgr._open_stream = range_opener
+    assert task2 is not None and task2.status == "queued"
+    mgr.run_download(task2)
+    assert task2.status == "done"
+    final = models_dir / "r.gguf"
+    assert final.read_bytes() == data                     # byte-identical
+    assert not (models_dir / "r.gguf.part").exists()      # atomic rename
+    d = task2.to_dict()
+    assert d["total_bytes"] == 3000
+    assert d["bytes_downloaded"] == 3000
+    assert d["percent"] == 100.0
+    assert seen["starts"] == [1000]                      # Range asked from byte 1000
+
+
+def test_new_task_resumes_stale_part(models_dir):
+    """A brand-NEW download of the same filename picks up a stale ``.part``
+    (auto-resume) instead of re-fetching from byte 0 — the documented
+    v1.1 behavior for any task whose target file already has a partial."""
+    data = b"Z" * 3000
+    mgr = _mgr(stream=lambda u, t, start=0: FailAfterStream(data, fail_at=1000))
+    mgr.chunk_size = 500
+    t1 = mgr.create_download("org/m", "auto.gguf", str(models_dir))
+    mgr.run_download(t1)
+    assert t1.status == "failed"
+    assert (models_dir / "auto.gguf.part").read_bytes() == b"Z" * 1000
+
+    seen = []
+    mgr._open_stream = lambda u, t, start=0: (seen.append(start) or RangeStream(data, start=start, status=206))
+    t2 = mgr.create_download("org/m", "auto.gguf", str(models_dir))  # NEW task, same file
+    mgr.run_download(t2)
+    assert t2.status == "done"
+    assert (models_dir / "auto.gguf").read_bytes() == data
+    assert seen == [1000]  # asked Range from byte 1000 — never re-fetched byte 0
+
+
+def test_resume_mismatched_range_fails_honestly(models_dir):
+    """A 206 whose ``Content-Range`` starts at a DIFFERENT offset than asked
+    would corrupt the appended file — the task must fail honestly instead."""
+    data = b"W" * 3000
+    mgr = _mgr(stream=lambda u, t, start=0: FailAfterStream(data, fail_at=1000))
+    mgr.chunk_size = 500
+    task = mgr.create_download("org/m", "mis.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "failed"
+
+    class WrongRange(RangeStream):
+        def __init__(self, data, start=0, status=206):
+            super().__init__(data, start=start, status=status)
+            self.content_range_start = 500  # claims a DIFFERENT offset
+
+    mgr._open_stream = lambda u, t, start=0: WrongRange(data, start=start, status=206)
+    t2 = mgr.resume(task.id)
+    mgr.run_download(t2)
+    assert t2.status == "failed"
+    assert "range" in (t2.error or "").lower()
+    assert not (models_dir / "mis.gguf").exists()      # never written
+    assert (models_dir / "mis.gguf.part").exists()      # partial kept, not corrupted
+
+
+def test_delete_during_active_download_stops_and_cleans(models_dir):
+    """Deleting a download WHILE it is running must stop the worker and
+    remove the ``.part`` (Windows cannot remove an open file — the retry
+    thread finishes the job once the worker closes its handle)."""
+    class SlowStream(FakeStream):
+        def __init__(self, task):
+            super().__init__(b"C" * 100_000_000)  # never finishes quickly
+            self._task = task
+
+        def read(self, n):
+            time.sleep(0.01)  # slow enough to delete mid-stream
+            return self._buf.read(n)
+
+    mgr = _mgr()
+    mgr.chunk_size = 500
+    task = mgr.create_download("org/m", "live.gguf", str(models_dir))
+    mgr._open_stream = lambda u, t, start=0: SlowStream(task)
+    th = threading.Thread(target=mgr.run_download, args=(task,))
+    th.start()
+    deadline = time.time() + 5
+    while time.time() < deadline and task.bytes_downloaded < 1000:
+        time.sleep(0.02)
+    mgr.delete(task.id)  # mid-download: cancel + pop + remove part (retries in bg)
+    th.join(timeout=5)
+    for _ in range(30):  # retry thread may need a moment on Windows
+        if not (models_dir / "live.gguf.part").exists():
+            break
+        time.sleep(0.1)
+    assert not (models_dir / "live.gguf.part").exists()  # no orphaned partial
+    assert not (models_dir / "live.gguf").exists()        # no final file
+
+
+def test_resume_ignored_range_restarts_fresh(models_dir):
+    """Upstream that ignores ``Range`` (200, whole body) must NOT duplicate
+    the kept partial — the transfer restarts fresh and stays correct."""
+    data = b"Y" * 3000
+    mgr = _mgr(stream=lambda u, t, start=0: FailAfterStream(data, fail_at=1500))
+    mgr.chunk_size = 500
+    task = mgr.create_download("org/m", "ign.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "failed"
+    assert (models_dir / "ign.gguf.part").read_bytes() == b"Y" * 1500
+
+    def full_opener(url, t, start=0):
+        return RangeStream(data, start=start, status=200)  # ignores Range
+
+    task2 = mgr.resume(task.id)
+    mgr._open_stream = full_opener  # swap seam on the SAME manager
+    mgr.run_download(task2)
+    assert task2.status == "done"
+    assert (models_dir / "ign.gguf").read_bytes() == data
+    assert task2.bytes_downloaded == 3000  # no double-counted prefix
+
+
+def test_resume_refuses_active_and_done(models_dir):
+    mgr = _mgr()
+    task = mgr.create_download("org/m", "a.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "done"
+    with pytest.raises(ValueError):
+        mgr.resume(task.id)  # done is not resumable
+
+
+def test_delete_removes_task_and_part(models_dir):
+    mgr = _mgr(stream=lambda u, t, start=0: FailAfterStream(b"X" * 3000, fail_at=700))
+    mgr.chunk_size = 500
+    task = mgr.create_download("org/m", "d.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "failed"
+    part = models_dir / "d.gguf.part"
+    assert part.exists()
+    assert mgr.delete(task.id) is not None
+    assert mgr.get_task(task.id) is None      # removed from the manager
+    assert not part.exists()                  # partial cleaned up
+
+
+def test_delete_done_task_keeps_final_file(models_dir):
+    """Deleting a COMPLETED task row must never destroy the downloaded model
+    by default (delete_file=False)."""
+    mgr = _mgr()
+    task = mgr.create_download("org/m", "keep.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert (models_dir / "keep.gguf").exists()
+    assert mgr.delete(task.id) is not None
+    assert (models_dir / "keep.gguf").exists()  # model file survives
+
+
+def test_delete_done_task_with_delete_file_removes_model(models_dir):
+    """delete_file=True on a COMPLETED task also removes the model file."""
+    mgr = _mgr()
+    task = mgr.create_download("org/m", "gone.gguf", str(models_dir))
+    mgr.run_download(task)
+    final = models_dir / "gone.gguf"
+    assert final.exists()
+    assert mgr.delete(task.id, delete_file=True) is not None
+    assert not final.exists()                       # model file deleted
+    assert not (models_dir / "gone.gguf.part").exists()
+
+
+def test_delete_file_refuses_outside_allowed_dir(models_dir, tmp_path):
+    """The destructive delete is containment-guarded: a target path that
+    realpath-resolves outside the allowed model dirs is never removed."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "victim.gguf"
+    victim.write_bytes(b"precious")
+    mgr = _mgr()
+    assert mgr._remove_model_file(str(victim)) is False
+    assert victim.read_bytes() == b"precious"       # untouched
+    # a symlink pointing outside is refused too (realpath escapes)
+    link = models_dir / "escape.gguf"
+    try:
+        os.symlink(victim, link)
+    except (OSError, NotImplementedError):
+        pytest.skip("symlinks unavailable on this platform")
+    assert mgr._remove_model_file(str(link)) is False
+    assert victim.read_bytes() == b"precious"
+    assert link.exists()  # the link itself is not removed either
 
 
 def test_part_symlink_not_followed(models_dir, tmp_path):
@@ -375,7 +683,7 @@ def test_size_guard_insufficient_disk(monkeypatch, models_dir):
         free = 10  # bytes
 
     monkeypatch.setattr(hubmod.shutil, "disk_usage", lambda p: _Usage())
-    mgr = _mgr(stream=lambda u, t: FakeStream(b"X" * 3000, content_length=3000))
+    mgr = _mgr(stream=lambda u, t, start=0: FakeStream(b"X" * 3000, content_length=3000))
     task = mgr.create_download("org/m", "big.gguf", str(models_dir))
     mgr.run_download(task)
     assert task.status == "failed"
@@ -442,6 +750,425 @@ def test_hub_cancel_endpoint_cancels_task(models_dir, monkeypatch, tmp_path):
         r = c.post(f"/v1/hub/download/{task.id}/cancel")
         assert r.status_code == 200
         assert r.json()["status"] == "cancelled"
+
+
+def test_hub_resume_endpoint_requeues_and_completes(models_dir, monkeypatch, tmp_path):
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        task = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        hub_mgr.cancel(task.id)
+        assert task.status == "cancelled"
+        r = c.post(f"/v1/hub/download/{task.id}/resume")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "queued"
+        # the worker runs (FakeStream) and finishes; poll the list until done
+        for _ in range(50):
+            if hub_mgr.get_task(task.id).status in ("done", "failed"):
+                break
+            import time as _t
+            _t.sleep(0.05)
+        assert hub_mgr.get_task(task.id).status == "done"
+        assert (models_dir / "m-q4_0.gguf").read_bytes() == b"Z" * 500
+
+
+def test_hub_resume_404_and_409(models_dir, monkeypatch, tmp_path):
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        assert c.post("/v1/hub/download/nope/resume").status_code == 404
+        hub_mgr = app.state.hub_manager
+        task = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        hub_mgr.run_download(task)  # synchronous → done
+        r = c.post(f"/v1/hub/download/{task.id}/resume")
+        assert r.status_code == 409
+        assert "resume" in r.json()["detail"]
+
+
+def test_hub_delete_endpoint_removes_task(models_dir, monkeypatch, tmp_path):
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        task = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        r = c.post(f"/v1/hub/download/{task.id}/delete")
+        assert r.status_code == 200
+        assert r.json()["status"] == "deleted"
+        assert r.json()["file_deleted"] is False
+        assert hub_mgr.get_task(task.id) is None
+        assert c.post("/v1/hub/download/nope/delete").status_code == 404
+
+
+def test_hub_delete_file_endpoint_removes_model(models_dir, monkeypatch, tmp_path):
+    """{"delete_file": true} on a completed task removes the model file too."""
+    app, _ = _app(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "weight_stream.server.api_server._assistants_referencing", lambda f: []
+    )
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        task = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        hub_mgr.run_download(task)  # synchronous → done, file on disk
+        final = models_dir / "m-q4_0.gguf"
+        assert final.exists()
+        r = c.post(f"/v1/hub/download/{task.id}/delete", json={"delete_file": True})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "deleted"
+        assert body["id"] == task.id
+        assert body["file_deleted"] is True
+        assert body["referenced_by"] == {"assistants": []}
+        assert not final.exists()
+
+
+def test_hub_delete_file_endpoint_409_when_not_done(models_dir, monkeypatch, tmp_path):
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        task = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        hub_mgr.cancel(task.id)  # cancelled — no model file
+        r = c.post(f"/v1/hub/download/{task.id}/delete", json={"delete_file": True})
+        assert r.status_code == 409
+        assert "completed" in r.json()["detail"]
+        # the task row is still there (the delete did NOT happen)
+        assert hub_mgr.get_task(task.id) is not None
+
+
+def test_hub_delete_file_endpoint_409_when_model_loaded(models_dir, monkeypatch, tmp_path):
+    """Deleting the file of a model that is currently loaded is refused — the
+    backend holds it open; unloading is the only safe path."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    app, manager = _app(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        manager, "list_models",
+        AsyncMock(return_value=[SimpleNamespace(path=str(models_dir / "m-q4_0.gguf"))]),
+    )
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        task = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        hub_mgr.run_download(task)  # done, file on disk
+        final = models_dir / "m-q4_0.gguf"
+        assert final.exists()
+        r = c.post(f"/v1/hub/download/{task.id}/delete", json={"delete_file": True})
+        assert r.status_code == 409
+        assert "loaded" in r.json()["detail"]
+        assert final.exists()          # file NOT deleted
+        assert hub_mgr.get_task(task.id) is not None  # task NOT removed
+
+
+def test_clear_removes_finished_keeps_active(models_dir):
+    """clear() removes every terminal task; queued/downloading stay."""
+    mgr = _mgr()
+    done = mgr.create_download("org/m", "d.gguf", str(models_dir))
+    mgr.run_download(done)
+    assert done.status == "done"
+    failed = mgr.create_download("org/m", "f.gguf", str(models_dir))
+    failed.status = "failed"
+    failed.error = "boom"
+    cancelled = mgr.create_download("org/m", "c.gguf", str(models_dir))
+    mgr.cancel(cancelled.id)
+    active = mgr.create_download("org/m", "a.gguf", str(models_dir))  # stays queued
+
+    res = mgr.clear()
+    assert set(res["removed"]) == {done.id, failed.id, cancelled.id}
+    assert res["files_deleted"] == []
+    assert res["files_skipped"] == []
+    assert mgr.get_task(done.id) is None
+    assert mgr.get_task(failed.id) is None
+    assert mgr.get_task(cancelled.id) is None
+    assert mgr.get_task(active.id) is not None   # active untouched
+    assert (models_dir / "d.gguf").exists()       # default: model file kept
+
+
+def test_clear_delete_file_removes_done_models_and_reports_skipped(models_dir):
+    """clear(delete_file=True) removes the model files of done tasks, except
+    protected (loaded) paths which are reported in files_skipped."""
+    mgr = _mgr()
+    t1 = mgr.create_download("org/m", "one.gguf", str(models_dir))
+    mgr.run_download(t1)
+    t2 = mgr.create_download("org/m", "two.gguf", str(models_dir))
+    mgr.run_download(t2)
+    failed = mgr.create_download("org/m", "f.gguf", str(models_dir))
+    failed.status = "failed"
+
+    res = mgr.clear(
+        delete_file=True,
+        protected_paths={os.path.realpath(str(models_dir / "two.gguf"))},
+    )
+    assert set(res["removed"]) == {t1.id, t2.id, failed.id}
+    assert res["files_deleted"] == [t1.id]
+    assert res["files_skipped"] == [t2.id]      # loaded → kept
+    assert not (models_dir / "one.gguf").exists()  # deleted
+    assert (models_dir / "two.gguf").exists()      # protected → kept
+
+
+def test_clear_is_idempotent_and_honest_with_nothing_to_do(models_dir):
+    """No finished tasks → empty summary, no error (idempotent clear)."""
+    mgr = _mgr()
+    active = mgr.create_download("org/m", "a.gguf", str(models_dir))
+    res = mgr.clear()
+    assert res == {"status": "cleared", "removed": [], "files_deleted": [], "files_skipped": []}
+    assert mgr.get_task(active.id) is not None
+
+
+def test_hub_clear_endpoint_removes_finished_keeps_active(models_dir, monkeypatch, tmp_path):
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        done = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        hub_mgr.run_download(done)  # synchronous → done, file on disk
+        active = hub_mgr.create_download("org/m", "live.gguf", str(models_dir))
+        r = c.post("/v1/hub/downloads/clear")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["removed"] == [done.id]
+        assert hub_mgr.get_task(done.id) is None
+        assert hub_mgr.get_task(active.id) is not None
+        assert (models_dir / "m-q4_0.gguf").exists()  # no delete_file → kept
+
+
+def test_hub_clear_endpoint_delete_file_skips_loaded_model(models_dir, monkeypatch, tmp_path):
+    """delete_file=true removes done model files but skips a loaded model's
+    file (never removed under a running backend) — reported honestly."""
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    app, manager = _app(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        manager, "list_models",
+        AsyncMock(return_value=[SimpleNamespace(path=str(models_dir / "m-q4_0.gguf"))]),
+    )
+    monkeypatch.setattr(
+        "weight_stream.server.api_server._assistant_refs_batch", lambda files: {}
+    )
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        loaded = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        hub_mgr.run_download(loaded)  # done; its file is "loaded" per the mock
+        free = hub_mgr.create_download("org/m", "free.gguf", str(models_dir))
+        hub_mgr.run_download(free)
+        r = c.post("/v1/hub/downloads/clear", json={"delete_file": True})
+        assert r.status_code == 200
+        body = r.json()
+        assert set(body["removed"]) == {loaded.id, free.id}
+        assert body["files_deleted"] == [free.id]
+        assert body["files_skipped"] == [loaded.id]
+        # every removed done task is mapped (empty refs here)
+        assert body["referenced_by"] == {
+            loaded.id: {"assistants": []},
+            free.id: {"assistants": []},
+        }
+        assert (models_dir / "m-q4_0.gguf").exists()  # loaded → kept
+        assert not (models_dir / "free.gguf").exists()  # deleted
+
+
+def test_hub_delete_endpoint_reports_assistant_references(models_dir, monkeypatch, tmp_path):
+    """The delete response carries which assistants reference this model's
+    suggested id — the server-side half of the cross-feature warning."""
+    app, _ = _app(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "weight_stream.server.api_server._assistants_referencing",
+        lambda f: ["Coder", "Translator"],
+    )
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        task = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        hub_mgr.run_download(task)  # done
+        r = c.post(f"/v1/hub/download/{task.id}/delete", json={"delete_file": True})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["referenced_by"] == {"assistants": ["Coder", "Translator"]}
+        # keep-file delete never scans the store — refs are irrelevant (the
+        # file survives) and the field stays honest and empty
+        task2 = hub_mgr.create_download("org/m", "keep.gguf", str(models_dir))
+        hub_mgr.run_download(task2)
+        r2 = c.post(f"/v1/hub/download/{task2.id}/delete")
+        assert r2.json()["referenced_by"] == {"assistants": []}
+
+
+def test_hub_clear_endpoint_reports_assistant_references(models_dir, monkeypatch, tmp_path):
+    """clear(delete_file=True) maps every removed done task to its assistant
+    references (task id → names) from ONE batched store read, so the
+    summary toast can be honest."""
+    app, _ = _app(monkeypatch, tmp_path)
+    by_name = {"a.gguf": ["Coder"], "b.gguf": [], "c.gguf": ["Coder", "Translator"]}
+    calls = []
+    monkeypatch.setattr(
+        "weight_stream.server.api_server._assistant_refs_batch",
+        lambda files: calls.append(list(files)) or {f: by_name.get(f, []) for f in files},
+    )
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        a = hub_mgr.create_download("org/m", "a.gguf", str(models_dir))
+        hub_mgr.run_download(a)
+        b = hub_mgr.create_download("org/m", "b.gguf", str(models_dir))
+        hub_mgr.run_download(b)
+        ccc = hub_mgr.create_download("org/m", "c.gguf", str(models_dir))
+        hub_mgr.run_download(ccc)
+        r = c.post("/v1/hub/downloads/clear", json={"delete_file": True})
+        assert r.status_code == 200
+        body = r.json()
+        assert body["referenced_by"] == {
+            a.id: {"assistants": ["Coder"]},
+            b.id: {"assistants": []},
+            ccc.id: {"assistants": ["Coder", "Translator"]},
+        }
+        assert len(calls) == 1  # one batched read, never per-task
+
+
+def test_assistants_referencing_matches_model_id(monkeypatch):
+    """The helper matches assistant.model_id against the filename's suggested
+    id (basename without .gguf) — the same rule the Console uses when loading
+    a downloaded model. Store problems degrade to [] (never block a delete)."""
+    import weight_stream.server.assistants as astore_mod
+    from weight_stream.server.api_server import _assistants_referencing
+
+    class _Stub:
+        def __init__(self, items):
+            self._items = items
+
+        def list(self):
+            return self._items
+
+    refs = [
+        {"id": "a1", "name": "Coder", "model_id": "qwen-7b-q4_k_m"},
+        {"id": "a2", "name": "Translator", "model_id": "qwen-7b-q4_k_m"},
+        {"id": "a3", "name": "Other", "model_id": "llama-3.2-1b"},
+        {"id": "a4", "name": "NoModel", "model_id": None},
+    ]
+    monkeypatch.setattr(astore_mod, "get_assistant_store", lambda: _Stub(refs))
+
+    assert _assistants_referencing("qwen-7b-q4_k_m.gguf") == ["Coder", "Translator"]
+    assert _assistants_referencing("llama-3.2-1b.gguf") == ["Other"]
+    assert _assistants_referencing("unknown.gguf") == []
+    assert _assistants_referencing("") == []
+
+    # a failing store must never block the delete — degrade to []
+    def boom():
+        raise RuntimeError("store gone")
+
+    monkeypatch.setattr(astore_mod, "get_assistant_store", boom)
+    assert _assistants_referencing("qwen-7b-q4_k_m.gguf") == []
+
+
+def test_assistant_refs_batch_reads_store_once(monkeypatch):
+    """The batched scanner performs ONE store read for many filenames (a
+    per-task scan would re-read every assistant JSON N times on clear)."""
+    import weight_stream.server.assistants as astore_mod
+    from weight_stream.server.api_server import _assistant_refs_batch
+
+    reads = {"n": 0}
+
+    class _Stub:
+        def list(self):
+            reads["n"] += 1
+            return [
+                {"id": "a1", "name": "Coder", "model_id": "qwen-7b-q4_k_m"},
+                {"id": "a2", "name": "Other", "model_id": "llama-3.2-1b"},
+                {"id": "a3", "name": "NoModel", "model_id": None},
+            ]
+
+    monkeypatch.setattr(astore_mod, "get_assistant_store", lambda: _Stub())
+    out = _assistant_refs_batch(["qwen-7b-q4_k_m.gguf", "llama-3.2-1b.gguf", "nope.gguf", ""])
+    assert reads["n"] == 1  # one read for the whole batch
+    assert out == {
+        "qwen-7b-q4_k_m.gguf": ["Coder"],
+        "llama-3.2-1b.gguf": ["Other"],
+        "nope.gguf": [],
+    }
+
+
+def test_to_dict_reports_real_file_size_for_done(models_dir):
+    """file_size is the REAL on-disk byte count for a completed download,
+    None for anything else (honest — never a fake size)."""
+    mgr = _mgr()
+    done = mgr.create_download("org/m", "sz.gguf", str(models_dir))
+    mgr.run_download(done)
+    d = done.to_dict()
+    assert d["status"] == "done"
+    assert d["file_size"] == 3000  # FakeStream wrote exactly 3000 bytes
+    # a queued/never-downloaded task has no file on disk
+    fresh = mgr.create_download("org/m", "n.gguf", str(models_dir))
+    assert fresh.to_dict()["file_size"] is None
+
+
+def test_file_size_none_when_file_vanish_race(models_dir, monkeypatch):
+    """A done task whose file disappears between isfile and getsize must
+    yield file_size None — never a raised OSError (which would 500 the whole
+    downloads list)."""
+    mgr = _mgr()
+    task = mgr.create_download("org/m", "race.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.to_dict()["file_size"] == 3000
+    final = models_dir / "race.gguf"
+    assert final.exists()
+
+    # simulate the external delete racing the stat
+    real_isfile = os.path.isfile
+    real_getsize = os.path.getsize
+    state = {"deleted": False}
+
+    def fake_isfile(p):
+        ok = real_isfile(p)
+        if ok and p == str(final):
+            state["deleted"] = True
+            final.unlink()  # vanish between the check and the stat
+        return ok
+
+    monkeypatch.setattr(os.path, "isfile", fake_isfile)
+    monkeypatch.setattr(os.path, "getsize", lambda p: real_getsize(p))  # still callable
+    assert task.to_dict()["file_size"] is None  # race degrades to None
+    monkeypatch.setattr(os.path, "isfile", real_isfile)
+    monkeypatch.setattr(os.path, "getsize", real_getsize)
+
+
+def test_hub_reveal_endpoint_404_409_403(models_dir, monkeypatch, tmp_path):
+    """Reveal is guarded: unknown task → 404, not-finished/no-file → 409,
+    file outside allowed dirs → 403 (never reveal an arbitrary path)."""
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        assert c.post("/v1/hub/download/nope/reveal").status_code == 404
+        hub_mgr = app.state.hub_manager
+        queued = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        assert c.post(f"/v1/hub/download/{queued.id}/reveal").status_code == 409
+
+
+def test_hub_reveal_endpoint_opens_folder_and_returns_path(models_dir, monkeypatch, tmp_path):
+    """A completed task with its file on disk is revealed — the subprocess
+    launcher is stubbed so the test stays offline and deterministic."""
+    app, _ = _app(monkeypatch, tmp_path)
+    calls = []
+    monkeypatch.setattr(
+        "weight_stream.server.api_server._reveal_in_explorer",
+        lambda path: calls.append(path) or {"ok": True},
+    )
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        task = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        hub_mgr.run_download(task)  # synchronous → done, file on disk
+        r = c.post(f"/v1/hub/download/{task.id}/reveal")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["status"] == "revealed"
+        assert body["path"] == os.path.realpath(str(models_dir / "m-q4_0.gguf"))
+        assert calls == [os.path.realpath(str(models_dir / "m-q4_0.gguf"))]
+
+
+def test_hub_reveal_endpoint_500_when_launcher_fails(models_dir, monkeypatch, tmp_path):
+    """The OS launcher failing must surface honestly (500), never a fake ok."""
+    app, _ = _app(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        "weight_stream.server.api_server._reveal_in_explorer",
+        lambda path: {"error": "explorer missing"},
+    )
+    with TestClient(app) as c:
+        hub_mgr = app.state.hub_manager
+        task = hub_mgr.create_download("org/m", "m-q4_0.gguf", str(models_dir))
+        hub_mgr.run_download(task)
+        r = c.post(f"/v1/hub/download/{task.id}/reveal")
+        assert r.status_code == 500
+        assert "explorer missing" in r.json()["detail"]
 
 
 def test_hub_progress_sse_streams_real_progress(models_dir, monkeypatch, tmp_path):

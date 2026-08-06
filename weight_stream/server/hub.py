@@ -22,8 +22,16 @@ endpoint writes files from the internet to disk):
   (``O_WRONLY|O_CREAT|O_EXCL|O_NOFOLLOW`` where available), so a
   pre-placed symlink at the destination can never redirect the write
   (closes the symlink-TOCTOU between the dir-containment check and the
-  write; a stale regular ``.part`` from an interrupted run is removed
-  first — v1 has no resume, a retry is a fresh download).
+  write). A cancelled/failed task KEEPS its ``.part``; any later download
+  of the same file (a resume OR a brand-new task) appends the remaining
+  bytes via HTTP ``Range`` instead of re-fetching from byte 0.
+- RESUME (v1.1): ``POST /v1/hub/download/{id}/resume`` re-queues a
+  cancelled/failed task; the worker re-opens the kept ``.part`` in append
+  mode (NO-FOLLOW, symlink refused) and streams ``Range: bytes=<n>-`` from
+  Hugging Face. If the upstream ignores ``Range`` (HTTP 200 instead of
+  206) the transfer restarts fresh rather than duplicating bytes; if it
+  answers 206 at a DIFFERENT offset than asked (``Content-Range``
+  mismatch) the task fails honestly instead of writing misaligned bytes.
 
 Honest limitation (disk-free guard without ``Content-Length``): when the
 upstream sends no ``Content-Length`` header the free-space pre-check cannot
@@ -62,6 +70,9 @@ HF_API_BASE = "https://huggingface.co/api/models"
 HF_RESOLVE_BASE = "https://huggingface.co"
 
 DEFAULT_TIMEOUT = 10.0          # seconds for HF HTTP calls
+DEFAULT_STREAM_TIMEOUT = 300.0  # per-read seconds for download streams
+                                # (much larger: a slow/stalling network must
+                                # not kill a multi-GB download mid-stream)
 SEARCH_CACHE_TTL = 300.0        # 5 minutes
 MODEL_CACHE_TTL = 900.0         # 15 minutes — on-demand detail changes rarely
 DEFAULT_CHUNK = 1 << 20         # 1 MiB read chunks
@@ -222,12 +233,25 @@ def _parse_next_cursor(headers: Any) -> Optional[str]:
 
 
 class _UrlStream:
-    """Minimal wrapper giving a urllib response a stable read/content_length."""
+    """Minimal wrapper giving a urllib response a stable read/content_length/status.
+
+    ``status`` lets the resume path detect a server that ignored the ``Range``
+    header (200 instead of 206) and restart fresh instead of duplicating bytes.
+    """
 
     def __init__(self, resp: Any) -> None:
         self._resp = resp
+        self.status = int(getattr(resp, "status", 200) or 200)
         cl = resp.headers.get("Content-Length") if hasattr(resp, "headers") else None
         self.content_length: Optional[int] = int(cl) if cl and cl.isdigit() else None
+        # ``Content-Range: bytes <start>-<end>/<total>`` on a 206 — lets the
+        # resume path verify the upstream answered the EXACT offset we asked
+        # for (a mismatched offset would silently corrupt the appended file).
+        self.content_range_start: Optional[int] = None
+        cr = (resp.headers.get("Content-Range") if hasattr(resp, "headers") else None) or ""
+        m = re.match(r"bytes\s+(\d+)-\d+/\d+", cr.strip(), re.IGNORECASE)
+        if m:
+            self.content_range_start = int(m.group(1))
 
     def read(self, n: int) -> bytes:
         return self._resp.read(n)
@@ -239,8 +263,18 @@ class _UrlStream:
             pass
 
 
-def _default_open_stream(url: str, timeout: float) -> _UrlStream:
-    req = urllib.request.Request(url, headers={"User-Agent": "weight-streaming"})
+def _default_open_stream(url: str, timeout: float, start: int = 0) -> _UrlStream:
+    """Open a download stream; ``start > 0`` asks for ``Range: bytes=<start>-``.
+
+    urllib forwards the ``Range`` header across the HF → CDN redirect, so a
+    resuming client receives only the remaining bytes (206). Servers that
+    ignore ``Range`` answer 200 with the whole body — the caller detects the
+    status and restarts fresh rather than appending duplicate bytes.
+    """
+    headers = {"User-Agent": "weight-streaming"}
+    if start > 0:
+        headers["Range"] = f"bytes={start}-"
+    req = urllib.request.Request(url, headers=headers)
     resp = urllib.request.urlopen(req, timeout=timeout)  # follows CDN redirects
     return _UrlStream(resp)
 
@@ -254,9 +288,11 @@ def _open_part_exclusive(part_path: str) -> Any:
 
     - An existing symlink (even a dangling one) at the path → refuse
       (``HubValidationError``) — never unlink or follow an attacker object.
-    - An existing regular file = a stale partial from an interrupted download;
-      remove it, because v1 has no resume (a retry is a fresh download — same
-      semantics the old ``open(path, "wb")`` truncate gave, made explicit).
+    - An existing regular file here means a start-at-0 run raced with a
+      leftover partial — ``run_download`` routes any kept partial to
+      ``_open_part_append`` and only calls this opener after that partial
+      was removed, so this delete is defensive (a fresh run never appends).
+      A RESUME keeps the partial instead (``_open_part_append``).
     - Then create with ``O_CREAT|O_EXCL`` (fails if anything reappears in the
       race window) plus ``O_NOFOLLOW`` where the platform exposes it (POSIX);
       Windows has no ``O_NOFOLLOW`` but ``O_EXCL`` there also refuses to open
@@ -279,6 +315,52 @@ def _open_part_exclusive(part_path: str) -> Any:
     return os.fdopen(fd, "wb")
 
 
+def _part_size(part_path: str) -> int:
+    """Existing partial size for a resume; 0 when there is nothing to keep.
+
+    Same no-follow rule as the writers: a symlink at the ``.part`` path is
+    refused (never read through an attacker object), and anything that is not
+    a regular file counts as no partial.
+    """
+    if not os.path.lexists(part_path):
+        return 0
+    if os.path.islink(part_path):
+        raise HubValidationError(
+            "refusing to resume through a symlink at the .part path", status=400
+        )
+    if not os.path.isfile(part_path):
+        return 0
+    try:
+        return os.path.getsize(part_path)
+    except OSError:
+        return 0
+
+
+def _open_part_append(part_path: str) -> Any:
+    """Open the kept ``.part`` for APPENDING (resume), with no-follow rules.
+
+    - A symlink (even dangling) at the path → refuse — never follow it.
+    - The file must exist and be a regular file (verified by ``_part_size``
+      before the stream is opened) — otherwise ``FileNotFoundError`` fails
+      the task honestly.
+    - ``O_WRONLY`` WITHOUT ``O_TRUNC`` keeps the partial bytes; the handle is
+      seeked to the end so new chunks append after them.
+    """
+    if os.path.islink(part_path):
+        raise HubValidationError(
+            "refusing to append through a symlink at the .part path", status=400
+        )
+    flags = os.O_WRONLY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    if os.name == "nt" and hasattr(os, "O_NOINHERIT"):
+        flags |= os.O_NOINHERIT
+    fd = os.open(part_path, flags)
+    fh = os.fdopen(fd, "wb")
+    fh.seek(0, os.SEEK_END)
+    return fh
+
+
 # ── Download task + manager ───────────────────────────────────────────
 
 
@@ -288,7 +370,7 @@ class DownloadTask:
     __slots__ = (
         "id", "repo_id", "filename", "target_dir", "target_path", "status",
         "bytes_downloaded", "total_bytes", "speed_bps", "eta_s", "error",
-        "created_at", "updated_at", "_cancel", "_start_mono",
+        "created_at", "updated_at", "_cancel", "_start_mono", "_start_bytes",
     )
 
     def __init__(self, task_id: str, repo_id: str, filename: str,
@@ -308,6 +390,7 @@ class DownloadTask:
         self.updated_at = self.created_at
         self._cancel = threading.Event()
         self._start_mono: Optional[float] = None
+        self._start_bytes = 0  # bytes already on disk when THIS run started
 
     def to_dict(self) -> dict:
         return {
@@ -319,6 +402,14 @@ class DownloadTask:
             "status": self.status,
             "bytes_downloaded": self.bytes_downloaded,
             "total_bytes": self.total_bytes,
+            # REAL size on disk for a completed download (the panel shows it
+            # next to the full path). stat at serialization time so it stays
+            # honest even if the file changed since the download finished.
+            # The short-circuit avoids a stat for active tasks (to_dict runs
+            # on every SSE frame); the try/except covers the file-deleted-
+            # between-isfile-and-getsize race (a 500 here would kill the
+            # whole downloads list) — same defensive style as _part_size.
+            "file_size": self._disk_size(),
             "percent": (
                 round(100.0 * self.bytes_downloaded / self.total_bytes, 1)
                 if self.total_bytes else None
@@ -329,6 +420,24 @@ class DownloadTask:
             "created_at": self.created_at,
             "updated_at": self.updated_at,
         }
+
+    def _disk_size(self) -> Optional[int]:
+        """Real on-disk byte size for a COMPLETED download; None otherwise.
+
+        ``status == "done"`` is checked first so active tasks (whose
+        ``to_dict`` runs on every 0.5s SSE frame) never pay for a stat.
+        The file may vanish between the ``isfile`` check and the stat (an
+        external delete) — that race degrades to None, never a raised
+        500 that would kill the whole downloads list.
+        """
+        if self.status != "done":
+            return None
+        try:
+            if os.path.isfile(self.target_path):
+                return os.path.getsize(self.target_path)
+        except OSError:
+            pass
+        return None
 
 
 class DownloadManager:
@@ -343,6 +452,7 @@ class DownloadManager:
         model_cache_ttl: float = MODEL_CACHE_TTL,
         chunk_size: int = DEFAULT_CHUNK,
         fetch_headers: Optional[Callable[[str, float], tuple[Any, dict]]] = None,
+        stream_timeout: float = DEFAULT_STREAM_TIMEOUT,
     ) -> None:
         self._fetch_json = fetch_json if fetch_json is not None else _default_fetch_json
         self._fetch_json_headers = (
@@ -350,6 +460,7 @@ class DownloadManager:
         )
         self._open_stream = open_stream if open_stream is not None else _default_open_stream
         self.timeout = timeout
+        self.stream_timeout = stream_timeout
         self.cache_ttl = cache_ttl
         self.model_cache_ttl = model_cache_ttl
         self.chunk_size = chunk_size
@@ -644,10 +755,14 @@ class DownloadManager:
     def run_download(self, task: DownloadTask) -> None:
         """Blocking download: stream → ``.part`` → atomic rename. Sync & testable.
 
-        The ``.part`` is opened exclusively and without following symlinks
-        (``_open_part_exclusive``); the mid-stream ``WS_HUB_MAX_BYTES`` guard
-        counts REAL transferred bytes, so the ceiling holds even when the
-        upstream sends no ``Content-Length`` (see module docstring).
+        A fresh run truncates (exclusive, no-follow ``_open_part_exclusive``);
+        a RESUME (existing regular ``.part`` from a cancelled/failed run)
+        appends after the kept bytes via ``Range: bytes=<n>-``. If the
+        upstream ignores ``Range`` (HTTP 200 instead of 206) the partial is
+        discarded and the transfer restarts from byte 0 — bytes are never
+        duplicated. Cancelled/failed runs KEEP their ``.part`` so a later
+        resume is cheap; the mid-stream ``WS_HUB_MAX_BYTES`` guard counts
+        REAL transferred bytes (see module docstring).
         """
         part_path = task.target_path + ".part"
         if task._cancel.is_set():
@@ -655,30 +770,67 @@ class DownloadManager:
             return
         task.status = "downloading"
         task._start_mono = time.monotonic()
+        task.speed_bps = None
+        task.eta_s = None
+        task.error = None
         self._touch(task)
         max_bytes = int(os.environ.get("WS_HUB_MAX_BYTES", "0") or "0")
         try:
+            start = _part_size(part_path)
             url = (
                 f"{HF_RESOLVE_BASE}/{task.repo_id}/resolve/main/"
                 f"{urllib.parse.quote(task.filename)}"
             )
-            resp = self._open_stream(url, self.timeout)
+            # Streams use a MUCH larger per-read timeout than the JSON calls:
+            # a stalled connection must pause the transfer, not kill it.
+            resp = self._open_stream(url, self.stream_timeout, start)
             try:
                 total = getattr(resp, "content_length", None)
-                task.total_bytes = total
-                if total is not None:
-                    if max_bytes and total > max_bytes:
+                if start > 0:
+                    status = getattr(resp, "status", 200)
+                    cr_start = getattr(resp, "content_range_start", None)
+                    if status == 200:
+                        # Range ignored → the stream already carries the WHOLE
+                        # file from byte 0; discard the partial and restart
+                        # fresh (append would duplicate the first `start` bytes).
+                        start = 0
+                        task.bytes_downloaded = 0
+                        self._remove_part(part_path)
+                        task.total_bytes = total
+                    elif status == 206:
+                        if cr_start is not None and cr_start != start:
+                            # Upstream answered a DIFFERENT offset than asked —
+                            # appending would corrupt the file. Fail honestly
+                            # (never write misaligned bytes).
+                            raise HubValidationError(
+                                f"upstream answered byte range {cr_start}- instead of {start}- "
+                                "(resume aborted to avoid a corrupt file)",
+                                status=400,
+                            )
+                        # 206 → Content-Length is the REMAINDER after `start`
+                        task.total_bytes = (start + total) if total is not None else None
+                    else:
                         raise HubValidationError(
-                            f"file size {total} exceeds WS_HUB_MAX_BYTES ({max_bytes})",
+                            f"unexpected HTTP status {status} on resume", status=502
+                        )
+                else:
+                    task.total_bytes = total
+                task._start_bytes = start
+                if task.total_bytes is not None:
+                    if max_bytes and task.total_bytes > max_bytes:
+                        raise HubValidationError(
+                            f"file size {task.total_bytes} exceeds WS_HUB_MAX_BYTES ({max_bytes})",
                             status=400,
                         )
                     free = shutil.disk_usage(task.target_dir).free
-                    if total > free:
+                    if task.total_bytes > free:
                         raise HubValidationError(
-                            f"insufficient disk space: need {total} bytes, free {free}",
+                            f"insufficient disk space: need {task.total_bytes} bytes, free {free}",
                             status=400,
                         )
-                with _open_part_exclusive(part_path) as fh:
+                task.bytes_downloaded = start
+                opener = _open_part_append if start > 0 else _open_part_exclusive
+                with opener(part_path) as fh:
                     while True:
                         if task._cancel.is_set():
                             raise _Cancelled()
@@ -695,22 +847,36 @@ class DownloadManager:
                         self._update_progress(task)
             finally:
                 resp.close()
+            # Integrity gate: EOF is only success when the stream actually
+            # delivered every advertised byte. A mid-stream connection cut can
+            # end ``read()`` with b'' early (no exception) — renaming a
+            # truncated file into place would silently corrupt the model.
+            # Fail honestly and KEEP the ``.part`` so a resume appends only
+            # the missing bytes.
+            if task.total_bytes is not None and task.bytes_downloaded != task.total_bytes:
+                raise HubValidationError(
+                    f"stream ended early: got {task.bytes_downloaded} of "
+                    f"{task.total_bytes} bytes "
+                    f"({task.total_bytes - task.bytes_downloaded} missing) — "
+                    "download truncated; resume will fetch the remainder",
+                    status=502,
+                )
             os.replace(part_path, task.target_path)  # atomic
             task.status = "done"
-            if task.total_bytes:
-                task.bytes_downloaded = task.total_bytes
+            # bytes_downloaded equals total_bytes exactly (gate above) — do
+            # NOT overwrite it; the count reflects the REAL bytes written.
             self._update_progress(task)
         except _Cancelled:
             task.status = "cancelled"
-            self._remove_part(part_path)
+            # KEEP the .part — a resume appends the remaining bytes (v1.1).
         except HubValidationError as e:
             task.status = "failed"
             task.error = str(e)
-            self._remove_part(part_path)
+            # KEEP the .part — a resume can retry without re-downloading byte 0.
         except Exception as e:
             task.status = "failed"
             task.error = str(e)
-            self._remove_part(part_path)
+            # KEEP the .part — same reason as above.
         finally:
             self._touch(task)
 
@@ -730,8 +896,137 @@ class DownloadManager:
         if task.status == "queued":
             task.status = "cancelled"  # never started
             self._touch(task)
-        # if downloading, run_download's loop observes the flag and cleans up
+        # if downloading, run_download's loop observes the flag and stops;
+        # the partial .part is KEPT so the task can be resumed (v1.1)
         return task
+
+    def resume(self, task_id: str) -> Optional[DownloadTask]:
+        """Re-queue a cancelled/failed task for a fresh worker run.
+
+        The kept ``.part`` (if any) is picked up by ``run_download`` via
+        ``Range`` and appended — only the remaining bytes are fetched.
+        Tasks that are active or done are not resumable (``ValueError`` →
+        the endpoint answers 409 with the honest reason).
+        """
+        task = self._tasks.get(task_id)
+        if task is None:
+            return None
+        if task.status not in ("cancelled", "failed"):
+            raise ValueError(
+                f"task {task_id} is {task.status!r} — only cancelled or failed downloads can resume"
+            )
+        task._cancel = threading.Event()
+        task.status = "queued"
+        task.error = None
+        task.speed_bps = None
+        task.eta_s = None
+        task.total_bytes = None
+        task.bytes_downloaded = 0  # run_download re-derives from the .part size
+        self._touch(task)
+        return task
+
+    def delete(self, task_id: str, delete_file: bool = False) -> Optional[DownloadTask]:
+        """Remove a task (and its partial) from the manager.
+
+        A running worker is signalled to stop via the cancel flag. The FINAL
+        ``.gguf`` of a completed task is kept by default — model files are
+        precious and the server has no auth. With ``delete_file=True`` (only
+        meaningful for a ``done`` task) the model file is ALSO removed, but
+        ONLY when it realpath-resolves inside an allowed model dir
+        (``_remove_model_file`` — an extra containment check on top of the
+        one already done at download-creation time).
+        """
+        with self._lock:
+            task = self._tasks.pop(task_id, None)
+        if task is None:
+            return None
+        task._cancel.set()
+        if task.status != "done":
+            part_path = task.target_path + ".part"
+            self._remove_part(part_path)
+            # On Windows a file still open by the worker cannot be removed
+            # (PermissionError), while the worker's cancel path now KEEPS the
+            # .part for resume — so a delete issued mid-download would orphan
+            # it. The worker stops within a chunk, so retry the removal in a
+            # short daemon thread (never blocks the request, never outlives
+            # the process; no-op if the direct remove already succeeded).
+            threading.Thread(
+                target=_remove_part_retry, args=(part_path,), daemon=True
+            ).start()
+        elif delete_file:
+            self._remove_model_file(task.target_path)
+        return task
+
+    def clear(self, delete_file: bool = False,
+              protected_paths: Optional[set] = None) -> dict:
+        """Remove every FINISHED task (done/failed/cancelled) in one call.
+
+        Active downloads (queued/downloading) are left untouched. Each
+        finished task is popped from the manager and its ``.part`` removed
+        (daemon retry thread — Windows cannot remove an open file). With
+        ``delete_file=True`` the model files of COMPLETED tasks are also
+        removed, EXCEPT paths in ``protected_paths`` (e.g. currently loaded
+        models — same rule as the single-task delete endpoint); those are
+        reported honestly in ``files_skipped`` rather than failing the whole
+        batch. Returns a summary: removed / files_deleted / files_skipped.
+        """
+        protected = {
+            os.path.normcase(os.path.realpath(p)) for p in (protected_paths or set())
+        }
+        with self._lock:
+            terminal = [
+                t for t in self._tasks.values()
+                if t.status in ("done", "failed", "cancelled")
+            ]
+            for task in terminal:
+                self._tasks.pop(task.id, None)
+        removed: list[str] = []
+        files_deleted: list[str] = []
+        files_skipped: list[str] = []
+        for task in terminal:
+            task._cancel.set()
+            removed.append(task.id)
+            if task.status != "done":
+                part_path = task.target_path + ".part"
+                self._remove_part(part_path)
+                threading.Thread(
+                    target=_remove_part_retry, args=(part_path,), daemon=True
+                ).start()
+            elif delete_file:
+                if os.path.normcase(os.path.realpath(task.target_path)) in protected:
+                    files_skipped.append(task.id)
+                elif self._remove_model_file(task.target_path):
+                    files_deleted.append(task.id)
+                else:
+                    files_skipped.append(task.id)  # missing / locked / outside dirs
+        return {
+            "status": "cleared",
+            "removed": removed,
+            "files_deleted": files_deleted,
+            "files_skipped": files_skipped,
+        }
+
+    @staticmethod
+    def _remove_model_file(target_path: str) -> bool:
+        """Delete a downloaded model file, guarded by realpath containment.
+
+        Defense in depth: ``target_path`` was validated at download-creation
+        time, but the delete happens later and is destructive — re-resolve it
+        and refuse unless it lands inside an allowed model dir (a symlink
+        escaped to elsewhere, or any other tampering, is never followed).
+        Returns True only when the file was actually removed.
+        """
+        real = os.path.realpath(target_path)
+        allowed = [os.path.realpath(d) for d in get_model_search_dirs()]
+        if not any(real == ra or real.startswith(ra + os.sep) for ra in allowed):
+            return False  # refuse to touch anything outside the allowed dirs
+        try:
+            if os.path.isfile(real):
+                os.remove(real)
+                return True
+        except OSError:
+            pass
+        return False
 
     # ── internals ───────────────────────────────────────────────────
 
@@ -739,7 +1034,9 @@ class DownloadManager:
         if task._start_mono is not None:
             elapsed = time.monotonic() - task._start_mono
             if elapsed > 0:
-                task.speed_bps = task.bytes_downloaded / elapsed
+                # Speed = bytes transferred by THIS run only (a resume must
+                # not count the partial that already existed on disk).
+                task.speed_bps = (task.bytes_downloaded - task._start_bytes) / elapsed
         if task.total_bytes and task.speed_bps and task.speed_bps > 0:
             remaining = max(0, task.total_bytes - task.bytes_downloaded)
             task.eta_s = remaining / task.speed_bps
@@ -756,6 +1053,20 @@ class DownloadManager:
                 os.remove(part_path)
         except OSError:
             pass
+
+
+def _remove_part_retry(part_path: str, tries: int = 6, delay: float = 0.5) -> None:
+    """Best-effort removal with retries (Windows: an open file cannot be
+    removed until the worker closes its handle — usually within one chunk).
+    Runs on a daemon thread; silently gives up rather than ever blocking."""
+    for _ in range(tries):
+        if not os.path.exists(part_path):
+            return
+        try:
+            os.remove(part_path)
+            return
+        except OSError:
+            time.sleep(delay)
 
 
 class _Cancelled(Exception):

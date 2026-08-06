@@ -169,14 +169,19 @@ def p95(xs):
 def main():
     # EXP-009 clean-room gate: abort when the environment is contaminated
     # (legacy server, orphan llama-server, port squatting). Read-only check.
-    checker = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                           "check_clean_environment.py")
-    p = subprocess.run([sys.executable, checker], capture_output=True, text=True)
-    print(p.stdout, end="", flush=True)
-    if p.returncode >= 2:
-        print("ABORTING: environment check FAILED - fix the findings and re-run.",
-              file=sys.stderr)
-        return 2
+    # SKIPPED when this harness is invoked as a SUB-HARNESS by
+    # measure_ncmoe_matrix.py (WS_SKIP_GATE=1): there a llama-server is
+    # deliberately running (the matrix loads the model and verified its
+    # flags itself) — the gate would false-FAIL on it.
+    if os.environ.get("WS_SKIP_GATE") != "1":
+        checker = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                               "check_clean_environment.py")
+        p = subprocess.run([sys.executable, checker], capture_output=True, text=True)
+        print(p.stdout, end="", flush=True)
+        if p.returncode >= 2:
+            print("ABORTING: environment check FAILED - fix the findings and re-run.",
+                  file=sys.stderr)
+            return 2
 
     base_vram = vram_mib()
     print(f"baseline VRAM (no model): {base_vram} MiB", flush=True)
