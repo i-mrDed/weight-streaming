@@ -17,7 +17,9 @@
 | 005 | 2026-08-06 | GPU `--cpu-moe` Tiering Proof | ⚠️ Invalidated | ⚠️ **Contaminated** — stale Jan Qwythos-9B answered on port 8805 (our backend's port). Real 35B + --cpu-moe = **~18.4 tok/s** (EXP-007), not 42-44. Mechanism still proven (experts stream from RAM) but numbers void |
 | 006 | 2026-08-06 | CPU Thread Scaling | ⚠️ Invalidated | ⚠️ **Contaminated** — measured a stale Jan Qwythos-9B (dense, GPU-resident) squatting on port 8805, not the 35B. See EXP-007. Real 35B + --cpu-moe: threads 8 is fine, but 42-46 tok/s claim is void |
 | 007 | 2026-08-06 | Context (KV Cache) Scaling | ✅ Complete | Real 35B-A3B + --cpu-moe: **18.4 tok/s flat** across 2048/8192/32768 ctx; KV cache mostly in host RAM (+637 MiB VRAM for 16× ctx, not +5 GB). Also exposed the EXP-005/006 stale-server contamination |
-| 008 | 2026-08-06 | `--n-cpu-moe` Expert Offload Matrix | ✅ Complete | Clean sweep (orphan-guarded, flag-verified): `--cpu-moe` 17.9 → `--n-cpu-moe 20` 33.8 → **10: 44.5** → **0: 53.9 tok/s** (3×). VRAM 3.9→11.3 GB. Sweet spot on 12 GB = `--n-cpu-moe 10` (44.5, 88%) |
+| 008 | 2026-08-06 | `--n-cpu-moe` Expert Offload Matrix | ✅ Complete | Clean sweep (orphan-guarded, flag-verified): `--cpu-moe` 17.9 → `--n-cpu-moe 20` 33.8 → **10: 44.5** → **0: 53.9 tok/s** (3×). VRAM 3.9→11.3 GB. Sweet spot on 12 GB = `--n-cpu-moe 10` (44.5, 88%). **Re-validated 2026-08-06 ผ่าน clean-room gate: 17.9 / 33.9 / 47.2 / 56.4 tok/s** |
+| 009 | 2026-08-06 | KV Cache q8_0 vs f16 | ✅ Complete | **No-op บนเครื่องนี้ (~10 MiB VRAM, tok/s เท่าเดิม)** — ยืนยัน EXP-007: KV อยู่ RAM เป็นส่วนใหญ่ → quantize KV ไม่ช่วยบน 12 GB นี้ |
+| 010 | 2026-08-06 | Speculative Decoding | ❌ Dead end (ที่พิสูจน์แล้ว) | Qwen3-0.6B draft ถูก reject: **vocab ไม่ตรง** (Qwen3 151k vs Qwen3.6 ~128k). ไม่มี Qwen3.6 เล็กบน HF. `ngram-simple` ≈ baseline. **ข้อค้นพบ:** build นี้ต้อง `--spec-type` (default none). สรุป: ไม่ใช่ lever สำหรับ bottleneck bandwidth นี้ |
 
 ---
 

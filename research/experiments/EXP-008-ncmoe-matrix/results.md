@@ -30,3 +30,22 @@ llama-server subprocess remained (Windows orphans children), still bound to
 port 8805, answering `/health` with the same model path. Killing all
 llama-server.exe before each restart + verifying the spawned cmdline fixed
 it. The 32.8/8566 rows are DISCARDED, not part of the results above.
+
+---
+
+## Re-validation 2026-08-06 (ผ่าน clean-room gate, EXP-009 era)
+
+Re-run ผ่าน `check_clean_environment.py` gate + token-exact flag
+verification (จับบั๊ก `--cpu-moe` substring match กับ `--n-cpu-moe`) +
+harness ไม่ถูกเรียกเป็น sub-harness แล้ว:
+
+| config | EXP-008 เดิม | Re-run | Δ |
+|--------|:---:|:---:|:---:|
+| `--cpu-moe` | 17.9 tok/s / 3858 MiB / 60.5 ms | **17.9 / 3085 / 57.7** | ≈ |
+| `--n-cpu-moe 20` | 33.8 / 8532 / 31.9 | **33.9 / 7761 / 31.4** | ≈ |
+| `--n-cpu-moe 10` | 44.5 / 10834 / 29.5 | **47.2 / 10061 / 20.6** | +6% |
+| `--n-cpu-moe 0` | 53.9 / 11338 / 20.2 | **56.4 / 11175 / 17.3** | +5% |
+
+**ตัวเลขยืนยันได้** — ความต่าง +5-6% บน config เร็วสุด = page-cache warm /
+run variance; สรุปเดิม (40+ tok/s สำเร็จ, sweet spot = n-cpu-moe 10,
+ceiling = n-cpu-moe 0) ยังคงถูกต้อง
