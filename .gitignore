@@ -17,6 +17,14 @@ venv/
 .coverage
 htmlcov/
 
+# Benchmark harness temp outputs (scripts/measure_*.py write these; they
+# are rerunnable artifacts, not source — see research/experiments EXP-007/008)
+scripts/.ctx_scaling_out.json
+scripts/.ncmoe_matrix_out.json
+scripts/.threads_scaling_out.json
+scripts/.ws-server-matrix.log
+scripts/.ws-matrix.log
+
 # Node / frontend toolchain (built assets in static/console/ ARE committed)
 node_modules/
 *.tsbuildinfo

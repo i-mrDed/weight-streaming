@@ -27,6 +27,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import shlex
 import shutil
 import subprocess
 import time
@@ -36,6 +37,7 @@ from typing import Any, Dict, Iterator, List, Optional
 
 from ._base import WeightStreamBackend
 from ..core.exceptions import ModelError, GenerationError
+from ..io.page_faults import page_fault_count, paging_demand
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +50,15 @@ _JAN_BACKENDS = os.path.join(
 # Fixed port for the server subprocess (API server uses 8765/8804/...).
 DEFAULT_SERVER_PORT = 8805
 DEFAULT_HOST = "127.0.0.1"
+
+# KV cache data types llama-server accepts (-ctk/-ctv). Keep it explicit so
+# the backend never forwards garbage to the binary — unknown types are
+# refused with a clear error instead of silently passing through.
+KV_CACHE_TYPES = {
+    "f32", "f16", "bf16",
+    "q8_0", "q4_0", "q4_1", "q5_0", "q5_1", "q6_k", "q8_1",
+    "iq4_nl", "iq4_xs", "iq3_s", "iq2_s",
+}
 
 
 def _find_llama_server() -> Optional[str]:
@@ -72,6 +83,224 @@ def _find_llama_server() -> Optional[str]:
     return found
 
 
+# ── Windows orphan guard (EXP-009) ──────────────────────────────────
+# Windows never reaps orphaned children: when a parent dies without
+# terminating them (taskkill /F, a crash, a closed console), the child keeps
+# running forever — exactly how the stale llama-server on port 8805 survived
+# for days and corrupted EXP-005/006. The canonical fix is a Job Object with
+# JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE: the OS force-kills every process in the
+# job the moment the LAST job handle closes, i.e. when this process dies by
+# ANY means. Every helper below is defensive — on any failure the backend
+# behaves exactly as before (graceful close() still terminates the child;
+# only the force-kill orphan case degrades).
+_JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x2000
+_JOB_OBJECT_EXTENDED_LIMIT_INFORMATION = 9
+
+# PIDs of llama-server subprocesses THIS process spawned (EXP-009). The
+# stale-owner sweep must never kill one of our own children: with
+# max_loaded_models > 1 two backends share the fixed port, and killing a
+# sibling's server would silently reroute that model's traffic to the
+# other model — the exact contamination class being eliminated. A stale
+# orphan from a DEAD parent is never in this set, so it is still swept.
+_OWNED_PIDS: set[int] = set()
+
+
+def _create_win32_kill_on_close_job() -> Optional[int]:
+    """Create a KILL_ON_JOB_CLOSE Job Object; None when unsupported.
+
+    On POSIX children are reparented and reaped by init, so there are no
+    orphans and the guard is unnecessary. On Windows this returns the job
+    handle (opaque int) or None if the platform refuses (best-effort).
+    """
+    if os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CreateJobObjectW.restype = wintypes.HANDLE
+        kernel32.CreateJobObjectW.argtypes = [wintypes.LPVOID, wintypes.LPCWSTR]
+        kernel32.SetInformationJobObject.restype = wintypes.BOOL
+        kernel32.SetInformationJobObject.argtypes = [
+            wintypes.HANDLE, ctypes.c_int, wintypes.LPVOID, wintypes.DWORD,
+        ]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+
+        class _BasicLimit(ctypes.Structure):
+            _fields_ = [
+                ("PerProcessUserTimeLimit", ctypes.c_longlong),
+                ("PerJobUserTimeLimit", ctypes.c_longlong),
+                ("LimitFlags", wintypes.DWORD),
+                ("MinimumWorkingSetSize", ctypes.c_size_t),
+                ("MaximumWorkingSetSize", ctypes.c_size_t),
+                ("ActiveProcessLimit", wintypes.DWORD),
+                ("Affinity", ctypes.c_size_t),
+                ("PriorityClass", wintypes.DWORD),
+                ("SchedulingClass", wintypes.DWORD),
+            ]
+
+        class _IoCounters(ctypes.Structure):
+            _fields_ = [
+                ("ReadOperationCount", ctypes.c_ulonglong),
+                ("WriteOperationCount", ctypes.c_ulonglong),
+                ("OtherOperationCount", ctypes.c_ulonglong),
+                ("ReadTransferCount", ctypes.c_ulonglong),
+                ("WriteTransferCount", ctypes.c_ulonglong),
+                ("OtherTransferCount", ctypes.c_ulonglong),
+            ]
+
+        class _ExtendedLimit(ctypes.Structure):
+            _fields_ = [
+                ("BasicLimitInformation", _BasicLimit),
+                ("IoInfo", _IoCounters),
+                ("ProcessMemoryLimit", ctypes.c_size_t),
+                ("JobMemoryLimit", ctypes.c_size_t),
+                ("PeakProcessMemoryUsed", ctypes.c_size_t),
+                ("PeakJobMemoryUsed", ctypes.c_size_t),
+            ]
+
+        job = kernel32.CreateJobObjectW(None, None)
+        if not job:
+            return None
+        info = _ExtendedLimit()
+        info.BasicLimitInformation.LimitFlags = _JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE
+        if not kernel32.SetInformationJobObject(
+            job,
+            _JOB_OBJECT_EXTENDED_LIMIT_INFORMATION,
+            ctypes.byref(info),
+            ctypes.sizeof(info),
+        ):
+            kernel32.CloseHandle(job)
+            return None
+        return int(job)
+    except Exception:
+        logger.warning(
+            "KILL_ON_JOB_CLOSE job creation failed — orphan guard inactive",
+            exc_info=True,
+        )
+        return None
+
+
+def _assign_process_to_job(job_handle: int, proc: Any) -> bool:
+    """Assign a spawned subprocess to the kill-on-close job (best-effort).
+
+    Some sandboxes (e.g. this process already inside a non-nestable job)
+    make the assignment fail with ERROR_ACCESS_DENIED. On failure we log
+    and continue — graceful close() still works; only the force-kill
+    orphan protection is lost for that spawn.
+    """
+    if os.name != "nt":
+        return False
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.AssignProcessToJobObject.restype = wintypes.BOOL
+        kernel32.AssignProcessToJobObject.argtypes = [wintypes.HANDLE, wintypes.HANDLE]
+        proc_handle = getattr(proc, "_handle", None)
+        if proc_handle is None:
+            return False
+        if not kernel32.AssignProcessToJobObject(job_handle, int(proc_handle)):
+            logger.warning(
+                "AssignProcessToJobObject failed (%d) — orphan guard "
+                "inactive for this spawn",
+                ctypes.get_last_error(),
+            )
+            return False
+        return True
+    except Exception:
+        logger.warning(
+            "could not assign llama-server to kill-on-close job",
+            exc_info=True,
+        )
+        return False
+
+
+def _close_win32_job(job_handle: int) -> None:
+    """Close a job handle — releasing the last one triggers KILL_ON_JOB_CLOSE."""
+    if os.name != "nt":
+        return
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle(job_handle)
+    except Exception:
+        pass
+
+
+def _parse_netstat_listener(output: str, port: int) -> Optional[int]:
+    """PID of the process LISTENING on ``port`` from ``netstat -ano`` text.
+
+    Line shape: ``TCP    127.0.0.1:8805    0.0.0.0:0    LISTENING    48920``
+    (IPv6 ``[::]:8805`` rows and rows owned by pid 0 / our own pid are
+    excluded — those are never the stale server we are allowed to kill).
+    """
+    suffix = f":{port}"
+    for line in output.splitlines():
+        parts = line.split()
+        if (
+            len(parts) >= 5
+            and parts[0] == "TCP"
+            and parts[3] == "LISTENING"
+            and parts[1].endswith(suffix)
+        ):
+            pid = parts[-1]
+            if pid.isdigit() and int(pid) > 0 and int(pid) != os.getpid():
+                return int(pid)
+    return None
+
+
+def _find_port_pid(port: int) -> Optional[int]:
+    """PID of the process LISTENING on ``port``; None when unresolvable.
+
+    Windows: ``netstat -ano -p tcp``. POSIX: ``lsof -ti :port``. Both are
+    best-effort — any failure returns None and the caller falls back to the
+    port-collision guard raising (the safe current behavior).
+    """
+    try:
+        flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        if os.name == "nt":
+            out = subprocess.run(
+                ["netstat", "-ano", "-p", "tcp"],
+                capture_output=True, text=True, timeout=10, creationflags=flags,
+            ).stdout or ""
+            return _parse_netstat_listener(out, port)
+        out = subprocess.run(
+            ["lsof", "-ti", f":{port}"],
+            capture_output=True, text=True, timeout=10,
+        )
+        if out.returncode == 0 and out.stdout.strip():
+            pid = out.stdout.strip().splitlines()[0].strip()
+            if pid.isdigit() and int(pid) != os.getpid():
+                return int(pid)
+    except Exception:
+        pass
+    return None
+
+
+def _kill_pid(pid: int) -> bool:
+    """Force-kill a process: ``taskkill /F /PID`` (Windows) or ``kill -9``."""
+    try:
+        flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/F", "/PID", str(pid)],
+                capture_output=True, timeout=10, creationflags=flags,
+            )
+        else:
+            subprocess.run(["kill", "-9", str(pid)], capture_output=True, timeout=10)
+        return True
+    except Exception:
+        return False
+
+
 class LlamaServerBackend(WeightStreamBackend):
     """Backend that runs llama-server as a subprocess and uses its HTTP API."""
 
@@ -84,21 +313,42 @@ class LlamaServerBackend(WeightStreamBackend):
         server_binary: Optional[str] = None,
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_SERVER_PORT,
+        kv_cache_type: Optional[str] = None,
         **kwargs,
     ):
         self._model_path = model_path
         self._n_ctx = n_ctx
         self._n_threads = n_threads
         self._gpu_layers = gpu_layers
+        self._kv_cache_type = (kv_cache_type or "").strip().lower()
+        if self._kv_cache_type and self._kv_cache_type not in KV_CACHE_TYPES:
+            raise ModelError(
+                f"Unsupported KV cache type: {kv_cache_type!r}",
+                details={
+                    "supported": sorted(KV_CACHE_TYPES),
+                    "hint": "Use f16 (default) or a quantized type like q8_0.",
+                },
+            )
         self._server_binary = server_binary or _find_llama_server()
         self._host = host
         self._port = port
         self._proc: Optional[subprocess.Popen] = None
+        # Windows orphan guard (EXP-009): handle of the KILL_ON_JOB_CLOSE
+        # Job Object the spawned llama-server is assigned to. While this
+        # handle stays open the child lives; the moment it closes (we die by
+        # any means, or close() releases it) the OS force-kills the child.
+        # None on POSIX or when job creation failed (graceful close() still
+        # terminates the child normally).
+        self._job_handle: Optional[int] = None
         self._base_url = f"http://{host}:{port}"
         self._last_gen_stats: Dict[str, Any] = {}
         self._metadata: Dict[str, Any] = {}
         self._ready = False
         self._started = False
+        # Real VRAM / offload telemetry from llama-server's GET /props
+        # (refreshed at most every 30s — stats polls every 2s must stay cheap).
+        self._gpu_cache: Optional[Dict[str, Any]] = None
+        self._gpu_cache_ts: float = 0.0
 
         # Detect capabilities from the GGUF metadata (arch + name).
         try:
@@ -107,6 +357,15 @@ class LlamaServerBackend(WeightStreamBackend):
                 self._metadata = parser.metadata or {}
         except Exception:
             self._metadata = {}
+        # Parity with the CPU binding (model_manager.list_models reads
+        # ``getattr(model, "n_experts", 0)`` for the MoE badge in the UI).
+        arch = self._get_arch()
+        self.n_experts = int(
+            self._metadata.get(
+                f"{arch}.expert_count",
+                self._metadata.get("expert_count", 0)
+            )
+        )
 
     # ── Availability ────────────────────────────────────────────────
     @classmethod
@@ -140,10 +399,35 @@ class LlamaServerBackend(WeightStreamBackend):
             cmd += ["-t", str(self._n_threads)]
         if self._gpu_layers != -1:
             cmd += ["-ngl", str(self._gpu_layers)]
+        # KV cache data type (P7.5): -1/auto leaves it unset; a type is
+        # validated in __init__ so the subprocess always gets a real one.
+        if self._kv_cache_type:
+            cmd += ["-ctk", self._kv_cache_type, "-ctv", self._kv_cache_type]
         # Quiet: don't spam logs
         cmd += ["--log-disable"]
+        # Optional extra args — lets us experiment with llama-server flags
+        # without code changes, e.g. MoE tiering for the GPU proof:
+        #   WS_LLAMA_EXTRA_ARGS="--cpu-moe -fa on -ctk q8_0 -ctv q8_0"
+        # Split on whitespace (shlex handles quotes); invalid input is
+        # ignored rather than crashing the backend.
+        # NOTE (Windows): posix=True strips quotes correctly but treats `\`
+        # as an escape — pass any paths in extra args with FORWARD slashes
+        # (e.g. `-md C:/models/draft.gguf`), which Windows APIs accept.
+        extra = os.environ.get("WS_LLAMA_EXTRA_ARGS", "").strip()
+        if extra:
+            try:
+                cmd += shlex.split(extra)
+            except ValueError:
+                logger.warning("WS_LLAMA_EXTRA_ARGS unparsable, ignoring: %r", extra)
 
         logger.info(f"Starting llama-server: port={self._port} model={os.path.basename(self._model_path)}")
+        # EXP-009 recovery: if an orphaned llama-server from a force-killed
+        # parent (or an old session) still squats on our fixed port serving a
+        # DIFFERENT model, kill it now so the spawn below binds cleanly. The
+        # _wait_ready guard would otherwise refuse to serve it. Only a
+        # responder that proves via /props to be a different model is ever
+        # touched — never our own server or an empty port.
+        self._sweep_stale_owner()
         self._proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
@@ -151,10 +435,44 @@ class LlamaServerBackend(WeightStreamBackend):
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
         self._started = True
-        self._wait_ready(timeout=60)
+        # Register the child as OURS before anything else can look at the
+        # port: the stale-owner sweep on a sibling backend must refuse to
+        # kill it (shared fixed port, max_loaded_models > 1).
+        _OWNED_PIDS.add(getattr(self._proc, "pid", None))
+        # Subprocess restarted → any cached /props (VRAM, layers) may belong
+        # to a previous process/model. Drop it; the next get_stats() re-reads.
+        self._gpu_cache = None
+        self._gpu_cache_ts = 0.0
+        # EXP-009 (Windows): assign the child to a KILL_ON_JOB_CLOSE Job
+        # Object so the OS terminates it whenever THIS process dies — by any
+        # means (taskkill /F, crash, console close, normal exit). Windows
+        # never reaps orphaned children, which is exactly how the stale 8805
+        # server from the Aug-4 session survived for days. Created AFTER
+        # Popen so a spawn failure cannot leak an unassigned job handle.
+        self._job_handle = _create_win32_kill_on_close_job()
+        if self._job_handle is not None:
+            _assign_process_to_job(self._job_handle, self._proc)
+        try:
+            self._wait_ready(timeout=60)
+        except Exception:
+            # Never leak the just-spawned subprocess when the port guard
+            # fails (a collision the sweep could not clear, a timeout, an
+            # early exit): the caller falls back to the CPU binding and drops
+            # this backend — close() terminates the child first.
+            self.close()
+            raise
 
     def _wait_ready(self, timeout: float = 60.0):
-        """Poll /health until the server is up."""
+        """Poll /health until the server is up.
+
+        Port-collision guard (EXP-007): llama-server binds a FIXED default
+        port (8805). If any OTHER llama-server already listens there it
+        answers /health, and this backend would silently talk to the WRONG
+        model (a stale Jan server was measured at 46 tok/s instead of the
+        real 18). Once /health is 200 we therefore verify the responder's
+        /props model_path matches the model we loaded, raising ModelError on
+        mismatch. Builds that expose no /props are accepted with a warning.
+        """
         deadline = time.time() + timeout
         while time.time() < deadline:
             if self._proc is not None and self._proc.poll() is not None:
@@ -164,13 +482,121 @@ class LlamaServerBackend(WeightStreamBackend):
                 )
             try:
                 with urllib.request.urlopen(f"{self._base_url}/health", timeout=2) as r:
-                    if r.status == 200:
-                        self._ready = True
-                        return
+                    if r.status != 200:
+                        raise OSError(f"health status {r.status}")
+            except Exception:
+                time.sleep(0.5)
+                continue
+            # Health is up — but is it OUR server? (see docstring)
+            self._verify_model_path()
+            self._ready = True
+            return
+        raise ModelError("llama-server not ready (timeout)", details={"port": self._port})
+
+    def _verify_model_path(self) -> None:
+        """Strict port-ownership check via GET /props.
+
+        llama-server exposes the loaded model path as ``model_path``. When
+        present it MUST match the model we asked for — a mismatch means a
+        stale server owns our fixed port. When absent (older builds) we
+        cannot verify and accept with a warning rather than break them.
+        """
+        data = self._read_props()
+        if data is None:
+            logger.warning(
+                "llama-server /props unavailable — cannot verify port "
+                "ownership for %s; a stale server could be answering",
+                os.path.basename(self._model_path),
+            )
+            return
+        live = data.get("model_path") or data.get("model_name") or ""
+        if not live:
+            logger.warning(
+                "llama-server /props has no model_path — cannot verify "
+                "port ownership for %s",
+                os.path.basename(self._model_path),
+            )
+            return
+        if not self._same_model_path(live, self._model_path):
+            raise ModelError(
+                "llama-server on our port serves a DIFFERENT model — port "
+                "collision with a stale server",
+                details={
+                    "expected": self._model_path,
+                    "found": live,
+                    "hint": f"kill the stale llama-server on port {self._port}",
+                },
+            )
+
+    @staticmethod
+    def _same_model_path(a: str, b: str) -> bool:
+        """Path equality tolerant of / vs \\ and case (Windows).
+
+        Both sides are made absolute so a relative request path still
+        matches llama-server's canonicalized /props path — avoiding a
+        false-positive collision on our OWN server (which would otherwise
+        degrade the load to the CPU binding via the backend fallback).
+        """
+        def norm(p: str) -> str:
+            p = p.strip().replace("\\", "/")
+            try:
+                p = os.path.abspath(p)
             except Exception:
                 pass
-            time.sleep(0.5)
-        raise ModelError("llama-server not ready (timeout)", details={"port": self._port})
+            return p.lower()
+        return norm(a) == norm(b)
+
+    def _read_props(self) -> Optional[Dict[str, Any]]:
+        """GET /props → dict; None on any failure (never raises)."""
+        try:
+            with urllib.request.urlopen(f"{self._base_url}/props", timeout=3) as r:
+                return json.loads(r.read().decode("utf-8", errors="replace"))
+        except Exception:
+            return None
+
+    def _sweep_stale_owner(self) -> None:
+        """Best-effort: clear a stale llama-server squatting on our fixed port.
+
+        EXP-009 recovery. If /props on our port already answers with the
+        model we are about to load, it is our own server (idempotent start)
+        — keep it. If it answers with a DIFFERENT model, it is an orphan
+        (a force-killed parent left it behind); resolve its PID and kill it
+        so the spawn below binds cleanly. Any failure degrades to the
+        _wait_ready guard raising — we never guess at a PID or kill blindly.
+        """
+        data = self._read_props()
+        if data is None:
+            return  # nothing listening, or not a llama-server → port is free
+        live = data.get("model_path") or data.get("model_name") or ""
+        if live and self._same_model_path(live, self._model_path):
+            return  # our own server already bound — nothing to clean
+        pid = _find_port_pid(self._port)
+        if pid is None:
+            logger.warning(
+                "port %s answered /props with a different model (%r) but its "
+                "PID could not be resolved — the load will fail with a "
+                "collision error",
+                self._port, live or "?",
+            )
+            return
+        if pid in _OWNED_PIDS:
+            # A sibling backend's llama-server on the shared fixed port
+            # (max_loaded_models > 1). Never kill our own child — killing
+            # it would silently reroute its model's traffic to ours. Let
+            # the _wait_ready guard raise (the pre-sweep safe behavior).
+            logger.warning(
+                "port %s serves model %r from one of OUR own backends — "
+                "refusing to sweep it; this load will fail with a collision "
+                "error",
+                self._port, live or "?",
+            )
+            return
+        logger.warning(
+            "killing stale llama-server on port %s (PID %s, model %r)",
+            self._port, pid, live or "?",
+        )
+        _kill_pid(pid)
+        time.sleep(0.5)  # let the port actually free before we spawn
 
     # ── OpenAI-compatible request helper ────────────────────────────
     def _request(
@@ -300,6 +726,11 @@ class LlamaServerBackend(WeightStreamBackend):
         start_time = time.time()
         token_count = 0
         reasoning_chunks: List[str] = []
+        # OS page-fault sampling of the llama-server SUBPROCESS (Windows):
+        # llama-server mmaps the GGUF itself, so its process-wide fault
+        # counter is the same honest "paging demand" signal the CPU binding
+        # reports for its own process. None on POSIX (no per-child rusage).
+        faults_before = page_fault_count(pid=self._proc.pid if self._proc else None)
         try:
             for event in self._request("/v1/chat/completions", payload):
                 choices = event.get("choices") or []
@@ -334,6 +765,15 @@ class LlamaServerBackend(WeightStreamBackend):
                 "reasoning_chars": sum(len(c) for c in reasoning_chunks),
                 "tool_calls": len(self._tool_calls),
             }
+            # Real subprocess paging demand (Windows); None elsewhere → the
+            # paging key is simply absent, never fabricated.
+            paging = paging_demand(
+                faults_before,
+                page_fault_count(pid=self._proc.pid if self._proc else None),
+                token_count,
+            )
+            if paging is not None:
+                self._last_gen_stats["paging"] = paging
 
     def stream_prompt(
         self,
@@ -354,6 +794,9 @@ class LlamaServerBackend(WeightStreamBackend):
     def close(self):
         """Stop the llama-server subprocess. Safe to call multiple times."""
         if self._proc is not None:
+            # getattr: tests and edge cases may hand close() a proc stub
+            # without a pid; discarding None is a harmless no-op.
+            _OWNED_PIDS.discard(getattr(self._proc, "pid", None))
             try:
                 self._proc.terminate()
                 try:
@@ -365,17 +808,63 @@ class LlamaServerBackend(WeightStreamBackend):
             self._proc = None
         self._ready = False
         self._started = False
+        # Releasing the last job handle triggers KILL_ON_JOB_CLOSE — a second
+        # kill mechanism that also catches any child which survived
+        # terminate(). (A raw int handle has no GC finalizer; the hard
+        # guarantee is that process EXIT closes every kernel handle, which
+        # fires KILL_ON_JOB_CLOSE even if close() never ran.)
+        if self._job_handle is not None:
+            _close_win32_job(self._job_handle)
+            self._job_handle = None
 
     def get_stats(self) -> Dict[str, Any]:
+        """Stats for /v1/stats — honest about what llama-server cannot see.
+
+        Explicit ``buffer: None`` / ``prefetcher: None`` / ``page_cache: None``
+        (never accidentally missing): llama-server manages the weights inside
+        its own process (GPU offload + its own mmap), so the weight-streaming
+        LRU shard buffer, the predictor/prefetcher, and the server-side page-
+        cache residency tracker have no equivalent here. ``gpu`` carries REAL
+        telemetry llama-server does expose (VRAM usage, layers offloaded).
+        """
         return {
             "generation": self._last_gen_stats,
             "model": {
                 "path": self._model_path,
                 "arch": self._get_arch(),
                 "backend": "llama-server",
+                "n_experts": self.n_experts,
             },
-            "page_cache": None,
+            "buffer": None,        # no shard-level streaming buffer in llama-server
+            "prefetcher": None,   # no predictor/prefetcher inside llama-server
+            "page_cache": None,   # weights are managed inside llama-server itself
+            "gpu": self._gpu_props(),
         }
+
+    def _gpu_props(self) -> Optional[Dict[str, Any]]:
+        """Real GPU telemetry from llama-server's GET /props (cached 30s).
+
+        Returns None honestly when the server is not running, the endpoint
+        is absent (older builds), or the values are not exposed (CPU-only
+        builds report no VRAM). Never fabricates numbers.
+        """
+        if not self.is_loaded:
+            return None
+        now = time.time()
+        if self._gpu_cache is not None and now - self._gpu_cache_ts < 30:
+            return self._gpu_cache
+        data = self._read_props()
+        if data is None:
+            return None
+        total = data.get("total_vram") or 0
+        used = data.get("used_vram") or 0
+        self._gpu_cache = {
+            "n_gpu_layers": data.get("n_gpu_layers"),
+            "total_vram_mb": round(total / 1024 / 1024) if total else None,
+            "used_vram_mb": round(used / 1024 / 1024) if used else None,
+        }
+        self._gpu_cache_ts = now
+        return self._gpu_cache
 
     def get_capabilities(self) -> dict:
         from ..server.capabilities import detect_capabilities

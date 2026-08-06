@@ -14,6 +14,21 @@
 | 002 | 2026-07-27 | Predictor Accuracy Impact | ✅ Complete (v2) | v1: 2.73 t/s flat. v2: 1.15-1.23 t/s, LRU flat at 98.9%, predictor still not critical |
 | 003 | 2026-07-27 | Timing & Overlap Efficiency | ✅ Complete | 76.6% overlap efficiency (simulated), superseded by EXP-004 real data |
 | 004 | 2026-07-27 | Real MoE Hardware Benchmark | ✅ Complete | K3: 815ms compute vs 67ms max I/O stall → ~92% compute-bound. LRU 64MB sufficient |
+| 005 | 2026-08-06 | GPU `--cpu-moe` Tiering Proof | ⚠️ Invalidated | ⚠️ **Contaminated** — stale Jan Qwythos-9B answered on port 8805 (our backend's port). Real 35B + --cpu-moe = **~18.4 tok/s** (EXP-007), not 42-44. Mechanism still proven (experts stream from RAM) but numbers void |
+| 006 | 2026-08-06 | CPU Thread Scaling | ⚠️ Invalidated | ⚠️ **Contaminated** — measured a stale Jan Qwythos-9B (dense, GPU-resident) squatting on port 8805, not the 35B. See EXP-007. Real 35B + --cpu-moe: threads 8 is fine, but 42-46 tok/s claim is void |
+| 007 | 2026-08-06 | Context (KV Cache) Scaling | ✅ Complete | Real 35B-A3B + --cpu-moe: **18.4 tok/s flat** across 2048/8192/32768 ctx; KV cache mostly in host RAM (+637 MiB VRAM for 16× ctx, not +5 GB). Also exposed the EXP-005/006 stale-server contamination |
+| 008 | 2026-08-06 | `--n-cpu-moe` Expert Offload Matrix | ✅ Complete | Clean sweep (orphan-guarded, flag-verified): `--cpu-moe` 17.9 → `--n-cpu-moe 20` 33.8 → **10: 44.5** → **0: 53.9 tok/s** (3×). VRAM 3.9→11.3 GB. Sweet spot on 12 GB = `--n-cpu-moe 10` (44.5, 88%) |
+
+---
+
+## 🔍 Clean-room gate (ตั้งแต่ EXP-009)
+
+ทุกการวัดต้องผ่าน `scripts/check_clean_environment.py` ก่อน
+(exit: `0` = clean, `1` = warn, `2` = **ห้ามวัด**) — บทเรียนจาก EXP-005/006
+ที่ invalidate เพราะ stale server / port ชน โดย harness (`measure_*.py`)
+เรียก gate นี้อัตโนมัติตอนเริ่ม
+
+รายละเอียดเต็ม: [`CLEAN_ROOM_CHECKLIST.md`](CLEAN_ROOM_CHECKLIST.md)
 
 ---
 
