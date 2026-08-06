@@ -248,10 +248,16 @@ class _UrlStream:
         # resume path verify the upstream answered the EXACT offset we asked
         # for (a mismatched offset would silently corrupt the appended file).
         self.content_range_start: Optional[int] = None
+        # ``Content-Range: bytes <start>-<end>/<total>`` — the /total is the
+        # AUTHORITATIVE file size on a 206. It is used as the size fallback
+        # when a 206 omits Content-Length (chunked remainder), so the resume
+        # path never loses the true total to a missing header.
+        self.content_range_total: Optional[int] = None
         cr = (resp.headers.get("Content-Range") if hasattr(resp, "headers") else None) or ""
-        m = re.match(r"bytes\s+(\d+)-\d+/\d+", cr.strip(), re.IGNORECASE)
+        m = re.match(r"bytes\s+(\d+)-(\d+)/(\d+)", cr.strip(), re.IGNORECASE)
         if m:
             self.content_range_start = int(m.group(1))
+            self.content_range_total = int(m.group(3))
 
     def read(self, n: int) -> bytes:
         return self._resp.read(n)
@@ -807,8 +813,15 @@ class DownloadManager:
                                 "(resume aborted to avoid a corrupt file)",
                                 status=400,
                             )
-                        # 206 → Content-Length is the REMAINDER after `start`
-                        task.total_bytes = (start + total) if total is not None else None
+                        # 206 → Content-Length is the REMAINDER after `start`.
+                        # If the 206 omits Content-Length (chunked remainder),
+                        # the Content-Range ``/total`` is the authoritative
+                        # file size — use it rather than losing the total.
+                        if total is not None:
+                            task.total_bytes = start + total
+                        else:
+                            cr_total = getattr(resp, "content_range_total", None)
+                            task.total_bytes = cr_total
                     else:
                         raise HubValidationError(
                             f"unexpected HTTP status {status} on resume", status=502

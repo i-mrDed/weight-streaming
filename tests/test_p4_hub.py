@@ -459,6 +459,38 @@ def test_truncated_stream_is_never_marked_done(models_dir):
     assert task.bytes_downloaded == 1500  # honest count, not faked
 
 
+def test_truncated_eof_then_resume_yields_identical_file(models_dir):
+    """The EXACT production scenario behind the integrity gate: a stream
+    ends early via quiet EOF (no exception) → the gate fails the task and
+    keeps the ``.part``; a resume via Range (206) fetches only the remainder
+    and the final file is byte-identical to a fresh download."""
+    data = b"Y" * 3000
+    # Phase 1: quiet truncation — EOF after 1000 of the advertised 3000.
+    mgr = _mgr(stream=lambda u, t, start=0: FakeStream(b"Y" * 1000, content_length=3000))
+    mgr.chunk_size = 500
+    task = mgr.create_download("org/m", "eof.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "failed"
+    assert "truncated" in (task.error or "")
+    part = models_dir / "eof.gguf.part"
+    assert part.exists() and part.read_bytes() == b"Y" * 1000
+
+    # Phase 2: resume honors Range → only the 2000 remaining bytes fetched.
+    seen = {"starts": []}
+
+    def range_opener(url, t, start=0):
+        seen["starts"].append(start)
+        return RangeStream(data, start=start, status=206)
+
+    task2 = mgr.resume(task.id)
+    mgr._open_stream = range_opener
+    mgr.run_download(task2)
+    assert task2.status == "done"
+    assert seen["starts"] == [1000]  # resumed exactly from the kept part
+    assert (models_dir / "eof.gguf").read_bytes() == data  # byte-identical
+    assert task2.bytes_downloaded == 3000
+
+
 def test_resume_appends_remaining_bytes_from_part(models_dir):
     """v1.1 happy path: a failed download's kept ``.part`` is resumed via
     ``Range`` (206) — only the remaining bytes are fetched and the final file
