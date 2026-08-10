@@ -66,6 +66,45 @@ def main():
                           help="Skip warmup phase (less accurate but faster)")
     bench_p.add_argument("--json", "-j", action="store_true",
                           help="Output results as JSON")
+
+    # ── bench (honest harness: REAL engine via the API server) ─────────
+    bench_p = sub.add_parser(
+        "bench",
+        help="Honest benchmark harness — measure any GGUF through the real engine",
+        epilog=(
+            "Example: python -m weight_stream bench model.gguf --matrix "
+            "'{\"cpu-moe t8\": \"--cpu-moe -fa on -t 8\"}' --thai"
+        ),
+    )
+    bench_p.add_argument("model", type=str, help="Path to GGUF model file")
+    bench_p.add_argument("--model-id", type=str, default="bench",
+                         help="Model ID registered on the API server (default: bench)")
+    bench_p.add_argument("--ctx", type=int, default=2048,
+                         help="Context size (default: 2048)")
+    bench_p.add_argument("--threads", type=int, default=8,
+                         help="CPU threads (default: 8)")
+    bench_p.add_argument("--buffer-mb", "-b", type=int, default=64,
+                         help="Buffer size in MB (default: 64)")
+    bench_p.add_argument("--gen-tokens", "-n", type=int, default=120,
+                         help="Tokens per cold/warm generation (default: 120)")
+    bench_p.add_argument("--extra-args", default="",
+                         help="llama-server extra args for the (single) config")
+    bench_p.add_argument("--matrix", default="",
+                         help='JSON dict name->extra args, e.g. '
+                              '"{\"cpu-moe t8\": \"--cpu-moe -fa on -t 8\"}" — '
+                              'overrides --extra-args')
+    bench_p.add_argument("--thai", action="store_true",
+                         help="Run the Thai quality gate (9 fixed questions) after measuring")
+    bench_p.add_argument("--port", type=int, default=8765,
+                         help="API server port (default: 8765)")
+    bench_p.add_argument("--no-restart", action="store_true",
+                         help="Measure against an already-running server (skip clean room)")
+    bench_p.add_argument("--no-verify", action="store_true",
+                         help="Skip llama-server cmdline verification")
+    bench_p.add_argument("--export", default="",
+                         help="Base path for report files (.json / .md appended)")
+    bench_p.add_argument("--json", "-j", action="store_true",
+                         help="Print JSON report to stdout")
     
     # ── server / serve ────────────────────────────────────────────────
     server_p = sub.add_parser("server", aliases=["serve"], help="Start API server for frontends and IDE integration",
@@ -173,6 +212,8 @@ def main():
             cmd_stats(args)
         elif args.command == "benchmark":
             cmd_benchmark(args)
+        elif args.command == "bench":
+            cmd_bench(args)
         elif args.command == "ui":
             cmd_ui(args)
         elif args.command == "tui":
@@ -425,6 +466,103 @@ def cmd_benchmark(args):
     
     finally:
         model.close()
+
+
+def cmd_bench(args):
+    """Honest benchmark harness — real engine (llama-server via the API
+    server), clean-room discipline, cold + warm paging numbers.
+
+    Replaces the legacy simulated benchmark: every number here comes from a
+    real measurement, never a fabricated value (project ground rule).
+    """
+    import json as _json
+    from pathlib import Path as _Path
+
+    from weight_stream.bench import measure, report, thai
+
+    model_path = str(_Path(args.model).resolve())
+    if not _Path(model_path).exists():
+        print(f"Error: file not found: {args.model}", file=sys.stderr)
+        sys.exit(1)
+
+    base = f"http://127.0.0.1:{args.port}"
+    project_root = _Path(__file__).resolve().parents[2]
+
+    # Matrix from --matrix JSON, else a single config from --extra-args.
+    if args.matrix.strip():
+        try:
+            configs = _json.loads(args.matrix)
+        except _json.JSONDecodeError as e:
+            print(f"Error: --matrix is not valid JSON: {e}", file=sys.stderr)
+            sys.exit(1)
+        if not isinstance(configs, dict) or not configs:
+            print("Error: --matrix must be a non-empty JSON object",
+                  file=sys.stderr)
+            sys.exit(1)
+    else:
+        configs = {args.extra_args or "default": args.extra_args}
+
+    print(f"⚡ Bench harness — real engine, clean room")
+    print(f"   model : {model_path}")
+    print(f"   ctx   : {args.ctx}  threads: {args.threads}  "
+          f"gen tokens: {args.gen_tokens}")
+    print(f"   configs: {len(configs)}  ({', '.join(configs)})")
+
+    results = measure.run_matrix(
+        base, model_path, args.model_id, configs, project_root,
+        port=args.port, n_ctx=args.ctx, n_threads=args.threads,
+        buffer_mb=args.buffer_mb, gen_tokens=args.gen_tokens,
+        restart=not args.no_restart, verify=not args.no_verify,
+    )
+
+    for r in results:
+        if "error" in r:
+            print(f"  [{r['config']}] FAILED: {r['error']}")
+            continue
+        c, w = r["cold"], r["warm"]
+        print(f"  [{r['config']}] cold {c.get('tok_s')} tok/s "
+              f"({c.get('faults_per_token')} faults/tok, "
+              f"{c.get('disk_mb_per_token')} disk MB/tok)  "
+              f"warm {w.get('tok_s')} tok/s "
+              f"({w.get('faults_per_token')} faults/tok, "
+              f"{w.get('disk_mb_per_token')} disk MB/tok)  "
+              f"VRAM {w.get('used_vram_mb')} MiB")
+
+    # Optional Thai quality gate on the last loaded config.
+    gate = None
+    if args.thai:
+        print("\n🎯 Running Thai quality gate (9 fixed questions)…")
+        try:
+            gate = thai.run_quality_gate(base, args.model_id)
+            print(f"   tok/s={gate['tok_s']}  wall={gate['wall_s']}s")
+            for qid, a in gate["answers"].items():
+                final = (a["final"] or "").replace("\n", " ").strip()
+                print(f"   [{qid}] {final[:120]}")
+        except Exception as e:
+            print(f"   quality gate failed: {e}")
+            gate = None
+
+    out = {"model": model_path, "configs": results}
+    if gate:
+        out["quality_gate"] = gate
+    if args.json:
+        print(_json.dumps(out, ensure_ascii=False, indent=2))
+
+    if args.export:
+        base_out = _Path(args.export)
+        base_out.parent.mkdir(parents=True, exist_ok=True)
+        json_path = base_out.with_suffix(".json")
+        md_path = base_out.with_suffix(".md")
+        json_path.write_text(report.matrix_to_json(results, model_path),
+                             encoding="utf-8")
+        md_path.write_text(report.matrix_to_markdown(results, model_path),
+                           encoding="utf-8")
+        if gate:
+            q_md = base_out.with_suffix(".quality.md")
+            q_md.write_text(report.quality_to_markdown(gate), encoding="utf-8")
+            print(f"   quality gate report -> {q_md}")
+        print(f"   report -> {md_path}")
+        print(f"   json   -> {json_path}")
 
 
 if __name__ == "__main__":

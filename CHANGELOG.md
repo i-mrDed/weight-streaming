@@ -7,6 +7,26 @@
 
 ## [Unreleased]
 
+### ⚡ Bench harness — honest-measurement core (`weight_stream/bench/`)
+- New package packaging the project's measurement discipline so ANY model
+  can be measured reproducibly through the REAL engine (llama-server via
+  the API server), never a simulation:
+  - `thai` — the Thai quality gate: the 9 fixed questions proven in
+    EXP-009/EXP-011 (ultra-low-bit quants fail Thai tonal accuracy), so a
+    benchmark number is never reported without the quality side.
+  - `measure` — clean-room measurement: kill stale llama-servers, fresh
+    API server per config, load through the real backend, verify the
+    ACTUAL spawned cmdline (presence + value-aware `-t/-fa/-ctk/-ctv`),
+    cold + warm generations, tok/s + paging from /v1/stats.
+  - `report` — JSON + markdown matrix/quality reports (honest FAILED rows
+    with error, never silently dropped).
+- New CLI subcommand: `python -m weight_stream bench <model.gguf>`
+  (`--matrix`, `--extra-args`, `--thai`, `--export`, `--no-restart`, …) —
+  replaces the legacy simulated benchmark for real numbers.
+- New `tests/test_bench.py` (13 tests, offline-only: think-splitting,
+  cmdline verification, /v1/stats shape normalization, quality-gate flow
+  with fake transport, report formatting).
+
 ### 🧪 Frontend test coverage (api client)
 - New `frontend/src/core/api.test.ts` (13 tests) covering the API client used
   by every page: `authHeaders()`/`setApiToken()` (B1 token store + Bearer
