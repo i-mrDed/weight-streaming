@@ -25,11 +25,11 @@ import urllib.request
 REPO = "unsloth/DeepSeek-V4-Flash-0731-GGUF"
 QUANT_DIR = "UD-IQ3_XXS"
 SHARDS = [
-    # (remote filename, size from HF tree API 2026-08-10)
+    # (remote filename, exact size from HF tree API 2026-08-10)
     ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00001-of-00004.gguf", 5_257_696),
-    ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00002-of-00004.gguf", 49_912_334_336),
-    ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00003-of-00004.gguf", 49_257_984_000),
-    ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00004-of-00004.gguf", 5_032_448_000),
+    ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00002-of-00004.gguf", 49_910_532_416),
+    ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00003-of-00004.gguf", 49_257_859_456),
+    ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00004-of-00004.gguf", 5_034_198_464),
 ]
 TOTAL_BYTES = sum(s for _, s in SHARDS)
 
@@ -37,10 +37,10 @@ TOTAL_BYTES = sum(s for _, s in SHARDS)
 # expert-only requant — better KLD (0.263) + imatrix, 1.52x decode on
 # spill rigs, but +11 GB. Select with --variant tacotakumi.
 TACO_SHARDS = [
-    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00001-of-00004.gguf", 28_790_000_000),
-    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00002-of-00004.gguf", 28_770_000_000),
-    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00003-of-00004.gguf", 28_770_000_000),
-    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00004-of-00004.gguf", 28_920_000_000),
+    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00001-of-00004.gguf", 28_787_493_728),
+    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00002-of-00004.gguf", 28_772_928_160),
+    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00003-of-00004.gguf", 28_772_928_160),
+    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00004-of-00004.gguf", 28_924_047_424),
 ]
 TACO_REPO = "TacoTakumi/DeepSeek-V4-Flash-0731-GGUF"
 
