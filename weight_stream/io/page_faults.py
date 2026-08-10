@@ -1,9 +1,13 @@
 """Process-level page-fault counters (cross-platform).
 
-Measures the cumulative page faults of the current process:
+Measures the cumulative page faults of a process:
 
 - Windows: ``psapi.GetProcessMemoryInfo().PageFaultCount`` (hard + soft)
-- POSIX:   ``resource.getrusage(RUSAGE_SELF)`` minor + major faults
+  for the current process, or for a child process by PID (``OpenProcess``)
+  — used to sample the llama-server subprocess on the GPU backend.
+- POSIX:   ``resource.getrusage(RUSAGE_SELF)`` minor + major faults for the
+  current process only; there is no portable per-child rusage, so asking
+  for a specific PID honestly returns None.
 
 Why this exists: during real inference llama.cpp reads the GGUF through its
 own internal mmap, so ``StreamingBuffer`` never observes accesses
@@ -31,14 +35,23 @@ def is_supported() -> bool:
         return False
 
 
-def page_fault_count() -> Optional[int]:
-    """Cumulative page-fault count for this process.
+def page_fault_count(pid: Optional[int] = None) -> Optional[int]:
+    """Cumulative page-fault count for a process.
 
-    Returns None when the platform has no supported counter (callers should
+    ``pid=None`` (default) measures the current process — the CPU-binding
+    path. ``pid=<subprocess pid>`` measures that child process on Windows
+    (used by LlamaServerBackend for the llama-server subprocess); on POSIX
+    there is no portable per-child rusage, so a non-None pid honestly
+    returns None.
+
+    Returns None when the platform/counter is unavailable (callers should
     treat telemetry as unavailable rather than zero).
     """
     if sys.platform == "win32":
-        return _windows_page_fault_count()
+        return _windows_page_fault_count(pid)
+    if pid is not None:
+        # getrusage is RUSAGE_SELF only — no portable child sampling.
+        return None
     try:
         import resource
         usage = resource.getrusage(resource.RUSAGE_SELF)
@@ -63,7 +76,7 @@ def hard_fault_count() -> Optional[int]:
         return None
 
 
-def _windows_page_fault_count() -> Optional[int]:
+def _windows_page_fault_count(pid: Optional[int] = None) -> Optional[int]:
     import ctypes
     from ctypes import wintypes
 
@@ -81,6 +94,9 @@ def _windows_page_fault_count() -> Optional[int]:
             ("PeakPagefileUsage", ctypes.c_size_t),
         ]
 
+    # PROCESS_QUERY_INFORMATION — enough for GetProcessMemoryInfo on a child.
+    PROCESS_QUERY_INFORMATION = 0x0400
+
     try:
         pmc = PROCESS_MEMORY_COUNTERS()
         pmc.cb = ctypes.sizeof(pmc)
@@ -93,11 +109,29 @@ def _windows_page_fault_count() -> Optional[int]:
         psapi.GetProcessMemoryInfo.restype = wintypes.BOOL
         k32 = ctypes.WinDLL("kernel32", use_last_error=True)
         k32.GetCurrentProcess.restype = wintypes.HANDLE
-        if not psapi.GetProcessMemoryInfo(
-            k32.GetCurrentProcess(), ctypes.byref(pmc), pmc.cb
-        ):
-            return None
-        return int(pmc.PageFaultCount)
+
+        if pid is None:
+            handle = k32.GetCurrentProcess()
+            close_handle = False
+        else:
+            k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+            k32.OpenProcess.restype = wintypes.HANDLE
+            k32.CloseHandle.argtypes = [wintypes.HANDLE]
+            k32.CloseHandle.restype = wintypes.BOOL
+            handle = k32.OpenProcess(PROCESS_QUERY_INFORMATION, False, int(pid))
+            close_handle = True
+            if not handle:
+                # Child not openable (gone / access denied) — honest None.
+                return None
+        try:
+            if not psapi.GetProcessMemoryInfo(
+                handle, ctypes.byref(pmc), pmc.cb
+            ):
+                return None
+            return int(pmc.PageFaultCount)
+        finally:
+            if close_handle:
+                k32.CloseHandle(handle)
     except OSError:
         return None
 
