@@ -285,23 +285,33 @@ def create_app(server_url: str = "http://127.0.0.1:8765") -> gr.Blocks:
                 models = data.get("models", {})
                 html = ""
                 for mid, ms in models.items():
-                    buf = ms.get("buffer", {})
-                    pref = ms.get("prefetcher", {})
-                    page = ms.get("page_cache", {})
+                    # LlamaServerBackend (GPU) sends buffer/prefetcher/page_cache
+                    # as None — render honest "n/a" instead of fake zeros.
+                    buf_na = ms.get("buffer") is None
+                    pref_na = ms.get("prefetcher") is None
+                    page_na = ms.get("page_cache") is None
+                    buf = ms.get("buffer") or {}
+                    pref = ms.get("prefetcher") or {}
+                    page = ms.get("page_cache") or {}
                     gen = ms.get("generation", {})
+
+                    hit = 'n/a' if buf_na else f"{buf.get('hit_rate', 0):.1%}"
+                    shards = 'n/a' if buf_na else f"{buf.get('hot_shards', 0)}/{buf.get('capacity_shards', 0)}"
+                    prefs = 'n/a' if pref_na else f"{pref.get('prefetched', 0)}"
+                    resident = 'n/a' if page_na else f"{page.get('resident_ratio', 0):.1%}"
 
                     html += f"""
                     <div class="stats-card">
                         <b style="color:#A78BFA;">{mid}</b>
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-top:6px;">
                             <div><span class="stat-label">Hit Rate</span><br>
-                                <span class="stat-value">{buf.get('hit_rate', 0):.1%}</span></div>
+                                <span class="stat-value">{hit}</span></div>
                             <div><span class="stat-label">Hot Shards</span><br>
-                                <span class="stat-value">{buf.get('hot_shards', 0)}/{buf.get('capacity_shards', 0)}</span></div>
+                                <span class="stat-value">{shards}</span></div>
                             <div><span class="stat-label">Prefetches</span><br>
-                                <span class="stat-value">{pref.get('prefetched', 0)}</span></div>
+                                <span class="stat-value">{prefs}</span></div>
                             <div><span class="stat-label">Resident</span><br>
-                                <span class="stat-value">{page.get('resident_ratio', 0):.1%}</span></div>
+                                <span class="stat-value">{resident}</span></div>
                             <div><span class="stat-label">Speed</span><br>
                                 <span class="stat-value">{gen.get('tokens_per_sec', 0):.1f} tok/s</span></div>
                             <div><span class="stat-label">Tokens</span><br>

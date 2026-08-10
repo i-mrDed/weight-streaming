@@ -208,20 +208,26 @@ def _setup_logging(verbose: bool = False):
 
 def _print_stats_table(stats: dict):
     """Print formatted statistics table."""
-    buf = stats.get("buffer", {})
-    pref = stats.get("prefetcher", {})
+    buf = stats.get("buffer") or {}
+    pref = stats.get("prefetcher") or {}
     gen = stats.get("generation", {})
-    page = stats.get("page_cache", {})
-    
-    print(" " * 4 + "Buffer Statistics:")
-    print(f"{'':>6}Capacity:    {buf.get('capacity_shards', '?')} shards ({buf.get('capacity_mb', '?')} MB)")
-    print(f"{'':>6}Hot shards:  {buf.get('hot_shards', '?')} / {buf.get('capacity_shards', '?')}")
-    print(f"{'':>6}Hit rate:    {buf.get('hit_rate', 0):.1%}")
-    print(f"{'':>6}Hits:        {buf.get('hits', 0)}")
-    print(f"{'':>6}Misses:      {buf.get('misses', 0)}")
-    print(f"{'':>6}Evictions:   {buf.get('evictions', 0)}")
-    print(f"{'':>6}Prefetches:  {buf.get('prefetches', 0)}")
-    print()
+    page = stats.get("page_cache") or {}
+
+    if stats.get("buffer") is None:
+        # LlamaServerBackend (GPU): weights are managed inside llama-server,
+        # so there is no shard-level streaming buffer to report.
+        print(" " * 4 + "Buffer: n/a (backend manages weights internally)")
+        print()
+    else:
+        print(" " * 4 + "Buffer Statistics:")
+        print(f"{'':>6}Capacity:    {buf.get('capacity_shards', '?')} shards ({buf.get('capacity_mb', '?')} MB)")
+        print(f"{'':>6}Hot shards:  {buf.get('hot_shards', '?')} / {buf.get('capacity_shards', '?')}")
+        print(f"{'':>6}Hit rate:    {buf.get('hit_rate', 0):.1%}")
+        print(f"{'':>6}Hits:        {buf.get('hits', 0)}")
+        print(f"{'':>6}Misses:      {buf.get('misses', 0)}")
+        print(f"{'':>6}Evictions:   {buf.get('evictions', 0)}")
+        print(f"{'':>6}Prefetches:  {buf.get('prefetches', 0)}")
+        print()
     
     if pref:
         print(" " * 4 + "Prefetcher:")
@@ -296,8 +302,9 @@ def cmd_run(args):
             stats = model.get_stats()
             _print_stats_table(stats)
             
-            # Buffer hit rate note
-            hit = stats.get("buffer", {}).get("hit_rate", 0)
+            # Buffer hit rate note (or {} — buffer may be an explicit null on
+            # the llama-server GPU backend, which has no shard buffer).
+            hit = (stats.get("buffer") or {}).get("hit_rate", 0)
             if hit == 0:
                 print(
                     "  Note: Hit rate is 0% because expert routing is opaque\n"

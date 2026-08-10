@@ -113,11 +113,14 @@ class StatsPanel(Static):
         if not self.data:
             return Text("No data yet", style="dim")
 
-        buf = self.data.get("buffer", {})
-        pref = self.data.get("prefetcher", {})
-        page = self.data.get("page_cache", {})
+        buf = self.data.get("buffer") or {}
+        pref = self.data.get("prefetcher") or {}
+        page = self.data.get("page_cache") or {}
         gen = self.data.get("generation", {})
 
+        # LlamaServerBackend (GPU) sends buffer/prefetcher/page_cache as None
+        # — render honest "n/a" instead of fake zeros.
+        buffer_na = self.data.get("buffer") is None
         hit_rate = buf.get("hit_rate", 0)
         hot = buf.get("hot_shards", 0)
         cap = buf.get("capacity_shards", 0)
@@ -127,10 +130,10 @@ class StatsPanel(Static):
 
         return Text.from_markup(
             f"[bold purple]STATISTICS[/]\n\n"
-            f"  [bold]Hit Rate:[/]    [cyan]{hit_rate:.1%}[/]\n"
-            f"  [bold]Hot Shards:[/]  [cyan]{hot}/{cap}[/]\n"
-            f"  [bold]Prefetches:[/]  [cyan]{pref_count}[/]\n"
-            f"  [bold]Resident:[/]    [cyan]{resident:.1%}[/]\n"
+            f"  [bold]Hit Rate:[/]    [cyan]{'n/a' if buffer_na else f'{hit_rate:.1%}'}[/]\n"
+            f"  [bold]Hot Shards:[/]  [cyan]{'n/a' if buffer_na else f'{hot}/{cap}'}[/]\n"
+            f"  [bold]Prefetches:[/]  [cyan]{'n/a' if buffer_na else pref_count}[/]\n"
+            f"  [bold]Resident:[/]    [cyan]{'n/a' if self.data.get('page_cache') is None else f'{resident:.1%}'}[/]\n"
             f"  [bold]Speed:[/]       [cyan]{tps:.1f} tok/s[/]\n"
         )
 
