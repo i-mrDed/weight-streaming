@@ -160,12 +160,33 @@ def _shard_group_key(filename: str, quant: Optional[str], shard: Optional[dict])
 
 
 def _sanitize_filename(name: Any) -> str:
+    """Validate a repo-relative GGUF filename for download.
+
+    Repo-relative paths (e.g. ``UD-IQ3_XXS/foo-00001-of-00004.gguf``) are
+    ACCEPTED — large-model repos (unsloth etc.) keep per-quant shards in
+    subdirectories, and the resolve URL needs the relative path. The target
+    write still lands under the allowed model dir (``_resolve_target_dir``
+    + ``os.path.join`` of a validated relative path).
+
+    Rejected: empty, non-GGUF, absolute paths (drive letter or leading
+    separator — ``os.path.join`` would otherwise escape the model dir),
+    ``..`` traversal, NUL bytes.
+    """
     if not isinstance(name, str) or not name:
         raise HubValidationError("filename is required", status=400)
-    if "/" in name or "\\" in name or ".." in name or "\x00" in name:
-        raise HubValidationError("filename must not contain path separators or '..'", status=400)
+    if "\x00" in name:
+        raise HubValidationError("filename must not contain NUL bytes", status=400)
     if not name.lower().endswith(".gguf"):
         raise HubValidationError("filename must end with .gguf", status=400)
+    # Absolute path (POSIX or Windows drive) would escape the model dir via
+    # os.path.join; a leading separator is equally absolute. ``..`` blocks
+    # traversal anywhere in the relative path.
+    if name.startswith("/") or name.startswith("\\") or ":\\" in name[:3] \
+            or ":/" in name[:3] or ".." in name:
+        raise HubValidationError(
+            "filename must be a repo-relative path (no absolute path or '..')",
+            status=400,
+        )
     return name
 
 
@@ -871,7 +892,12 @@ class DownloadManager:
 
         enc = urllib.parse.quote(repo_id, safe="/")
         detail_url = f"{HF_API_BASE}/{enc}"
-        tree_url = f"{HF_API_BASE}/{enc}/tree/main"
+        # ``recursive=true``: many large-model repos (unsloth DS V4 Flash
+        # etc.) organize GGUF files under per-quant SUBDIRECTORIES; the
+        # default tree call lists only the top level (directories appear as
+        # ``type: directory`` entries with no files). Without recursion the
+        # hub detail would show just the root-level Q8_0 and hide all shards.
+        tree_url = f"{HF_API_BASE}/{enc}/tree/main?recursive=true"
         try:
             detail = self._fetch_json(detail_url, self.timeout)
             tree = self._fetch_json(tree_url, self.timeout)
@@ -1005,9 +1031,17 @@ class DownloadManager:
             raise HubValidationError("repo_id is required", status=400)
         fname = _sanitize_filename(filename)
         resolved = _resolve_target_dir(target_dir, get_model_search_dirs())
-        # filename is sanitized (no path separators), so joining keeps the
-        # final path inside the already-validated `resolved` dir.
+        # ``fname`` is a repo-relative path (subdirs allowed — unsloth keeps
+        # per-quant shards in subdirectories); joining keeps the final path
+        # inside the already-validated ``resolved`` dir because ``..`` and
+        # absolute paths are rejected above.
         target_path = os.path.join(resolved, fname)
+        parent = os.path.dirname(target_path)
+        try:
+            os.makedirs(parent, exist_ok=True)
+        except OSError as e:
+            raise HubValidationError(
+                f"cannot create target directory {parent}: {e}", status=400)
         with self._lock:
             self._counter += 1
             task_id = f"dl-{self._counter}"

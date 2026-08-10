@@ -78,7 +78,7 @@ FAKE_TREE = [
 
 def detail_router(url, t):
     """Fake HF: /tree/main → file tree, otherwise the model detail document."""
-    return FAKE_TREE if url.rstrip("/").endswith("/tree/main") else FAKE_DETAIL
+    return FAKE_TREE if url.rstrip("/").split("?", 1)[0].endswith("/tree/main") else FAKE_DETAIL
 
 
 class FakeStream:
@@ -244,7 +244,14 @@ def test_parse_shard(name, shard):
 
 def test_sanitize_filename_rules():
     assert _sanitize_filename("model.gguf") == "model.gguf"
-    for bad in ["a/b.gguf", "a\\b.gguf", "..gguf", "../x.gguf", "model.bin", "", "a\x00b.gguf"]:
+    # Repo-relative subdir paths are now ACCEPTED (unsloth keeps per-quant
+    # shards in subdirs, e.g. DS V4 Flash "UD-IQ3_XXS/...-00001-of-00004.gguf").
+    assert _sanitize_filename("UD-IQ3_XXS/m-00001-of-00004.gguf") == \
+        "UD-IQ3_XXS/m-00001-of-00004.gguf"
+    assert _sanitize_filename("a/b/c.gguf") == "a/b/c.gguf"
+    for bad in ["..gguf", "../x.gguf", "a/../x.gguf", "/abs.gguf",
+                "\\abs.gguf", "C:/x.gguf", "C:\\x.gguf", "model.bin",
+                "", "a\x00b.gguf"]:
         with pytest.raises(HubValidationError) as ei:
             _sanitize_filename(bad)
         assert ei.value.status == 400
@@ -1308,6 +1315,39 @@ def test_model_detail_shard_grouping_and_totals():
     assert by_q["F16"]["total_bytes"] == 4 * 3_900_000_000
 
 
+def test_model_detail_includes_subdir_files():
+    """EXP-012: DS V4 Flash keeps its shards under per-quant subdirs
+    (``UD-IQ3_XXS/...``). The tree call must be recursive or the hub detail
+    hides every shard behind directory entries — the default HF tree API
+    returns only top-level entries. The detail must surface the subdir
+    shards and group them as one sharded quant."""
+    detail = {"id": "org/m", "tags": [], "cardData": {}}
+    tree = [
+        {"path": "UD-IQ3_XXS", "type": "directory"},
+        {"path": "UD-IQ3_XXS/m-00001-of-00004.gguf", "type": "file",
+         "size": 5_257_696},
+        {"path": "UD-IQ3_XXS/m-00002-of-00004.gguf", "type": "file",
+         "size": 49_912_334_336},
+        {"path": "UD-IQ3_XXS/m-00003-of-00004.gguf", "type": "file",
+         "size": 49_257_984_000},
+        {"path": "UD-IQ3_XXS/m-00004-of-00004.gguf", "type": "file",
+         "size": 5_032_448_000},
+        {"path": "dspark-m-Q8_0.gguf", "type": "file", "size": 10_900_000_000},
+    ]
+    mgr = DownloadManager(
+        fetch_json=lambda u, t: tree if u.rstrip("/").split("?", 1)[0].endswith("/tree/main") else detail,
+        open_stream=lambda u, t: FakeStream(b""),
+    )
+    d = mgr.model_detail("org/m")
+    q = [q for q in d["quants"] if q["quant"] == "IQ3_XXS"]
+    assert len(q) == 1
+    assert q[0]["sharded"] is True
+    assert len(q[0]["files"]) == 4
+    assert q[0]["files"][0]["filename"] == \
+        "UD-IQ3_XXS/m-00001-of-00004.gguf"
+    assert q[0]["total_bytes"] == 104_208_024_032
+
+
 def test_model_detail_single_and_sharded_same_quant_separate():
     """A repo shipping fp16 as BOTH one file and an N-part split must yield two
     independent F16 groups — otherwise "download all N" grabs two copies."""
@@ -1318,7 +1358,7 @@ def test_model_detail_single_and_sharded_same_quant_separate():
         {"path": "m-fp16-00002-of-00002.gguf", "type": "file", "size": 7_000_000_000},
     ]
     mgr = DownloadManager(
-        fetch_json=lambda u, t: tree if u.rstrip("/").endswith("/tree/main") else detail,
+        fetch_json=lambda u, t: tree if u.rstrip("/").split("?", 1)[0].endswith("/tree/main") else detail,
         open_stream=lambda u, t: FakeStream(b""),
     )
     d = mgr.model_detail("org/m")
@@ -1360,7 +1400,7 @@ def test_model_detail_upstream_failure_raises():
 def test_model_detail_missing_fields_are_null():
     sparse_detail = {"id": "org/bare"}  # HF returned almost nothing
     mgr = DownloadManager(
-        fetch_json=lambda u, t: [] if u.rstrip("/").endswith("/tree/main") else sparse_detail,
+        fetch_json=lambda u, t: [] if u.rstrip("/").split("?", 1)[0].endswith("/tree/main") else sparse_detail,
         open_stream=lambda u, t: FakeStream(b""),
     )
     d = mgr.model_detail("org/bare")
