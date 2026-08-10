@@ -47,3 +47,4 @@ scripts/_probe_gguf_split.py
 scripts/.test_mxfp4.gguf
 scripts/.mxfp4_load.log
 scripts/.mxfp4_load2.log
+scripts/.qwen_baseline_out.json
