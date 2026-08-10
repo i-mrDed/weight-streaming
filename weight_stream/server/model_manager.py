@@ -140,6 +140,7 @@ class ModelManager:
             ModelError: If model file not found or load fails
             ValueError: If model already loaded and force=False
         """
+        # Phase 1 — check + plan INSIDE the lock (no awaits that re-enter it).
         async with self._dict_lock:
             if model_id in self._models:
                 raise ValueError(
@@ -165,7 +166,11 @@ class ModelManager:
                 kv_cache_type = self._cfg.default_kv_cache_type or None
             verbose = kwargs.pop("verbose", False)
 
-            # Enforce max models
+            # Enforce max models — find the eviction candidate here, but
+            # unload it OUTSIDE the lock: unload() re-acquires _dict_lock
+            # and asyncio.Lock is NOT reentrant (W1 — deadlock when a load
+            # evicts the oldest model).
+            evict_id: Optional[str] = None
             if len(self._models) >= self._cfg.max_loaded_models:
                 # Unload oldest idle model
                 oldest_id, oldest_time = None, float("inf")
@@ -175,12 +180,25 @@ class ModelManager:
                         oldest_time = lu
                         oldest_id = mid
                 if oldest_id:
-                    await self.unload(oldest_id)
+                    evict_id = oldest_id
                 else:
                     raise RuntimeError(
                         f"Max models ({self._cfg.max_loaded_models}) loaded "
                         f"and all are busy generating."
                     )
+
+        # Phase 2 — evict OUTSIDE the lock (unload re-enters _dict_lock).
+        if evict_id is not None:
+            await self.unload(evict_id)
+
+        # Phase 3 — re-acquire and perform the actual load.
+        async with self._dict_lock:
+            # A concurrent load may have claimed the id while we evicted.
+            if model_id in self._models:
+                raise ValueError(
+                    f"Model '{model_id}' is already loaded. "
+                    f"Use force=True to reload."
+                )
 
             # Load model (CPU-bound, run in thread)
             loop = asyncio.get_running_loop()

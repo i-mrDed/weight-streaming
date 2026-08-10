@@ -25,6 +25,14 @@ class IssueStore:
 
     ID_PREFIX = "Report-ISSUE-"
 
+    # Only safe filename characters. Blocks path traversal (W5): "..", path
+    # separators (/ and Windows \\) and encoded variants never reach disk.
+    _ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+    @classmethod
+    def _valid_id(cls, issue_id: str) -> bool:
+        return bool(issue_id) and bool(cls._ID_RE.fullmatch(issue_id))
+
     def _next_id(self) -> str:
         with self._lock:
             n = 1
@@ -47,9 +55,13 @@ class IssueStore:
         return max_n
 
     def _path(self, issue_id: str) -> Path:
+        if not self._valid_id(issue_id):
+            raise ValueError(f"invalid issue id: {issue_id!r}")
         return self.base / f"{issue_id}.json"
 
     def _md_path(self, issue_id: str) -> Path:
+        if not self._valid_id(issue_id):
+            raise ValueError(f"invalid issue id: {issue_id!r}")
         return self.base / f"{issue_id}.md"
 
     def create(self, issue: Issue) -> Issue:
@@ -62,6 +74,8 @@ class IssueStore:
             return issue
 
     def get(self, issue_id: str) -> Optional[Issue]:
+        if not self._valid_id(issue_id):
+            return None
         path = self._path(issue_id)
         if not path.exists():
             return None

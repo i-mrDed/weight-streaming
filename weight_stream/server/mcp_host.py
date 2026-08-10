@@ -28,6 +28,61 @@ logger = logging.getLogger(__name__)
 MCP_DIR = "data/mcp"
 MCP_SERVERS_FILE = "data/mcp/servers.json"
 
+# Common MCP stdio runners. Arbitrary executables are refused (W3 — the
+# POST /v1/mcp/servers endpoint must not become a remote RCE primitive).
+# Extend with WS_MCP_ALLOWED_COMMANDS (comma-separated) for custom runners.
+DEFAULT_MCP_ALLOWED_COMMANDS = (
+    "npx", "npm", "uvx", "node", "python", "python3",
+    "deno", "bun", "bunx", "claude", "mcp",
+)
+
+_ID_RE = r"^[A-Za-z0-9._-]+$"
+
+
+def _allowed_mcp_commands() -> frozenset:
+    cmds = set(DEFAULT_MCP_ALLOWED_COMMANDS)
+    extra = os.environ.get("WS_MCP_ALLOWED_COMMANDS", "")
+    cmds.update(c.strip() for c in extra.split(",") if c.strip())
+    return frozenset(cmds)
+
+
+def validate_mcp_command(command: Optional[str]) -> None:
+    """Reject an MCP stdio command that could execute arbitrary programs.
+
+    The command must be a bare, allowlisted executable name — no path
+    separators, no parent-dir traversal, no shell metacharacters. Raises
+    ValueError with a user-readable message.
+    """
+    import re as _re
+    if not command:
+        return  # SSE servers have no command
+    if not _re.fullmatch(_ID_RE, command):
+        raise ValueError(
+            f"command must be a bare executable name (no path/separators), got {command!r}"
+        )
+    if command not in _allowed_mcp_commands():
+        raise ValueError(
+            f"command {command!r} is not in the MCP allowlist; "
+            f"set WS_MCP_ALLOWED_COMMANDS to add it"
+        )
+
+
+def validate_mcp_server(server: Dict[str, Any]) -> None:
+    """Security validation for an MCP server config (W3 / SSRF-lite).
+
+    - stdio: ``command`` must be a bare allowlisted executable name.
+    - sse:   ``url`` must be http/https (no file:// or arbitrary schemes).
+
+    Raises ValueError with a user-readable message.
+    """
+    transport = server.get("transport", "stdio")
+    if transport == "sse":
+        url = server.get("url") or ""
+        if not url.lower().startswith(("http://", "https://")):
+            raise ValueError(f"sse url must be http(s), got {url!r}")
+        return
+    validate_mcp_command(server.get("command"))
+
 
 def _servers_file() -> str:
     base = os.environ.get("WS_DATA_DIR", "data")
@@ -106,6 +161,9 @@ class MCPHost:
         from mcp.client.stdio import stdio_client
         from mcp.client.sse import sse_client
 
+        # Defense-in-depth (W3): even a hand-edited servers.json goes
+        # through the same command/url validation as the API.
+        validate_mcp_server(server)
         transport = server.get("transport", "stdio")
         if transport == "sse":
             url = server.get("url")

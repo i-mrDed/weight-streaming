@@ -5,6 +5,18 @@
 
 ---
 
+## [0.14.1] - 2026-08-10
+
+### 🔒 Security hardening (4-platform public review — OpenCode W1–W5, verified)
+- **W1 deadlock fix** — `ModelManager.load()` evicted the oldest model while holding `_dict_lock`, but `unload()` re-acquires the same `asyncio.Lock` (not reentrant) → server froze permanently at `max_loaded_models`. Eviction now runs outside the lock.
+- **W2 CORS hardening** — `allow_origins=["*"]` + `allow_credentials=True` let ANY website drive the local API (load/unload, delete model files, invoke MCP tools). Now loopback-only (`localhost`/`127.0.0.1`); extend with `WS_CORS_ORIGINS` (comma-separated).
+- **W3 MCP RCE** — `POST /v1/mcp/servers` accepted arbitrary `command`/`args` (e.g. `cmd.exe /c calc`) and spawned it. `command` must now be a bare allowlisted runner (`npx`, `npm`, `uvx`, `node`, `python`, `deno`, `bun*`, `claude`, `mcp` — extend with `WS_MCP_ALLOWED_COMMANDS`); SSE `url` must be http(s). Enforced at the API **and** the connect path (hand-edited config included).
+- **W4 mmap leak** — a GGUF metadata parse failure leaked the Step-1 mmap + fd (a >100 GB mapping per failed load). The exception path now closes both.
+- **W5 path traversal** — `assistant_id`/`issue_id` were joined straight into file paths; Windows `%5C` encoded backslashes escaped the store dir (read/write/delete `.json` outside). IDs now validate `^[A-Za-z0-9_.-]+$` at the store level.
+- **11 regression tests** (`tests/test_p4_security_hardening.py`) — every one fails against the pre-fix code (test-first).
+
+---
+
 ## [0.14.0] - 2026-08-10
 
 ### 🤖 P7 — Assistants, MCP, GPU backend & tool calling

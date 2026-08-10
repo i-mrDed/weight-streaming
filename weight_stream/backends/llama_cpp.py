@@ -146,6 +146,18 @@ class WeightStreamModel(WeightStreamBackend):
             self._expert_map = self._gguf.get_expert_map()
             self._expert_tensors = self._gguf.get_expert_tensors()
         except Exception as e:
+            # W4: release the Step-1 mmap + file handle before re-raising.
+            # Leaving them open leaks a >100 GB mapping + an fd per failed
+            # load until resource exhaustion (the Step-4 path already cleans
+            # up on the same principle).
+            try:
+                self._mmap.close()
+            except Exception:
+                pass
+            try:
+                self._file.close()
+            except Exception:
+                pass
             raise ModelError(
                 f"Failed to parse GGUF metadata: {e}",
                 model_path=model_path,

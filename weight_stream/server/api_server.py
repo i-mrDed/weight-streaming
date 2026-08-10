@@ -223,10 +223,25 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         lifespan=lifespan,
     )
     
-    # CORS — allow all origins for local development
+    # CORS — local-first hardening (W2): only loopback origins may call the
+    # API with credentials. A wildcard + allow_credentials would let ANY
+    # website open in a browser drive this local server (load/unload models,
+    # delete files, invoke MCP tools — RCE). Extra origins for LAN/dev use
+    # go through WS_CORS_ORIGINS (comma-separated).
+    _cors_origins = [
+        "http://localhost",
+        "http://127.0.0.1",
+        "http://localhost:8765",
+        "http://127.0.0.1:8765",
+    ]
+    _cors_extra = os.environ.get("WS_CORS_ORIGINS", "").strip()
+    if _cors_extra:
+        _cors_origins += [
+            o.strip() for o in _cors_extra.split(",") if o.strip()
+        ]
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=_cors_origins,
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -1219,7 +1234,7 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         return {"status": "deleted", "id": assistant_id}
 
     # ── MCP (P7.4): manage MCP servers + list/call tools ───────────────
-    from .mcp_host import get_mcp_store, get_mcp_host
+    from .mcp_host import get_mcp_store, get_mcp_host, validate_mcp_server
     from .schemas import MCPServerCreate
 
     _mcpstore = get_mcp_store()
@@ -1232,6 +1247,17 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
 
     @app.post("/v1/mcp/servers", status_code=201)
     async def add_mcp_server(body: MCPServerCreate):
+        """Add an MCP server config. `command` must be an allowlisted bare
+        executable name and `url` (sse) must be http(s) — arbitrary commands
+        are refused (W3: this endpoint must not be an RCE primitive)."""
+        try:
+            validate_mcp_server({
+                "transport": body.transport,
+                "command": body.command,
+                "url": body.url,
+            })
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
         import uuid as _uuid
         server = {
             "id": _uuid.uuid4().hex[:12],

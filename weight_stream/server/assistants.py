@@ -25,6 +25,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 import uuid
@@ -35,6 +36,14 @@ import aiofiles
 logger = logging.getLogger(__name__)
 
 ASSISTANTS_DIR = "data/assistants"
+
+# Only safe filename characters. Blocks path traversal (W5): "..", path
+# separators (/ and Windows \\) and encoded variants never reach disk.
+_ID_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
+
+
+def _valid_id(assistant_id: str) -> bool:
+    return bool(assistant_id) and bool(_ID_RE.fullmatch(assistant_id))
 
 
 def _assistants_dir() -> str:
@@ -52,6 +61,8 @@ class AssistantStore:
         os.makedirs(self._dir, exist_ok=True)
 
     def _path(self, assistant_id: str) -> str:
+        if not _valid_id(assistant_id):
+            raise ValueError(f"invalid assistant id: {assistant_id!r}")
         return os.path.join(self._dir, f"{assistant_id}.json")
 
     def _read(self, assistant_id: str) -> Optional[Dict[str, Any]]:
@@ -85,6 +96,8 @@ class AssistantStore:
         return out
 
     def get(self, assistant_id: str) -> Optional[Dict[str, Any]]:
+        if not _valid_id(assistant_id):
+            return None
         return self._read(assistant_id)
 
     def create(
@@ -118,6 +131,8 @@ class AssistantStore:
         model_id: Optional[str] = None,
         params: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
+        if not _valid_id(assistant_id):
+            return None
         a = self._read(assistant_id)
         if a is None:
             return None
@@ -136,6 +151,8 @@ class AssistantStore:
         return a
 
     def delete(self, assistant_id: str) -> bool:
+        if not _valid_id(assistant_id):
+            return False
         try:
             os.remove(self._path(assistant_id))
             return True
