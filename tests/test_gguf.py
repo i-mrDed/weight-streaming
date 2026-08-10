@@ -7,6 +7,14 @@ from weight_stream.gguf import GGUFParser
 
 MODEL_PATH = 'research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf'
 
+# The fixture is a ~5.9 GB real model that is not committed (and cannot
+# reasonably live in CI). Skip the module when it is absent so CI stays
+# green; locally (where the file exists) the tests run as usual.
+pytestmark = pytest.mark.skipif(
+    not Path(MODEL_PATH).exists(),
+    reason='requires local model fixture (research/models/Qwen1.5-MoE-A2.7B_Q2_k.gguf)',
+)
+
 
 @pytest.fixture(scope='module')
 def parser():
