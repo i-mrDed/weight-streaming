@@ -26,6 +26,17 @@ scripts/.threads_scaling_out.json
 scripts/.ws-server-matrix.log
 scripts/.ws-matrix.log
 
+# Private usage telemetry (model id + tok/s per generation — runtime data,
+# not source; must never be committed with a push)
+data/usage_history.jsonl
+
+# Local agent/tool state (never for the remote)
+.freebuff/
+.playwright-mcp/
+.p2.json
+.proof2.json
+opencode.jsonc
+
 # Node / frontend toolchain (built assets in static/console/ ARE committed)
 node_modules/
 *.tsbuildinfo
