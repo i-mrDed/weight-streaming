@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Weight Streaming — hero</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;700&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --canvas: #06090f;
+    --violet: #8b5cf6;
+    --indigo: #6366f1;
+    --cyan: #06b6d4;
+    --teal: #14b8a6;
+    --ink-1: #edf0f7;
+    --ink-2: #9aa4ba;
+    --ink-3: #647089;
+    --ok: #34d399;
+    --grad-brand: linear-gradient(100deg, var(--violet), var(--indigo) 38%, var(--cyan) 72%, var(--teal));
+    --font-sans: 'Inter', 'Noto Sans Thai', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; }
+  body {
+    background: var(--canvas);
+    background-image:
+      radial-gradient(1100px 780px at 12% -8%, rgba(139, 92, 246, 0.10), transparent 60%),
+      radial-gradient(950px 700px at 104% 108%, rgba(20, 184, 166, 0.07), transparent 55%);
+    font-family: var(--font-sans);
+    display: flex; align-items: center; justify-content: center;
+    overflow: hidden;
+  }
+  .hero { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 24px 40px; }
+  .hero__logo { width: 300px; height: 300px; filter: drop-shadow(0 18px 60px rgba(99, 102, 241, 0.35)); }
+  .hero__word {
+    margin-top: 22px; font-weight: 700; font-size: 46px; letter-spacing: 0.14em; color: var(--ink-1);
+  }
+  .hero__word span {
+    background: var(--grad-brand); -webkit-background-clip: text; background-clip: text; color: transparent; margin-left: 0.35em;
+  }
+  .hero__sub { margin-top: 10px; font-size: 15px; letter-spacing: 0.42em; font-weight: 600; color: var(--ink-3); }
+  .hero__tagline { margin-top: 26px; font-size: 24px; color: var(--ink-2); font-weight: 500; }
+  .hero__chips { margin-top: 22px; display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+  .chip {
+    font-family: var(--font-mono); font-size: 15px; color: #aac3eb;
+    background: rgba(28, 37, 54, 0.9); border: 1px solid rgba(86, 106, 158, 0.45);
+    border-radius: 21px; padding: 8px 18px;
+  }
+  .hero__status { margin-top: 30px; display: flex; align-items: center; gap: 9px; font-family: var(--font-mono); font-size: 13.5px; color: var(--ink-2); }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 10px var(--ok); }
+</style>
+</head>
+<body>
+  <div class="hero">
+    <!-- Streamline W — same SVG as frontend/src/components/Logo.tsx -->
+    <svg class="hero__logo" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+      <defs>
+        <linearGradient id="flow" x1="6" y1="14" x2="58" y2="52" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#8b5cf6"/>
+          <stop offset="0.38" stop-color="#6366f1"/>
+          <stop offset="0.72" stop-color="#06b6d4"/>
+          <stop offset="1" stop-color="#14b8a6"/>
+        </linearGradient>
+        <linearGradient id="back" x1="6" y1="14" x2="58" y2="52" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#8b5cf6"/>
+          <stop offset="1" stop-color="#6366f1"/>
+        </linearGradient>
+        <linearGradient id="front" x1="6" y1="14" x2="58" y2="52" gradientUnits="userSpaceOnUse">
+          <stop offset="0" stop-color="#06b6d4"/>
+          <stop offset="1" stop-color="#14b8a6"/>
+        </linearGradient>
+      </defs>
+      <path d="M8 16 C11 32 14.5 44 19 50 C23.5 43 28 33 32 26 C36 33 40.5 43 45 50 C49.5 44 53 32 56 16" transform="translate(0 -3.4)" stroke="url(#back)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.48"/>
+      <path d="M8 16 C11 32 14.5 44 19 50 C23.5 43 28 33 32 26 C36 33 40.5 43 45 50 C49.5 44 53 32 56 16" stroke="url(#flow)" stroke-width="4.4" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M8 16 C11 32 14.5 44 19 50 C23.5 43 28 33 32 26 C36 33 40.5 43 45 50 C49.5 44 53 32 56 16" transform="translate(0 3.4)" stroke="url(#front)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.5"/>
+      <circle cx="58.6" cy="16.4" r="1.5" fill="#14b8a6" opacity="0.65"/>
+      <circle cx="61.4" cy="12.6" r="1.15" fill="#14b8a6" opacity="0.45"/>
+      <circle cx="63.4" cy="8.6" r="0.85" fill="#14b8a6" opacity="0.3"/>
+    </svg>
+    <div class="hero__word">WEIGHT<span>STREAMING</span></div>
+    <div class="hero__sub">CONSOLE</div>
+    <div class="hero__tagline">Run LLMs larger than your RAM — measured honestly.</div>
+    <div class="hero__chips">
+      <span class="chip">llama.cpp / GGUF</span>
+      <span class="chip">MoE 100B–3T+</span>
+      <span class="chip">NVMe-as-memory</span>
+      <span class="chip">honest telemetry</span>
+    </div>
+    <div class="hero__status"><span class="dot"></span>Connected to 127.0.0.1:8765 · Server v0.15.0</div>
+  </div>
+</body>
+</html>

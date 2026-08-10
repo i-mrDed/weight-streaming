@@ -66,8 +66,8 @@ repo has measured answers, not marketing.
 
 ## Visuals to attach when posting (files already on disk)
 
-- `docs/screenshots/banner.png` — 1280×640 social banner (attach as the
-  post image).
+- `docs/screenshots/hero.png` — 1280×640 hero with the console logo +
+  tagline (attach as the post image).
 - `docs/screenshots/03-stats.png` — the live-telemetry page (tok/s gauge,
   faults/token, VRAM). This is the money shot.
 - `docs/screenshots/demo-chat.gif` — 9 s console demo ending on the

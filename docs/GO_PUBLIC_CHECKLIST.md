@@ -69,8 +69,9 @@ gh repo edit i-mrDed/weight-streaming --visibility public
 These two cannot be set via `gh`; do them in the browser:
 
 - [ ] **Social preview image**: Settings → Social preview → Upload
-      `docs/screenshots/banner.png` (1280×640, already generated). This is the
-      card shown when the repo is shared on X/LinkedIn/Discord.
+      `docs/screenshots/hero.png` (1280×640, app-logo hero with tagline —
+      already generated). This is the card shown when the repo is shared on
+      X/LinkedIn/Discord.
 - [ ] **GitHub Pages** (optional but recommended for discoverability): Settings →
       Pages → build from `main` `/docs`. Consider adding a `docs/index.md`
       landing that links to README, screenshots, EXP write-ups, and the

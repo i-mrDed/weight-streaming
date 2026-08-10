@@ -1,8 +1,8 @@
 # weight-streaming
 
 <p align="center">
-  <img src="docs/screenshots/boot-splash.png" alt="Weight Streaming console boot splash" width="70%">
-  <br><em>The console boot splash — real screen, real connection status (v0.15.0).</em>
+  <img src="docs/screenshots/hero.png" alt="Weight Streaming — run LLMs larger than your RAM, measured honestly" width="80%">
+  <br><em>The console logo, tagline and honest-telemetry promise — built from the app's own brand assets.</em>
 </p>
 
 **Run LLMs larger than your RAM — using NVMe as an extension of memory, measured honestly.**
@@ -76,6 +76,10 @@ fabricated value.
 <tr>
   <td align="center" width="50%"><img src="docs/screenshots/02-models.png" alt="Model library"><br><b>Model library</b> — load, quant advisor, KV/GPU controls</td>
   <td align="center" width="50%"><img src="docs/screenshots/05-hub.png" alt="Hugging Face hub downloads"><br><b>Hub</b> — resumable GGUF downloads</td>
+</tr>
+<tr>
+  <td align="center" width="50%"><img src="docs/screenshots/boot-splash.png" alt="Console boot splash"><br><b>Boot splash</b> — real screen, real connection status</td>
+  <td align="center" width="50%"><img src="docs/screenshots/06-chat.png" alt="Chat"><br><b>Chat</b> — streaming with thinking/answer separation</td>
 </tr>
 </table>
 
