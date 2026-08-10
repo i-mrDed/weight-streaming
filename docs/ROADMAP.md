@@ -5,6 +5,24 @@
 
 ---
 
+## Phase 4 (ปัจุบัน, 2026-08-10): Constraint-Bound Optimization
+
+**ข้อจำกัดคงที่ (เพิ่ม HW ไม่ได้):** i9-9900KF + RTX 3060 12 GB + 64 GB RAM + Windows
+
+**เป้าหมายซื่อตรง:** DS V4 Flash 104 GB 1.5–1.9 → **2.5–4 tok/s** (ใช้แบบอดทนได้) ด้วย software-only · K3 2.8T ตั้งความคาดหวังไว้ที่ 0.3–0.5 tok/s (รันได้พิสูจน์แนวคิด — ยังไม่ใช่ใช้ทำงานจริง)
+
+> อ้างอิง: [EXP-014](research/experiments/EXP-014-2026-08-consumer-moe-landscape/) — landscape 2026-08 + pulsar deep-dive (engine ที่พิสูจน์ thesis เรา: GLM-5.2 743B @ 2.7 tok/s บน 2×16GB GPU)
+
+| # | โครงการ | ผลที่คาด | สถานะ |
+|---|---------|---------|-------|
+| 1 | Expert popularity census → auto `n-cpu-moe` tiering | hot experts อยู่ GPU อัตโนมัติ (แทน static) | 📋 วางแผน |
+| 2 | CPU lane ตาม host-cache residency | เลือก CPU/GPU ต่อ expert ตาม residency จริง | 📋 วางแผน |
+| 3 | วัด IQ2_XXS (`--variant iq2m`) บน DS V4 Flash | bytes/token ↓ → resident ↑ → tok/s ↑ | 🟢 script พร้อมแล้ว |
+| 4 | Speculative decoding บน GPU backend | EXP-010 dead end บน CPU → ลองบน LlamaServerBackend | 📋 วางแผน |
+| 5 | วินัย benchmark (census + warm-run + value-aware flags) | ตัวเลขเชื่อถือได้ทุกตัว | 🔄 ทำอยู่แล้ว |
+
+---
+
 ## Phase 3c: MVP — `weight-streaming` Python Library
 
 **เป้าหมาย:** `pip install weight-streaming` แล้วใช้ได้เลย
