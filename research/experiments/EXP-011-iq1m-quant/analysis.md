@@ -60,16 +60,52 @@ First run (earlier session) showed a different error pattern (ข้าว =
 reproducible across runs, not a one-off. IQ2_M classified all six words
 correctly in both think and final answer.
 
+### Follow-up probe (2026-08-10): hard minimal pairs + determinism
+
+`scripts/probe_tonal_determinism.py` — 6 words forcing real tonal
+discrimination across consonant classes (ข = high-class, ค = low-class),
+3 runs per quant at temp 0:
+
+| word (correct tone) | IQ1_M (3 runs, identical) | IQ2_M (budget 4096) |
+|---------------------|:---:|:---:|
+| ข้าว (โท) | ตรี ❌ | **โท ✅** |
+| ข่าว (เอก) | ตรี ❌ | จัตวา ❌ |
+| เข้า (เอก) | สามัญ ❌ | โท ❌ |
+| ค้าว (ตรี) | ตรี ❌ | จัตวา ❌ |
+| ค่าว (โท) | ตรี ❌ | จัตวา ❌ |
+| เข่า (เอก) | ตรี ❌ | จัตวา ❌ |
+| **total** | **0/6** | **1/6** |
+
+**IQ1_M is deterministically broken**: all 3 runs byte-identical (3157
+chars), everything mapped to เสียงตรี — its tonal model is destroyed.
+
+**Surprise — IQ2_M fails the hard pairs too.** It got ข้าว right but
+classified ข่าว/เข้า/ค้าว/ค่าว/เข่า wrong, with *fabricated* reasoning:
+it claims ค is a high-class consonant (จริงคืออักษรต่ำ) and invents a
+`ไม้โท → จัตวา` rule that does not exist. In the 9-question set above,
+IQ2_M passed the same word ข่าว — so its tonal knowledge is
+**prompt-fragile**: OK on common words (ข้าว/ไข่/ไก่), wrong when the
+prompt forces real consonant-class rules.
+
+**Refined verdict:** the earlier claim "IQ2_M = quality floor for tonal
+work" was too strong. For Thai tone tasks, *neither* quant is reliable;
+the gap is IQ1_M is always wrong (deterministic, 0/6) while IQ2_M is
+sometimes wrong (1/6 on hard pairs, correct on common words). For
+general Thai chat (the other 8 dimensions) they remain equal.
+
 ### Verdict: is 79 vs 50 tok/s worth it?
 
 **For general use — yes.** 8 of 9 dimensions are byte-identical in
 quality; the +57% tok/s (79.1 vs 50.3) costs nothing there.
 
-**For Thai-language-sensitive tasks — no.** Tonal classification is
-fundamentally broken in IQ1_M (systematic, not random), and tones carry
+**For Thai-language-sensitive tasks — mostly no.** Tonal classification
+is broken in IQ1_M (deterministic 0/6, not random), and tones carry
 meaning in Thai (ข้าว vs ข่าว vs เข้า are distinguished *only* by tone).
-If the console serves Thai users doing Thai text work, IQ2_M is the
-safety floor; IQ1_M is the "fast everyday chat" tier.
+But the probe showed IQ2_M is not a reliable tonal floor either (1/6 on
+hard pairs, fabricated rules) — it only survives common words. So the
+trade-off is: IQ1_M = always-wrong tones + 79 tok/s; IQ2_M =
+common-word tones + 50 tok/s. Neither is safe for tone-critical Thai
+work; both are fine for ordinary chat.
 
 **Recommendation:** keep both files; default IQ1_M for speed, offer
 IQ2_M as an explicit "quality" switch in the console load dialog

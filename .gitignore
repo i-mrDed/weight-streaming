@@ -33,3 +33,5 @@ frontend/.vite/
 scripts/.quant_quality_out.json
 scripts/.quant_quality_out.iq2m.json
 scripts/.quant_quality_*_run.log
+scripts/.tonal_probe_out*.json
+scripts/.tonal_probe_*.log
