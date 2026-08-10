@@ -61,9 +61,15 @@ params) รันได้จริงบนเครื่องนี้ผ่
 - [ ] บันทึกเวลาดาวน์โหลด + speed → ลง results.md
 
 ### Phase 2 — วัด config matrix (หลังดาวน์โหลด, รันผ่าน harness ตัวเดียวกับ EXP-008/011)
-- [ ] Harness: `scripts/measure_dsv4flash.py` (เขียนใหม่ ต่อยอดจาก
-      measure_ctx_scaling / compare_quant_quality) — มี clean-room gate
-      อัตโนมัติ + ใช้ `/v1/stats` + `nvidia-smi` + page_faults
+- [x] Harness: `scripts/measure_dsv4flash.py` (เขียนใหม่ ต่อยอดจาก
+      measure_ncmoe_matrix) — มี clean-room gate อัตโนมัติ + verify flags
+      จริงบน cmdline ของ llama-server + วัด **cold vs warm paging** แยก
+      (สำคัญสำหรับโมเดล > RAM: บอกว่า expert มาจาก page cache หรือ disk)
+- [x] **Validate harness กับโมเดลจริง (Qwen IQ1_M, 10 GB)** 2026-08-10:
+      cold 68.9 / warm 64.8 tok/s, faults 212→823/tok, fault_mb 0.87→3.37
+      — ค่า paging อ่านจาก `/v1/stats` ได้จริง; ปลดโหลดคืนสะอาด ✓
+      (ระหว่างเขียนเจอบั๊ก: `/v1/stats?model=` คืน stats ตรงๆ ใต้ `models`
+      ไม่ใช่ `{id: stats}` — แก้ให้รองรับทั้งสอง shape แล้ว)
 - [ ] Matrix: `--cpu-moe` vs `--n-cpu-moe 10/5/0` (ถ้า VRAM พอ) × ctx 2048
 - [ ] ต่อ config: threads 8 (ค่าเริ่มต้น) vs 16 (ถ้า CPU-bound)
 - [ ] โหลดเสร็จ วัด prompt processing + decode แยก (ถ้า stats ให้)
