@@ -93,3 +93,6 @@ scripts/.qwen_threads_out.json
 
 # Runtime/server logs (broad — no tracked .log files exist)
 *.log
+
+# One-off QA screenshot (P5.2 models-library "before" state)
+p52-models-lib-before.jpeg
