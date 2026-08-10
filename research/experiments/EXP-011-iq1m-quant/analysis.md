@@ -33,6 +33,51 @@ gate. The remaining gap to 100+ is ~30% more bandwidth — which is a
 hardware question (a 3090's 936 GB/s is 2.6× this GPU's 360 GB/s; see
 `research/HARDWARE_100TPS_PLAN.md`).
 
+## Quality eval: IQ1_M vs IQ2_M (same 9-question set, same n-cpu-moe 0)
+
+Measured with `scripts/compare_quant_quality.py` (fixed 9-question Thai
+set: facts, arithmetic, logic, code, idiom, multi-step math, percentage,
+Thai tonal classification, science units; temperature 0, max_tokens 2048).
+
+| metric | IQ1_M | IQ2_M |
+|--------|:---:|:---:|
+| tok/s (measured) | **79.1** | 50.3 |
+| fact / math / logic / code / idiom / math_multi / price / science | ✅ all correct | ✅ all correct |
+| **Thai tonal classification (thai_tonal)** | ❌ **wrong** | ✅ correct |
+
+### The one real regression: Thai tonal classification
+
+IQ1_M got every word's tone wrong, in a *systematic* way — it asserted
+`ไม้เอก → เสียงโท` and `ไม้โท → เสียงตรี` (both false; correct mapping is
+ไม้เอก → เสียงเอก, ไม้โท → เสียงโท):
+
+- ข้าว → it said เสียงตรี (จริงคือ เสียงโท)
+- ข่าว / เข้า → it said เสียงตรี (จริงคือ เสียงเอก)
+- ไข่ / ไก่ / ไหม → it said เสียงโท (จริงคือ เสียงเอก)
+
+First run (earlier session) showed a different error pattern (ข้าว =
+เสียงสามัญ, ไข่/ไก่ = เสียงตรี) — also wrong. So the failure is
+reproducible across runs, not a one-off. IQ2_M classified all six words
+correctly in both think and final answer.
+
+### Verdict: is 79 vs 50 tok/s worth it?
+
+**For general use — yes.** 8 of 9 dimensions are byte-identical in
+quality; the +57% tok/s (79.1 vs 50.3) costs nothing there.
+
+**For Thai-language-sensitive tasks — no.** Tonal classification is
+fundamentally broken in IQ1_M (systematic, not random), and tones carry
+meaning in Thai (ข้าว vs ข่าว vs เข้า are distinguished *only* by tone).
+If the console serves Thai users doing Thai text work, IQ2_M is the
+safety floor; IQ1_M is the "fast everyday chat" tier.
+
+**Recommendation:** keep both files; default IQ1_M for speed, offer
+IQ2_M as an explicit "quality" switch in the console load dialog
+(backlog item: auto-select quant by VRAM headroom). This is the 
+concrete trade-off the hardware plan predicted — quant bytes per expert
+is the only lever that moved tok/s on this 12 GB machine, and it has a
+real, measurable quality floor in tonal languages.
+
 ## Backlog items surfaced this session (not acted on)
 
 1. **Hub download integrity:** mid-stream EOF was treated as success —
@@ -43,9 +88,9 @@ hardware question (a 3090's 936 GB/s is 2.6× this GPU's 360 GB/s; see
    clean-room gate flags. Consider excluding Jan-owned PIDs (by parent
    image) from FAIL → WARN so benchmarks are possible while Jan runs, or
    document "close Jan before measuring".
-3. **IQ1_M quality eval:** tok/s is not quality — a quick perplexity or
-   sample check on the IQ1_M vs IQ2_M would bound how usable 77 tok/s
-   actually is.
-4. **Auto-select quant by free VRAM:** with per-quant tok/s now known,
-   the server could pick IQ1_M (fast) vs IQ2_M (quality) on load based on
-   `gpu_layers` headroom — a small feature win for the console.
+3. ~~**IQ1_M quality eval**~~ — DONE (this section): 8/9 dimensions
+   equal, Thai tonal classification broken; verdict above.
+4. **Auto-select quant by free VRAM:** with per-quant tok/s and quality
+   now known, the server could pick IQ1_M (fast) vs IQ2_M (quality) on
+   load based on `gpu_layers` headroom — a small feature win for the
+   console.

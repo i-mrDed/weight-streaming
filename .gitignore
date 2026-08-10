@@ -30,3 +30,6 @@ node_modules/
 *.tsbuildinfo
 npm-debug.log*
 frontend/.vite/
+scripts/.quant_quality_out.json
+scripts/.quant_quality_out.iq2m.json
+scripts/.quant_quality_*_run.log

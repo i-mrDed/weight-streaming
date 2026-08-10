@@ -27,11 +27,24 @@ real generation; `raw tok_s` = llama-server's own decode figure.)
 - **n-cpu-moe 10 unchanged** (≈47) — expert-offload tiering is not where
   the win is; full-GPU experts + small quant is.
 
+## Quality eval (2026-08-10, same 9-question Thai set, n-cpu-moe 0)
+
+| metric | IQ1_M | IQ2_M |
+|--------|:---:|:---:|
+| tok/s | **79.1** | 50.3 |
+| 8/9 dimensions (fact, math, logic, code, idiom, multi-step, price, science) | ✅ | ✅ |
+| Thai tonal classification | ❌ wrong (systematic) | ✅ correct |
+
+Raw answers: `scripts/.quant_quality_out.json` (IQ1_M, latest run) and
+`scripts/.quant_quality_out.iq2m.json` (IQ2_M backup).
+
 ## Caveats
 
-1. **Quality:** IQ1_M is an ultra-low-bit quant — quality loss vs IQ2_M is
+1. ~~**Quality:** IQ1_M is an ultra-low-bit quant — quality loss vs IQ2_M is
    REAL (this is the trade the tok/s buys). Not evaluated for task
-   quality here; check before relying on it for real work.
+   quality here; check before relying on it for real work.~~
+   **DONE — see Quality eval above**: 8/9 equal; Thai tonal is the real,
+   systematic regression (ข้าว/ข่าว/ไข่/ไก่ etc. all wrong tone class).
 2. **VRAM headroom at n-cpu-moe 0 is thin** (1,485 MiB free). A larger
    n_ctx or concurrent second model will spill → expect a cliff, not a
    smooth decline.
