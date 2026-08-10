@@ -61,6 +61,18 @@ class ServerConfig:
     default_n_threads: int = field(
         default_factory=lambda: int(os.getenv("WS_N_THREADS", str(_default_n_threads())))
     )
+    # GPU offload control for the llama-server backend (P7.5):
+    #   default_gpu_layers  — -1 = auto (llama-server decides), 0 = CPU only,
+    #                         N = offload first N layers to VRAM.
+    #   default_kv_cache_type — KV cache data type ("f16" default, "q8_0",
+    #                         "q4_0", …); empty = llama-server's default.
+    # Both only matter on the GPU backend; the CPU binding ignores them.
+    default_gpu_layers: int = field(
+        default_factory=lambda: int(os.getenv("WS_GPU_LAYERS", "-1"))
+    )
+    default_kv_cache_type: str = field(
+        default_factory=lambda: os.getenv("WS_KV_CACHE_TYPE", "").strip()
+    )
     
     # Model lifecycle
     idle_unload_timeout: float = field(
@@ -123,6 +135,8 @@ CONFIG_ENV_KEYS: dict[str, str] = {
     "default_buffer_mb": "WS_BUFFER_MB",
     "default_n_ctx": "WS_N_CTX",
     "default_n_threads": "WS_N_THREADS",
+    "default_gpu_layers": "WS_GPU_LAYERS",
+    "default_kv_cache_type": "WS_KV_CACHE_TYPE",
     "idle_unload_timeout": "WS_IDLE_TIMEOUT",
     "max_loaded_models": "WS_MAX_MODELS",
     "lower_process_priority": "WS_LOWER_PRIORITY",

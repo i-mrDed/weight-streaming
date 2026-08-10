@@ -64,6 +64,8 @@ from .schemas import (
     ErrorResponse,
     ChatCompletionRequest,
     HubDownloadRequest,
+    HubDeleteRequest,
+    HubClearRequest,
     AssistantCreate,
     AssistantUpdate,
     MCPServerCreate,
@@ -71,6 +73,76 @@ from .schemas import (
 from .streaming import sse_stream, ws_stream
 
 logger = logging.getLogger(__name__)
+
+
+def _reveal_in_explorer(path: str) -> dict:
+    """Reveal a file in the OS file manager (server-side subprocess).
+
+    Opens the parent folder with the file selected where the platform
+    supports it (Windows ``explorer /select``, macOS ``open -R``); Linux
+    falls back to opening the folder. Returns ``{"error": ...}`` honestly
+    when the shell command fails — never a fake success.
+
+    Known platform quirk (documented, not worked around): ``explorer``
+    mis-parses ``/select,<path>`` when the path itself contains a comma
+    (GGUF model paths almost never do; the list-form Popen keeps the arg
+    intact with no shell involved, so only the comma case misbehaves).
+    """
+    import subprocess, sys
+    folder = os.path.dirname(path)
+    try:
+        if sys.platform == "win32":
+            # explorer /select needs the comma syntax; quoting is handled
+            # by Popen's list form (no shell involved).
+            subprocess.Popen(["explorer", f"/select,{os.path.normpath(path)}"])
+        elif sys.platform == "darwin":
+            subprocess.Popen(["open", "-R", path])
+        else:
+            subprocess.Popen(["xdg-open", folder])
+        return {"ok": True}
+    except Exception as e:
+        return {"error": str(e)}
+
+def _assistant_refs_batch(filenames: list[str]) -> dict[str, list[str]]:
+    """filename → assistant names pinned to that file's suggested model id.
+
+    Model references across features are keyed by the SUGGESTED model id
+    (basename without ``.gguf`` — the same rule as the Console's
+    ``suggestModelId`` used when loading a downloaded model and when a
+    conversation is created against it). So an assistant pinned to that id
+    silently loses its model if the file is deleted — the delete dialogs
+    warn about exactly these references.
+
+    ONE store read for the whole batch (``clear`` can carry several done
+    tasks — per-task scans would re-read every assistant JSON N times). The
+    store is read LIVE at request time, so an assistant created in another
+    tab counts. Returns {} on any store problem — a reference-scan failure
+    must never block a delete.
+    """
+    wanted: dict[str, str] = {}
+    for f in filenames:
+        model_id = os.path.splitext(os.path.basename(f))[0]
+        if model_id:
+            wanted[f] = model_id
+    if not wanted:
+        return {}
+    try:
+        from .assistants import get_assistant_store
+        store_list = get_assistant_store().list()
+    except Exception:
+        return {}
+    by_id: dict[str, list[str]] = {m: [] for m in set(wanted.values())}
+    for a in store_list:
+        mid = a.get("model_id") or ""
+        if mid in by_id:
+            by_id[mid].append(a.get("name") or a.get("id", "?"))
+    return {f: by_id[m] for f, m in wanted.items()}
+
+
+def _assistants_referencing(filename: str) -> list[str]:
+    """Assistant names for ONE file (see ``_assistant_refs_batch``)."""
+    return _assistant_refs_batch([filename]).get(filename, [])
+
 
 # ── PATCH /v1/config policy (P4 v1.1) ───────────────────────────────
 # Which runtime config mutations are safe. ModelManager has no setters, so
@@ -80,8 +152,14 @@ logger = logging.getLogger(__name__)
 #   REJECT — restart-only, inconsistent mid-run, or never enforced (no-op);
 #            answered with 409 + an env snippet (honest capability claim).
 _CONFIG_SAFE_KEYS = {"idle_unload_timeout", "max_loaded_models"}
-_CONFIG_GATED_KEYS = {"default_buffer_mb", "default_n_ctx", "default_n_threads"}
-_CONFIG_INT_KEYS = {"default_buffer_mb", "default_n_ctx", "default_n_threads", "max_loaded_models"}
+_CONFIG_GATED_KEYS = {
+    "default_buffer_mb", "default_n_ctx", "default_n_threads",
+    "default_gpu_layers", "default_kv_cache_type",
+}
+_CONFIG_INT_KEYS = {
+    "default_buffer_mb", "default_n_ctx", "default_n_threads",
+    "max_loaded_models", "default_gpu_layers",
+}
 _CONFIG_REJECT_REASONS = {
     "host": "bind address is fixed at startup; restart required",
     "port": "bind port is fixed at startup; restart required",
@@ -255,7 +333,10 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             except (TypeError, ValueError):
                 raise HTTPException(status_code=400, detail=f"{key}: invalid value {val!r}")
             if key in _CONFIG_INT_KEYS and coerced[key] < 1:
-                raise HTTPException(status_code=400, detail=f"{key} must be >= 1")
+                # default_gpu_layers is special: -1 = auto (valid) and
+                # 0 = CPU-only (valid). Anything below -1 is nonsense.
+                if not (key == "default_gpu_layers" and coerced[key] >= -1):
+                    raise HTTPException(status_code=400, detail=f"{key} must be >= 1")
             if key == "idle_unload_timeout" and coerced[key] < 0:
                 raise HTTPException(status_code=400, detail="idle_unload_timeout must be >= 0")
 
@@ -592,6 +673,8 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
                 buffer_mb=request.buffer_mb,
                 n_ctx=request.n_ctx,
                 n_threads=request.n_threads,
+                gpu_layers=request.gpu_layers,
+                kv_cache_type=request.kv_cache_type,
             )
             return ModelActionResponse(
                 status="loaded",
@@ -935,12 +1018,154 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     async def hub_cancel(task_id: str):
         """
         Cancel a download. Sets the cancel flag; the worker stops within one
-        chunk and removes the `.part`. Idempotent for already-terminal tasks.
+        chunk and the partial ``.part`` is KEPT so the task can be resumed.
+        Idempotent for already-terminal tasks.
         """
         task = hub_manager.cancel(task_id)
         if task is None:
             raise HTTPException(status_code=404, detail=f"download task {task_id} not found")
         return task.to_dict()
+
+    @app.post("/v1/hub/download/{task_id}/resume")
+    async def hub_resume(task_id: str):
+        """
+        Resume a cancelled/failed download (v1.1): re-queues the task; the
+        worker appends the remaining bytes to the kept ``.part`` via HTTP
+        ``Range`` instead of re-downloading from byte 0. 404 unknown task;
+        409 when the task is not resumable (active or done).
+        """
+        try:
+            task = hub_manager.resume(task_id)
+        except ValueError as e:
+            raise HTTPException(status_code=409, detail=str(e))
+        if task is None:
+            raise HTTPException(status_code=404, detail=f"download task {task_id} not found")
+        hub_manager.schedule_download(task)
+        return task.to_dict()
+
+    @app.post("/v1/hub/download/{task_id}/delete")
+    async def hub_delete(task_id: str, body: Optional[HubDeleteRequest] = None):
+        """
+        Delete a download task from the manager (v1.1): stops a running
+        worker and removes the partial ``.part``. By default the final
+        ``.gguf`` of a completed task is left on disk; pass
+        ``{"delete_file": true}`` to ALSO delete the model file (only for
+        ``done`` tasks whose file is inside an allowed model dir and whose
+        model is not currently loaded). Returns ``file_deleted`` honestly.
+        """
+        delete_file = bool(body and body.delete_file)
+        task = hub_manager.get_task(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail=f"download task {task_id} not found")
+        if delete_file:
+            if task.status != "done":
+                raise HTTPException(
+                    status_code=409,
+                    detail="only a completed download has a model file to delete",
+                )
+            # never delete a model that a backend is holding open — removing
+            # it would break the running session (checked BEFORE the delete).
+            # Compare NORMALIZED paths (realpath + case-fold) so a model
+            # loaded through a different spelling/symlink still matches.
+            target_real = os.path.normcase(os.path.realpath(task.target_path))
+            loaded = await manager.list_models()
+            if any(
+                os.path.normcase(os.path.realpath(getattr(m, "path", "") or "")) == target_real
+                for m in loaded
+            ):
+                raise HTTPException(
+                    status_code=409,
+                    detail="this model is currently loaded — unload it before deleting the file",
+                )
+        hub_manager.delete(task_id, delete_file=delete_file)
+        file_deleted = delete_file and not os.path.exists(task.target_path)
+        # which features reference this model's suggested id (conversations
+        # live client-side, so the server reports assistants only — the UI
+        # counts conversations itself). Honest at delete time: a reference
+        # created in another tab after the dialog opened is still reported.
+        # Only scanned when a file is actually at risk (delete_file) — the
+        # keep-file path never reads the assistant store.
+        refs = _assistants_referencing(task.filename) if delete_file else []
+        return {
+            "status": "deleted",
+            "id": task.id,
+            "file_deleted": file_deleted,
+            "referenced_by": {"assistants": refs},
+        }
+
+    @app.post("/v1/hub/downloads/clear")
+    async def hub_clear(body: Optional[HubClearRequest] = None):
+        """
+        Remove every FINISHED download (done/failed/cancelled) at once
+        (v1.1): the panel's "clear finished" action. Active downloads are
+        kept. Pass ``{"delete_file": true}`` to ALSO delete the model files
+        of completed downloads — except those of currently loaded models,
+        which are skipped and reported in ``files_skipped`` (never removed
+        under a running backend). Returns the honest summary.
+        """
+        delete_file = bool(body and body.delete_file)
+        protected: set = set()
+        if delete_file:
+            # same normalized-path rule as the single-task delete endpoint
+            loaded = await manager.list_models()
+            protected = {
+                os.path.normcase(os.path.realpath(getattr(m, "path", "") or ""))
+                for m in loaded
+            }
+        # snapshot the DONE tasks' filenames BEFORE the clear so the response
+        # can map task id → assistant references (the tasks are popped inside
+        # clear(); their filenames would otherwise be gone).
+        done_files = {
+            t["id"]: t["filename"]
+            for t in hub_manager.list_tasks()
+            if t.get("status") == "done"
+        }
+        result = hub_manager.clear(delete_file=delete_file, protected_paths=protected)
+        if delete_file and done_files:
+            # ONE store read for the whole batch, then task_id → references
+            # for every done task the clear removed (conversations live
+            # client-side, so only assistants are reported). A task that
+            # finished between the snapshot and the clear simply has no
+            # entry — advisory only, never blocks.
+            refs_by_file = _assistant_refs_batch(list(done_files.values()))
+            result["referenced_by"] = {
+                tid: {"assistants": refs_by_file.get(fname, [])}
+                for tid, fname in done_files.items()
+                if tid in result.get("removed", [])
+            }
+        return result
+
+    @app.post("/v1/hub/download/{task_id}/reveal")
+    async def hub_reveal(task_id: str):
+        """
+        Open the OS file manager showing a COMPLETED download's file (v1.1).
+
+        The server and the browser run on the same machine, so this launches
+        Explorer/Finder via a subprocess (Windows ``/select`` highlights the
+        file; macOS ``open -R``; Linux opens the folder). Security: only
+        tasks that finished with their file on disk, and the file must
+        realpath-resolve inside an allowed model dir (same containment rule
+        as delete) — revealing an arbitrary path is refused.
+        """
+        task = hub_manager.get_task(task_id)
+        if task is None:
+            raise HTTPException(status_code=404, detail=f"download task {task_id} not found")
+        if task.status != "done" or not os.path.isfile(task.target_path):
+            raise HTTPException(
+                status_code=409,
+                detail="only a completed download whose file is still on disk can be revealed",
+            )
+        real = os.path.realpath(task.target_path)
+        allowed = [os.path.realpath(d) for d in get_model_search_dirs()]
+        if not any(real == ra or real.startswith(ra + os.sep) for ra in allowed):
+            raise HTTPException(
+                status_code=403,
+                detail="refusing to reveal a file outside the allowed model directories",
+            )
+        res = _reveal_in_explorer(real)
+        if res.get("error"):
+            raise HTTPException(status_code=500, detail=res["error"])
+        return {"status": "revealed", "path": real}
 
     # ── Assistants (P7.2): named chat personas (system prompt + model + params)
     from .assistants import get_assistant_store

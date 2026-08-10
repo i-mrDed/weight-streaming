@@ -35,6 +35,21 @@ class ModelLoadRequest(BaseModel):
     buffer_mb: int = Field(default=64, ge=1, description="Buffer size in MB")
     n_ctx: int = Field(default=512, ge=8, description="Context window size")
     n_threads: Optional[int] = Field(default=None, description="Number of CPU threads")
+    gpu_layers: Optional[int] = Field(
+        default=None,
+        ge=-1,
+        description=(
+            "GPU layers to offload (-1 = auto, 0 = CPU only, N = first N layers). "
+            "GPU-backend only; None = server default (default_gpu_layers)."
+        ),
+    )
+    kv_cache_type: Optional[str] = Field(
+        default=None,
+        description=(
+            "KV cache data type (f16, q8_0, q4_0, …). GPU-backend only; "
+            "None = server default (default_kv_cache_type)."
+        ),
+    )
     force: bool = Field(default=False, description="Force reload if already loaded")
 
 
@@ -50,6 +65,30 @@ class HubDownloadRequest(BaseModel):
     target_dir: Optional[str] = Field(
         default=None,
         description="Destination dir; must resolve inside an allowed model dir",
+    )
+
+
+class HubDeleteRequest(BaseModel):
+    """Request to delete a download task (v1.1)."""
+    delete_file: bool = Field(
+        default=False,
+        description=(
+            "Also delete the downloaded model file from disk. Only honored for "
+            "tasks that COMPLETED (done) and whose file is inside an allowed "
+            "model dir; a task whose model is currently loaded is refused."
+        ),
+    )
+
+
+class HubClearRequest(BaseModel):
+    """Request to clear every FINISHED download task at once (v1.1)."""
+    delete_file: bool = Field(
+        default=False,
+        description=(
+            "Also delete the model files of COMPLETED downloads from disk. "
+            "Files of currently loaded models are skipped and reported in "
+            "files_skipped (never removed under a running backend)."
+        ),
     )
 
 

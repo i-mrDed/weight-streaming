@@ -95,6 +95,11 @@ class ModelManager:
         llama-server binary or GPU.
         """
         use_server = kwargs.pop("use_llama_server", True)
+        # GPU-only load options (P7.5) — never leak into the CPU binding
+        # (its **kwargs go straight to llama_cpp.Llama, which would reject
+        # unknown args). Only meaningful on LlamaServerBackend.
+        gpu_layers = kwargs.pop("gpu_layers", None)
+        kv_cache_type = kwargs.pop("kv_cache_type", None)
         if use_server and LlamaServerBackend.is_available():
             try:
                 logger.info("Using LlamaServerBackend (GPU) for %s", model_path)
@@ -102,6 +107,8 @@ class ModelManager:
                     model_path=model_path,
                     n_ctx=n_ctx,
                     n_threads=n_threads,
+                    gpu_layers=gpu_layers if gpu_layers is not None else -1,
+                    kv_cache_type=kv_cache_type,
                     **kwargs,
                 )
             except Exception as e:
@@ -148,6 +155,14 @@ class ModelManager:
             buffer_mb = kwargs.pop("buffer_mb", self._cfg.default_buffer_mb)
             n_ctx = kwargs.pop("n_ctx", self._cfg.default_n_ctx)
             n_threads = kwargs.pop("n_threads", None) or self._cfg.default_n_threads
+            # GPU-only options (P7.5): fall back to the configured defaults
+            # exactly like n_threads — None coalesces, never crashes.
+            gpu_layers = kwargs.pop("gpu_layers", None)
+            if gpu_layers is None:
+                gpu_layers = self._cfg.default_gpu_layers
+            kv_cache_type = kwargs.pop("kv_cache_type", None)
+            if kv_cache_type is None:
+                kv_cache_type = self._cfg.default_kv_cache_type or None
             verbose = kwargs.pop("verbose", False)
 
             # Enforce max models
@@ -176,6 +191,8 @@ class ModelManager:
                     buffer_mb=buffer_mb,
                     n_ctx=n_ctx,
                     n_threads=n_threads,
+                    gpu_layers=gpu_layers,
+                    kv_cache_type=kv_cache_type,
                     verbose=verbose,
                     **kwargs,
                 )
@@ -187,6 +204,8 @@ class ModelManager:
                 "buffer_mb": buffer_mb,
                 "n_ctx": n_ctx,
                 "n_threads": n_threads,
+                "gpu_layers": gpu_layers,
+                "kv_cache_type": kv_cache_type,
             }
             self._locks[model_id] = asyncio.Lock()
             self._last_used[model_id] = time.time()
