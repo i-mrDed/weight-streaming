@@ -23,7 +23,7 @@ import {
   Send,
   Settings2,
 } from 'lucide-preact'
-import { sseRequest, listAssistants, type Assistant } from '@/core/api'
+import { sseRequest } from '@/core/api'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/Button'
 import { Drawer } from '@/components/Drawer'
@@ -50,6 +50,7 @@ import {
   type ChatMsg,
   type Conversation,
 } from './store'
+import { assistants, refreshAssistants } from '@/core/assistants'
 import { ConversationSidebar } from './ConversationSidebar'
 import { ParamDrawer } from './ParamDrawer'
 import { RichText } from './RichText'
@@ -77,16 +78,13 @@ export function ChatPage() {
   const sideCollapsed = useSignal(false) // desktop rail
   const agentMode = useSignal<'default' | 'agent'>('default')
   // Assistant (P7.2): select a persona → apply its system prompt to the conv.
-  const assistants = useSignal<Assistant[]>([])
-  const assistantLoaded = useSignal(false)
-  const loadAssistants = async () => {
-    if (assistantLoaded.value) return
-    try {
-      assistants.value = await listAssistants()
-    } catch { /* non-fatal — offline */ }
-    assistantLoaded.value = true
-  }
-  loadAssistants()
+  // The list lives in the shared assistants store (core/assistants) — the
+  // Chat toolbar and the Assistants page read the same signal, so a
+  // create/edit/delete there is instantly visible here. Refresh on mount so
+  // direct visits (deep link / first load) are never stale.
+  useEffect(() => {
+    refreshAssistants().catch(() => { /* non-fatal — offline */ })
+  }, [])
   const applyAssistant = async (id: string) => {
     if (!id) return
     const a = assistants.value.find((x) => x.id === id)
@@ -154,13 +152,16 @@ export function ChatPage() {
     }
   }
   // User toggle: show/hide completed thinking accordions (persisted).
-  const showThinking = useSignal<boolean>(() => {
+  // NOTE: useSignal does NOT invoke a function initializer — the value must
+  // be computed eagerly via IIFE, or the persisted preference is never read
+  // and the stored function is used as the value (truthy) instead.
+  const showThinking = useSignal<boolean>((() => {
     try {
       return localStorage.getItem('ws-show-thinking') !== '0'
     } catch {
       return true
     }
-  })
+  })())
   const toggleThinking = () => {
     showThinking.value = !showThinking.value
     try {
@@ -558,21 +559,28 @@ export function ChatPage() {
           ) : null}
 
           {/* Thinking budget (P7.1c) — 5 levels like Jan, only for reasoning
-              models. Compact select. */}
+              models. Custom Menu, NOT a native <select>: Chrome on Windows
+              draws its own OS popup that ignores option colours, so the
+              dropdown text blended into the background (user feedback). The
+              Menu panel is fully CSS-themed with high-contrast text. */}
           {reasoningCapable ? (
-            <select
-              class="icon-btn thinking-budget"
-              aria-label={t('chat.budget.label')}
-              title={t('chat.budget.label')}
-              value={thinkingBudget.value}
-              onChange={(e) => setBudget((e.target as HTMLSelectElement).value as typeof thinkingBudget.value)}
-            >
-              <option value="low">{t('chat.budget.low')}</option>
-              <option value="medium">{t('chat.budget.medium')}</option>
-              <option value="high">{t('chat.budget.high')}</option>
-              <option value="xhigh">{t('chat.budget.xhigh')}</option>
-              <option value="unlimited">{t('chat.budget.unlimited')}</option>
-            </select>
+            <Menu
+              ariaLabel={`${t('chat.budget.label')}: ${t(`chat.budget.${thinkingBudget.value}`)}`}
+              align="start"
+              trigger={
+                <span class="chat__budget-trigger">
+                  ⚡ {t(`chat.budget.${thinkingBudget.value}`)}
+                  <ChevronDown size={13} aria-hidden="true" />
+                </span>
+              }
+              header={t('chat.budget.label')}
+              items={(['low', 'medium', 'high', 'xhigh', 'unlimited'] as const).map((v) => ({
+                key: v,
+                label: t(`chat.budget.${v}`),
+                active: thinkingBudget.value === v,
+                onSelect: () => setBudget(v),
+              }))}
+            />
           ) : null}
 
           {/* Thinking visibility toggle (user feedback: show/hide thinking) */}
@@ -586,20 +594,26 @@ export function ChatPage() {
             {showThinking.value ? <Eye size={16} /> : <EyeOff size={16} />}
           </button>
 
-          {/* Assistant selector (P7.2) — apply a persona's system prompt */}
+          {/* Assistant selector (P7.2) — apply a persona's system prompt.
+              Same Menu conversion as the budget selector: the native <select>
+              popup is OS-drawn on Chrome/Windows and ignores option colours. */}
           {assistants.value.length > 0 ? (
-            <select
-              class="icon-btn assistant-select"
-              aria-label={t('chat.assistant')}
-              title={t('chat.assistant')}
-              value=""
-              onChange={(e) => applyAssistant((e.target as HTMLSelectElement).value)}
-            >
-              <option value="">{t('chat.assistant')}</option>
-              {assistants.value.map((a) => (
-                <option key={a.id} value={a.id}>{a.name}</option>
-              ))}
-            </select>
+            <Menu
+              ariaLabel={t('chat.assistant')}
+              align="start"
+              trigger={
+                <span class="chat__assistant-trigger">
+                  🧑 {t('chat.assistant')}
+                  <ChevronDown size={13} aria-hidden="true" />
+                </span>
+              }
+              header={t('chat.assistant')}
+              items={assistants.value.map((a) => ({
+                key: a.id,
+                label: a.name,
+                onSelect: () => void applyAssistant(a.id),
+              }))}
+            />
           ) : null}
 
           <span class="chat__toolbar-spacer" />

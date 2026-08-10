@@ -77,3 +77,24 @@ export function createPoller(
     },
   }
 }
+
+/** Register a visibilitychange listener that runs `refresh` ONCE when the tab
+    becomes visible again — catches up state changed in another tab/device.
+    For stores WITHOUT a poller (e.g. assistants); the pollers above already
+    do this via their own onVisibility catch-up. Errors are swallowed (it is
+    background sync — the next focus/mount retries). Returns an unsubscribe. */
+export function refreshOnFocus(refresh: () => Promise<void>): () => void {
+  let timer = 0
+  const onVis = () => {
+    if (document.hidden) return
+    window.clearTimeout(timer)
+    timer = window.setTimeout(() => {
+      refresh().catch(() => { /* non-fatal background refresh */ })
+    }, 150 + Math.random() * 300) // small jitter vs the pollers' catch-up
+  }
+  document.addEventListener('visibilitychange', onVis)
+  return () => {
+    window.clearTimeout(timer)
+    document.removeEventListener('visibilitychange', onVis)
+  }
+}

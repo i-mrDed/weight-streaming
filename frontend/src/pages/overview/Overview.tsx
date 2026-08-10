@@ -29,11 +29,12 @@ import { toast } from '@/components/Toast'
 import { ApiError } from '@/core/api'
 import { navigate } from '@/core/router'
 import { t, fmtNumber, fmtRelative, relativeDay, locale } from '@/i18n'
-import { createPoller } from '@/core/poll'
+import { createPoller, refreshOnFocus } from '@/core/poll'
 import { fetchStats, type StatsPayload, type ModelStats } from '@/core/stats'
 import { fetchUsageHistory, type UsageRecord } from '@/core/config'
 import { guessQuant, unloadModel } from '@/core/models'
-import { health, models, openIssueCount, serverVersion } from '@/core/store'
+import { health, models, serverVersion } from '@/core/store'
+import { openIssueCount } from '@/core/issues'
 
 function fmtDuration(ms: number): string {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -84,9 +85,14 @@ export function Overview() {
     poller.start()
     poller.kick()
     const beat = window.setInterval(() => (tick.value += 1), 1000)
+    // Focus-refresh: the poller already catches up on visibility change, but
+    // this guarantees stats+activity are fresh the moment the tab regains
+    // focus instead of waiting for the next 5s tick.
+    const offFocus = refreshOnFocus(async () => poller.kick())
     return () => {
       poller.stop()
       window.clearInterval(beat)
+      offFocus()
     }
   }, [])
 
@@ -113,8 +119,10 @@ export function Overview() {
   })()
   const residency = (() => {
     for (const ms of Object.values(stats.value?.models ?? {})) {
-      if (typeof ms.page_cache?.resident_ratio === 'number' && Object.keys(ms.page_cache).length > 0) {
-        return ms.page_cache
+      const pc = ms.page_cache
+      // LlamaServerBackend sends page_cache:null — skip those models honestly
+      if (pc != null && typeof pc.resident_ratio === 'number' && Object.keys(pc).length > 0) {
+        return pc
       }
     }
     return null

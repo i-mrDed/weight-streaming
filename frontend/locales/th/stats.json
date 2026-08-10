@@ -10,22 +10,35 @@
     "body": "สถิติจะปรากฏหลังจากรันครั้งแรก — บัฟเฟอร์ ความเร็ว และตัวนับ paging เริ่มจากศูนย์",
     "goChat": "เริ่มแชท"
   },
+  "note": {
+    "gpuTitle": "GPU backend (llama-server)",
+    "gpuBody": "llama.cpp จัดการน้ำหนักภายในโปรเซสของตัวเอง (offload ไป GPU + mmap ของตัวเอง) ดังนั้น telemetry ด้าน shard buffer ความแม่นยำของพรีเฟตช์ และ RAM page-cache จึงไม่ใช้ที่นี่ ความเร็วในการ generate โทเคน และความต้องการ paging (บน Windows) ด้านล่างเป็นค่าที่วัดจริง ส่วน VRAM รายงานสดจาก llama-server",
+    "gpuVram": "VRAM {{used}} / {{total}} MB · offload {{layers}} เลเยอร์",
+    "gpuVramNoLayers": "VRAM {{used}} / {{total}} MB",
+    "gpuLayers": "offload {{layers}} เลเยอร์"
+  },
   "gauge": {
     "hitRate": "อัตราการฮิตของบัฟเฟอร์",
     "hitRateTip": "การอ่าน shard ที่ served จากบัฟเฟอร์ streaming เทียบกับการเข้าถึงทั้งหมด",
+    "hitRateGpuTip": "llama-server จัดการน้ำหนักภายในโปรเซสของตัวเอง — ไม่มีบัฟเฟอร์ระดับ shard ให้วัด",
     "hitRateCaveat": "ค่าจริง — เป็น 0% เสมอในทางปฏิบัติ: llama.cpp อ่าน mmap ของมันเอง ตัวติดตามจึงไม่เห็นการอ่านเหล่านั้น (ADR-003) ใช้ความต้องการ paging เป็นสัญญาณหลัก",
+    "hitRateGpuCaveat": "GPU backend: น้ำหนักอยู่ใน llama-server (offload ไป GPU) จึงไม่มีบัฟเฟอร์ shard ให้ติดตาม ใช้หมายเหตุ VRAM ด้านบนเป็นสัญญาณเรซิเดนซีจริง",
+    "hitRateGpuNa": "n/a · GPU backend",
     "residency": "RAM residency",
     "residencyTip": "สัดส่วนของไฟล์โมเดลที่อยู่ใน page cache ของ OS",
     "residencyNa": "n/a · ไม่ใช่ Windows",
+    "residencyGpuNa": "n/a · GPU backend",
     "speed": "ความเร็วในการ generate",
     "speedTip": "โทเคนต่อวินาทีจากการ generate ล่าสุดบนโมเดลนี้",
     "prefetch": "ความแม่นยำของพรีเฟตช์",
     "prefetchTip": "พรีเฟตช์ที่มีประโยชน์หารด้วยพรีเฟตช์ทั้งหมด n/a เมื่อไม่มีกิจกรรมพรีเฟตช์ที่ถูกวัด",
     "prefetchNa": "n/a · ไม่มีพรีเฟตช์",
+    "prefetchGpuNa": "n/a · GPU backend",
     "paging": "ความต้องการ paging",
     "pagingTip": "page fault ทั้งโปรเซสต่อโทเคนระหว่างการ generate ล่าสุด (ส่วนใหญ่มาจาก mmap ของโมเดล)",
     "pagingUnit": "ฟอลต์/tok",
-    "noGeneration": "ยังไม่มี generate"
+    "noGeneration": "ยังไม่มี generate",
+    "pagingNa": "n/a · backend นี้ไม่ได้วัด"
   },
   "chart": {
     "tokTitle": "ความเร็วในการ generate",
@@ -49,7 +62,8 @@
     "srcFaults": "POSIX major fault",
     "srcResidency": "การประมาณ residency ของ Windows",
     "idle": "ยังไม่มี generate — ตัวนับ paging เริ่มหลังจากรันครั้งแรก",
-    "unavailable": "ไม่ได้วัดบนแพลตฟอร์มนี้ (การติดตาม page cache มีเฉพาะ Windows)"
+    "unavailable": "ไม่ได้วัดบนแพลตฟอร์มนี้ (การติดตาม page cache มีเฉพาะ Windows)",
+    "unavailableGpu": "ไม่ได้วัด — llama-server รัน inference ในโปรเซสของตัวเอง การสุ่ม page fault เชื่อมเฉพาะบน Windows"
   },
   "heatmap": {
     "title": "กิจกรรม expert ของ MoE",

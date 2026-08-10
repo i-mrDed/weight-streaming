@@ -14,6 +14,7 @@ const PHASE: Record<PageId, string> = {
   docs: 'P3',
   settings: 'P3',
   hub: 'P5',
+  assistants: 'P7',
 }
 
 const EMOJI: Record<PageId, string> = {
@@ -25,6 +26,7 @@ const EMOJI: Record<PageId, string> = {
   hub: '🌐',
   docs: '📖',
   settings: '⚙️',
+  assistants: '🤖',
 }
 
 export function Placeholder({ page }: { page: PageId }) {

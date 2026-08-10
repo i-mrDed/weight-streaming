@@ -49,15 +49,37 @@ export interface PageCacheStats {
   total_gb: number
 }
 
+/** Real GPU telemetry from llama-server's GET /props (LlamaServerBackend). */
+export interface GpuStats {
+  n_gpu_layers: number | null
+  total_vram_mb: number | null
+  used_vram_mb: number | null
+}
+
 export interface ModelStats {
-  buffer: BufferStats
-  predictor: Record<string, unknown>
-  prefetcher: PrefetcherStats
+  /** CPU binding always sends a BufferStats object; LlamaServerBackend (GPU)
+      explicitly sends null — weights live inside llama-server, so there is no
+      shard-level streaming buffer to measure. Never assume an object. */
+  buffer?: BufferStats | null
+  predictor?: Record<string, unknown>
+  /** Same contract as buffer: present for the CPU binding, explicit null (or
+      absent on older servers) for the GPU backend. */
+  prefetcher?: PrefetcherStats | null
   /** empty object until the first generation on this model */
   generation: Partial<GenerationStats>
-  /** empty object on platforms without a residency tracker (non-Windows) */
-  page_cache: Partial<PageCacheStats>
-  model: { path: string; arch: string; n_experts: number }
+  /** null when the platform/backend has no residency tracker (non-Windows
+      or LlamaServerBackend) — never assume an object */
+  page_cache: Partial<PageCacheStats> | null
+  model: { path: string; arch: string; n_experts: number; backend?: string }
+  /** LlamaServerBackend only — real VRAM/offload telemetry, or null when the
+      running llama-server does not expose it (older/CPU-only builds) */
+  gpu?: GpuStats | null
+}
+
+/** True for LlamaServerBackend (GPU): no shard buffer / prefetcher / page
+    cache residency — those gauges must render honest n/a, not zeros. */
+export function isGpuBackend(ms: ModelStats | null | undefined): boolean {
+  return !!ms && ms.model?.backend === 'llama-server'
 }
 
 /** from io/process_priority.py describe() — a dict, not a string */

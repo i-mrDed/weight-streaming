@@ -30,7 +30,10 @@ export function fetchConfig(): Promise<ServerConfigResponse> {
    here ONLY to structure the form — the server remains the authority: an
    unknown key is a 400, and the reject set is read from the 409 body. */
 export const SAFE_KEYS = ['idle_unload_timeout', 'max_loaded_models'] as const
-export const GATED_KEYS = ['default_buffer_mb', 'default_n_ctx', 'default_n_threads'] as const
+export const GATED_KEYS = [
+  'default_buffer_mb', 'default_n_ctx', 'default_n_threads',
+  'default_gpu_layers', 'default_kv_cache_type',
+] as const
 
 export interface PatchApplied {
   status: 'applied'

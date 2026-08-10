@@ -31,6 +31,11 @@ const FOCUSABLE =
 export function Drawer({ open, onClose, title, children, width = 380, side = 'right' }: Props) {
   const ref = useRef<HTMLDivElement>(null)
   const restoreRef = useRef<Element | null>(null)
+  // Latest-ref pattern (same as Dialog.tsx): inline onClose arrows are recreated
+  // on every parent render — depending on onClose directly would re-run the
+  // focus trap after each keystroke and steal focus back to the first control.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   // aria-modal contract (spec §7.2): trap Tab within the drawer and restore
   // focus to the trigger on close — mirrors Dialog.tsx. Initial focus goes to
@@ -45,7 +50,7 @@ export function Drawer({ open, onClose, title, children, width = 380, side = 'ri
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (e.key !== 'Tab' || !panel) return
@@ -69,7 +74,7 @@ export function Drawer({ open, onClose, title, children, width = 380, side = 'ri
       document.body.style.overflow = prevOverflow
       ;(restoreRef.current as HTMLElement | null)?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 

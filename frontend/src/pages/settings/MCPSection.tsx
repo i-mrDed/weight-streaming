@@ -73,13 +73,13 @@ export function MCPSection() {
           <strong>{t('settings.mcp.subtitle')}</strong>
           <p class="set-note">{t('settings.mcp.note')}</p>
         </span>
-        <Button size="sm" tone="primary" onClick={() => (addOpen.value = true)}>{t('settings.mcp.add')}</Button>
+        <Button size="sm" variant="primary" onClick={() => (addOpen.value = true)}>{t('settings.mcp.add')}</Button>
       </div>
 
       {loading.value ? (
         <p class="set-note">{t('common.loading')}</p>
       ) : servers.value.length === 0 ? (
-        <EmptyState title={t('settings.mcp.empty')} icon="🔌" />
+        <EmptyState emoji="🔌" title={t('settings.mcp.empty')} />
       ) : (
         <div class="mcp-list">
           {servers.value.map((s) => (
@@ -93,47 +93,45 @@ export function MCPSection() {
                 </span>
                 <code class="mcp-item__cmd">{s.transport === 'stdio' ? s.command : s.url}</code>
               </div>
-              <Button size="sm" tone="danger" onClick={() => remove(s)}>{t('common.delete')}</Button>
+              <Button size="sm" variant="danger" onClick={() => remove(s)}>{t('common.delete')}</Button>
             </div>
           ))}
         </div>
       )}
 
-      {addOpen.value ? (
-        <Dialog title={t('settings.mcp.add')} onClose={() => (addOpen.value = false)}>
-          <div class="form">
-            <label class="form__label">{t('settings.mcp.name')}</label>
-            <input class="form__input tnum" value={name.value}
-              onInput={(e) => (name.value = (e.target as HTMLInputElement).value)} />
-            <label class="form__label">{t('settings.mcp.transport')}</label>
-            <select class="form__input tnum" value={transport.value}
-              onChange={(e) => (transport.value = (e.target as HTMLSelectElement).value as 'stdio' | 'sse')}>
-              <option value="stdio">stdio</option>
-              <option value="sse">sse</option>
-            </select>
-            {transport.value === 'stdio' ? (
-              <>
-                <label class="form__label">{t('settings.mcp.command')}</label>
-                <input class="form__input tnum" placeholder="npx" value={command.value}
-                  onInput={(e) => (command.value = (e.target as HTMLInputElement).value)} />
-                <label class="form__label">{t('settings.mcp.args')}</label>
-                <input class="form__input tnum" placeholder="-y @modelcontextprotocol/server-filesystem" value={args.value}
-                  onInput={(e) => (args.value = (e.target as HTMLInputElement).value)} />
-              </>
-            ) : (
-              <>
-                <label class="form__label">{t('settings.mcp.url')}</label>
-                <input class="form__input tnum" placeholder="http://localhost:8000/sse" value={url.value}
-                  onInput={(e) => (url.value = (e.target as HTMLInputElement).value)} />
-              </>
-            )}
-            <div class="form__actions">
-              <Button onClick={() => (addOpen.value = false)}>{t('common.cancel')}</Button>
-              <Button tone="primary" onClick={save}>{t('common.save')}</Button>
-            </div>
+      <Dialog open={addOpen.value} title={t('settings.mcp.add')} onClose={() => (addOpen.value = false)}>
+        <div class="form">
+          <label class="form__label">{t('settings.mcp.name')}</label>
+          <input class="form__input tnum" value={name.value}
+            onInput={(e) => (name.value = (e.target as HTMLInputElement).value)} />
+          <label class="form__label">{t('settings.mcp.transport')}</label>
+          <select class="form__input tnum" value={transport.value}
+            onChange={(e) => (transport.value = (e.target as HTMLSelectElement).value as 'stdio' | 'sse')}>
+            <option value="stdio">stdio</option>
+            <option value="sse">sse</option>
+          </select>
+          {transport.value === 'stdio' ? (
+            <>
+              <label class="form__label">{t('settings.mcp.command')}</label>
+              <input class="form__input tnum" placeholder="npx" value={command.value}
+                onInput={(e) => (command.value = (e.target as HTMLInputElement).value)} />
+              <label class="form__label">{t('settings.mcp.args')}</label>
+              <input class="form__input tnum" placeholder="-y @modelcontextprotocol/server-filesystem" value={args.value}
+                onInput={(e) => (args.value = (e.target as HTMLInputElement).value)} />
+            </>
+          ) : (
+            <>
+              <label class="form__label">{t('settings.mcp.url')}</label>
+              <input class="form__input tnum" placeholder="http://localhost:8000/sse" value={url.value}
+                onInput={(e) => (url.value = (e.target as HTMLInputElement).value)} />
+            </>
+          )}
+          <div class="form__actions">
+            <Button onClick={() => (addOpen.value = false)}>{t('common.cancel')}</Button>
+            <Button variant="primary" onClick={save}>{t('common.save')}</Button>
           </div>
-        </Dialog>
-      ) : null}
+        </div>
+      </Dialog>
     </Card>
   )
 }

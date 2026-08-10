@@ -6,8 +6,10 @@
   "close": "Close",
   "confirm": "Confirm",
   "save": "Save",
+  "edit": "Edit",
   "copy": "Copy",
   "copied": "Copied ✓",
+  "delete": "Delete",
   "search": "Search",
   "notAvailable": "n/a",
   "comingSoon": "Coming soon",
@@ -51,6 +53,7 @@
     "themeMenu": "Theme menu",
     "languageMenu": "Language menu",
     "userMenu": "Profile",
+    "moreInfo": "More info",
     "closeDialog": "Close dialog",
     "generating": "Assistant is responding",
     "generationDone": "Response complete"

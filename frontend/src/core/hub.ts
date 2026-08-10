@@ -106,6 +106,9 @@ export interface HubTask {
   status: HubTaskStatus
   bytes_downloaded: number
   total_bytes: number | null
+  /** REAL byte size of the file on disk for a completed download; null
+      otherwise (stat'ed server-side at serialization time — honest). */
+  file_size: number | null
   /** null until total_bytes is known — render "–", never guess */
   percent: number | null
   speed_bps: number | null
@@ -155,6 +158,74 @@ export function hubDownloads(): Promise<{ downloads: HubTask[]; count: number }>
 
 export function hubCancel(taskId: string): Promise<HubTask> {
   return apiJSON<HubTask>(`/v1/hub/download/${encodeURIComponent(taskId)}/cancel`, { method: 'POST' }, { timeoutMs: 10_000 })
+}
+
+/** v1.1 resume: re-queues a cancelled/failed task; the server appends the
+    remaining bytes to the kept ``.part`` via HTTP Range (never byte 0). */
+export function hubResume(taskId: string): Promise<HubTask> {
+  return apiJSON<HubTask>(`/v1/hub/download/${encodeURIComponent(taskId)}/resume`, { method: 'POST' }, { timeoutMs: 10_000 })
+}
+
+/** v1.1 delete: removes a task (stops a running worker, drops its .part).
+    With `deleteFile` the server ALSO removes the completed .gguf from disk
+    (only for done tasks whose model is not loaded); `file_deleted` in the
+    response says honestly whether the file was removed. */
+
+/** Cross-feature model references (the server scans what it owns —
+    assistants; conversations live client-side so the UI counts those
+    itself). Used to warn before a model file is deleted. */
+export interface HubReferencedBy {
+  /** assistant NAMES pinned to this download's suggested model id */
+  assistants: string[]
+}
+
+export interface HubDeleteResult {
+  status: string
+  id: string
+  file_deleted: boolean
+  /** scanned live at delete time (catches cross-tab assistant edits) */
+  referenced_by: HubReferencedBy
+}
+
+export function hubDelete(taskId: string, deleteFile = false): Promise<HubDeleteResult> {
+  return apiJSON(
+    `/v1/hub/download/${encodeURIComponent(taskId)}/delete`,
+    deleteFile ? { method: 'POST', body: JSON.stringify({ delete_file: true }) } : { method: 'POST' },
+    { timeoutMs: 10_000 },
+  )
+}
+
+/** v1.1 clear-finished: remove every terminal task (done/failed/cancelled)
+    in one call; active downloads are kept. With `deleteFile` the server ALSO
+    deletes the model files of completed downloads, except those of currently
+    loaded models (reported in `files_skipped`). */
+export interface HubClearResult {
+  status: string
+  removed: string[]
+  files_deleted: string[]
+  files_skipped: string[]
+  /** task id → references; present only when deleteFile was requested
+      (only then are model files at risk). */
+  referenced_by?: Record<string, HubReferencedBy>
+}
+
+export function hubClear(deleteFile = false): Promise<HubClearResult> {
+  return apiJSON(
+    '/v1/hub/downloads/clear',
+    deleteFile ? { method: 'POST', body: JSON.stringify({ delete_file: true }) } : { method: 'POST' },
+    { timeoutMs: 10_000 },
+  )
+}
+
+/** v1.1 reveal: ask the server (same machine as the browser) to open the OS
+    file manager showing a completed download's file. 404 unknown / 409 not
+    finished / 403 outside the allowed model dirs / 500 launcher failed. */
+export function hubReveal(taskId: string): Promise<{ status: string; path: string }> {
+  return apiJSON(
+    `/v1/hub/download/${encodeURIComponent(taskId)}/reveal`,
+    { method: 'POST' },
+    { timeoutMs: 10_000 },
+  )
 }
 
 /** Visibility-aware SSE subscription to a download's REAL progress.

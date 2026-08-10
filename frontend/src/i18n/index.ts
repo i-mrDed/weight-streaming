@@ -96,7 +96,15 @@ export function t(key: string, vars?: Record<string, string | number>): string {
   const path = (dot === -1 ? key : key.slice(dot + 1)).split('.')
   let val = lookup(lang, ns, path)
   if (typeof val !== 'string') val = lookup(FALLBACK, ns, path)
-  if (typeof val !== 'string') return key
+  if (typeof val !== 'string') {
+    // Key not found in any locale — almost always a call-site bug (e.g. a
+    // missing namespace prefix like 'server.field.host' instead of
+    // 'settings.server.field.host'). The translation verifier only checks
+    // locale-file parity and cannot see wrong prefixes, so surface it here
+    // instead of silently rendering the raw key. (2026-08-05)
+    if (import.meta.env?.DEV) console.warn(`[i18n] missing key: ${key}`)
+    return key
+  }
   return interpolate(val, vars)
 }
 

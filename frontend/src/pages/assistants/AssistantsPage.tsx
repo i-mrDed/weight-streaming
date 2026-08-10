@@ -10,11 +10,11 @@ import { toast } from '@/components/Toast'
 import { t } from '@/i18n'
 import {
   type Assistant,
-  listAssistants,
   createAssistant,
   updateAssistant,
   deleteAssistant,
 } from '@/core/api'
+import { assistants, refreshAssistants } from '@/core/assistants'
 
 interface EditorState {
   open: boolean
@@ -25,16 +25,21 @@ interface EditorState {
 }
 
 export function AssistantsPage() {
-  const assistants = useSignal<Assistant[]>([])
-  const loading = useSignal(true)
+  // Shared with the Chat toolbar (core/assistants) — edits here are instantly
+  // reflected there via the same signal; this page just triggers the refetch.
+  // Direct value (NOT a function initializer — useSignal doesn't call those):
+  // warm store (data already fetched by Chat) → skip the spinner on revisit.
+  const loading = useSignal(assistants.value.length === 0)
   const editor = useSignal<EditorState>({
     open: false, editing: null, name: '', description: '', system_prompt: '',
   })
 
   async function load() {
-    loading.value = true
+    // Spinner only when the store is cold; a warm store refreshes in the
+    // background and swaps in when the fetch lands (no flash on revisit).
+    if (assistants.value.length === 0) loading.value = true
     try {
-      assistants.value = await listAssistants()
+      await refreshAssistants()
     } catch (e) {
       toast('error', String(e))
     } finally {
@@ -82,19 +87,19 @@ export function AssistantsPage() {
   }
 
   return (
-    <div class="page-wrap">
-      <div class="page-header">
+    <div class="page">
+      <header class="page__header">
         <div>
-          <h1 class="page-title">{t('assistants.title')}</h1>
-          <p class="page-sub">{t('assistants.subtitle')}</p>
+          <h1 class="page__title">{t('assistants.title')}</h1>
+          <p class="page__sub">{t('assistants.subtitle')}</p>
         </div>
-        <Button tone="primary" onClick={openCreate}>{t('assistants.new')}</Button>
-      </div>
+        <Button variant="primary" onClick={openCreate}>{t('assistants.new')}</Button>
+      </header>
 
       {loading.value ? (
-        <EmptyState title={t('common.loading') as string} />
+        <EmptyState emoji="💭" title={t('common.loading')} />
       ) : assistants.value.length === 0 ? (
-        <EmptyState title={t('assistants.empty')} icon="🤖" />
+        <EmptyState emoji="🤖" title={t('assistants.empty')} />
       ) : (
         <div class="assistants-grid">
           {assistants.value.map((a) => (
@@ -111,35 +116,34 @@ export function AssistantsPage() {
               </div>
               <div class="assistant-card__actions">
                 <Button size="sm" onClick={() => openEdit(a)}>{t('common.edit')}</Button>
-                <Button size="sm" tone="danger" onClick={() => remove(a)}>{t('common.delete')}</Button>
+                <Button size="sm" variant="danger" onClick={() => remove(a)}>{t('common.delete')}</Button>
               </div>
             </Card>
           ))}
         </div>
       )}
 
-      {editor.value.open ? (
-        <Dialog
-          title={editor.value.editing ? t('assistants.edit') : t('assistants.new')}
-          onClose={() => (editor.value = { ...editor.value, open: false })}
-        >
-          <div class="form">
-            <label class="form__label">{t('assistants.name')}</label>
-            <input class="form__input tnum" value={editor.value.name}
-              onInput={(e) => (editor.value = { ...editor.value, name: (e.target as HTMLInputElement).value })} />
-            <label class="form__label">{t('assistants.description')}</label>
-            <input class="form__input tnum" value={editor.value.description}
-              onInput={(e) => (editor.value = { ...editor.value, description: (e.target as HTMLInputElement).value })} />
-            <label class="form__label">{t('assistants.systemPrompt')}</label>
-            <textarea class="form__textarea tnum" rows={5} value={editor.value.system_prompt}
-              onInput={(e) => (editor.value = { ...editor.value, system_prompt: (e.target as HTMLTextAreaElement).value })} />
-            <div class="form__actions">
-              <Button onClick={() => (editor.value = { ...editor.value, open: false })}>{t('common.cancel')}</Button>
-              <Button tone="primary" onClick={save}>{t('common.save')}</Button>
-            </div>
+      <Dialog
+        open={editor.value.open}
+        title={editor.value.editing ? t('assistants.edit') : t('assistants.new')}
+        onClose={() => (editor.value = { ...editor.value, open: false })}
+      >
+        <div class="form">
+          <label class="form__label">{t('assistants.name')}</label>
+          <input class="form__input tnum" value={editor.value.name}
+            onInput={(e) => (editor.value = { ...editor.value, name: (e.target as HTMLInputElement).value })} />
+          <label class="form__label">{t('assistants.description')}</label>
+          <input class="form__input tnum" value={editor.value.description}
+            onInput={(e) => (editor.value = { ...editor.value, description: (e.target as HTMLInputElement).value })} />
+          <label class="form__label">{t('assistants.systemPrompt')}</label>
+          <textarea class="form__textarea tnum" rows={5} value={editor.value.system_prompt}
+            onInput={(e) => (editor.value = { ...editor.value, system_prompt: (e.target as HTMLTextAreaElement).value })} />
+          <div class="form__actions">
+            <Button onClick={() => (editor.value = { ...editor.value, open: false })}>{t('common.cancel')}</Button>
+            <Button variant="primary" onClick={save}>{t('common.save')}</Button>
           </div>
-        </Dialog>
-      ) : null}
+        </div>
+      </Dialog>
     </div>
   )
 }

@@ -16,12 +16,12 @@ import {
   downloadText,
   exportIssues,
   ISSUE_STATUSES,
-  listIssues,
+  issues,
+  refreshIssues,
   SEVERITIES,
   SEVERITY_TONE,
   STATUS_EMOJI,
   STATUS_TONE,
-  type Issue,
   type IssueStatus,
   type Severity,
 } from '@/core/issues'
@@ -39,8 +39,12 @@ function ts(s: string): number {
 
 export function IssuesPage() {
   locale.value // re-render on language change
-  const issues = useSignal<Issue[]>([])
-  const loading = useSignal(false)
+  // The list lives in the shared store (core/issues) — the Sidebar badge and
+  // Overview derive the open count from the same signal, so a status change
+  // here is reflected everywhere instantly. Filters run client-side.
+  // Direct value (NOT a function initializer — useSignal doesn't call those):
+  // warm store → no spinner flash on revisit (assistants.ts pattern).
+  const loading = useSignal(issues.value.length === 0)
   const error = useSignal('')
 
   const search = useSignal('')
@@ -52,17 +56,13 @@ export function IssuesPage() {
   const openId = useSignal<string | null>(null)
 
   const load = async () => {
-    loading.value = true
+    // Spinner only on a cold store — a warm store refreshes in the background.
+    if (issues.value.length === 0) loading.value = true
     error.value = ''
     try {
-      const list = await listIssues({
-        status: (statusFilter.value || undefined) as IssueStatus | undefined,
-        severity: (sevFilter.value || undefined) as Severity | undefined,
-      })
-      issues.value = Array.isArray(list) ? list : []
+      await refreshIssues()
     } catch (e) {
       error.value = e instanceof Error ? e.message : String(e)
-      issues.value = []
     } finally {
       loading.value = false
     }
@@ -70,12 +70,19 @@ export function IssuesPage() {
 
   useEffect(() => {
     void load()
-  }, [statusFilter.value, sevFilter.value])
+  }, [])
 
-  // severity counts over the (server-filtered) list — honest zeros included.
-  const sevCounts = SEVERITIES.map((s) => ({ s, n: issues.value.filter((i) => i.severity === s).length }))
+  // Filters are now client-side (the store holds the full list) — same result
+  // as the old server-filtered fetch, but instant (no refetch per filter tap).
+  const filtered = issues.value.filter(
+    (i) =>
+      (!statusFilter.value || i.status === statusFilter.value) &&
+      (!sevFilter.value || i.severity === sevFilter.value),
+  )
+  // severity counts over the filtered set — honest zeros included.
+  const sevCounts = SEVERITIES.map((s) => ({ s, n: filtered.filter((i) => i.severity === s).length }))
 
-  const visible = issues.value
+  const visible = filtered
     .filter((i) => {
       const q = search.value.trim().toLowerCase()
       if (!q) return true
@@ -210,7 +217,7 @@ export function IssuesPage() {
 
       {/* summary chips (honest counts) */}
       <div class="iss-summary" role="group" aria-label={t('issues.summary.bySeverity')}>
-        <span class="iss-summary__total tnum">{t('issues.summary.total', { count: issues.value.length })}</span>
+        <span class="iss-summary__total tnum">{t('issues.summary.total', { count: filtered.length })}</span>
         {sevCounts.map(({ s, n }) => (
           <button
             key={s}

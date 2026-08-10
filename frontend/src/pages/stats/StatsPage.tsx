@@ -15,29 +15,39 @@ import { Gauge, type GaugeDelta } from '@/components/Gauge'
 import { Sparkline } from '@/components/Sparkline'
 import { Tip } from '@/components/Tip'
 import { navigate } from '@/core/router'
-import { createPoller } from '@/core/poll'
-import { fetchStats, hasGeneration, type ModelStats, type StatsPayload } from '@/core/stats'
+import { createPoller, refreshOnFocus } from '@/core/poll'
+import { fetchStats, hasGeneration, isGpuBackend, type ModelStats, type StatsPayload } from '@/core/stats'
 import { RingBuffer } from '@/core/ring'
 import { statsFocusModel } from '@/core/nav-hints'
 import { t, fmtNumber, locale } from '@/i18n'
 import { Heatmap } from './Heatmap'
 
 interface Snapshot {
-  hitRate: number
+  /** null when the backend has no shard buffer (GPU) — never a fake 0 */
+  hitRate: number | null
   residency: number | null
   tokS: number | null
   prefetchAcc: number | null
   faults: number | null
 }
 
+// LlamaServerBackend (GPU) sends buffer/prefetcher as explicit null and
+// page_cache null — every field here is guarded so those models render
+// honest "n/a" instead of a fabricated zero or a crash (ADR-003: fields the
+// backend does not provide are never fabricated).
 function snapshotOf(ms: ModelStats | null): Snapshot | null {
   if (!ms) return null
+  const buf = ms.buffer
   const pf = ms.prefetcher
+  const pc = ms.page_cache
   return {
-    hitRate: ms.buffer.hit_rate,
-    residency: Object.keys(ms.page_cache).length > 0 ? (ms.page_cache.resident_ratio ?? 0) : null,
+    // null (not 0) when there is no buffer: the GPU backend manages weights
+    // inside llama-server, so "0% hit rate" would be a fabricated value.
+    hitRate: buf && typeof buf.hit_rate === 'number' ? buf.hit_rate : null,
+    residency:
+      pc != null && Object.keys(pc).length > 0 ? (pc.resident_ratio ?? 0) : null,
     tokS: typeof ms.generation.tokens_per_sec === 'number' ? ms.generation.tokens_per_sec : null,
-    prefetchAcc: pf.prefetched > 0 ? pf.useful / pf.prefetched : null,
+    prefetchAcc: pf && pf.prefetched > 0 ? pf.useful / pf.prefetched : null,
     faults: typeof ms.generation.paging?.faults_per_token === 'number'
       ? ms.generation.paging.faults_per_token
       : null,
@@ -79,7 +89,15 @@ export function StatsPage() {
     }, 2000)
     poller.start()
     poller.kick()
-    return () => poller.stop()
+    // Focus-refresh via poller.kick() — single-flight guarded and reuses the
+    // poller closure (no duplicated fetch body). The poller's own visibility
+    // catch-up (poll.ts) would also fire on refocus; kick() schedules a tick
+    // that is deduped by the running flag, so there is no double network call.
+    const offFocus = refreshOnFocus(async () => poller.kick())
+    return () => {
+      poller.stop()
+      offFocus()
+    }
   }, [])
 
   const modelIds = Object.keys(payload.value?.models ?? {})
@@ -89,6 +107,7 @@ export function StatsPage() {
     modelIds[0] ||
     ''
   const ms: ModelStats | null = payload.value?.models[effective] ?? null
+  const isGpu = isGpuBackend(ms)
   const srv = payload.value?.server ?? null
 
   // Feed the ring buffers + delta baseline after each poll.
@@ -177,19 +196,52 @@ export function StatsPage() {
         </Card>
       ) : null}
 
+      {/* ── GPU backend note (honest telemetry boundaries) ───────── */}
+      {isGpu ? (
+        <Card tier="raised" class="st-gpu-note">
+          <div class="st-gpu-note__head">
+            <span aria-hidden="true">⚡</span> {t('stats.note.gpuTitle')}
+          </div>
+          <p class="st-gpu-note__body">{t('stats.note.gpuBody')}</p>
+          {ms?.gpu &&
+          (ms.gpu.used_vram_mb != null || ms.gpu.n_gpu_layers != null) ? (
+            <div class="st-gpu-note__vram tnum">
+              {ms.gpu.used_vram_mb != null && ms.gpu.total_vram_mb != null
+                ? ms.gpu.n_gpu_layers != null
+                  ? t('stats.note.gpuVram', {
+                      used: fmtNumber(ms.gpu.used_vram_mb),
+                      total: fmtNumber(ms.gpu.total_vram_mb),
+                      layers: fmtNumber(ms.gpu.n_gpu_layers),
+                    })
+                  : t('stats.note.gpuVramNoLayers', {
+                      used: fmtNumber(ms.gpu.used_vram_mb),
+                      total: fmtNumber(ms.gpu.total_vram_mb),
+                    })
+                : t('stats.note.gpuLayers', { layers: fmtNumber(ms.gpu.n_gpu_layers ?? 0) })}
+            </div>
+          ) : null}
+        </Card>
+      ) : null}
+
       {/* ── Gauge cards ─────────────────────────────────────────── */}
       <div class="st-gauges">
         <Gauge
           label={t('stats.gauge.hitRate')}
-          tip={t('stats.gauge.hitRateTip')}
-          value={cur ? cur.hitRate * 100 : null}
-          fraction={cur ? cur.hitRate : null}
+          tip={isGpu ? t('stats.gauge.hitRateGpuTip') : t('stats.gauge.hitRateTip')}
+          value={cur?.hitRate != null ? cur.hitRate * 100 : null}
+          fraction={cur?.hitRate ?? null}
           format={pct}
           unit="%"
           tone="info"
           delta={delta(cur?.hitRate != null ? cur.hitRate * 100 : null, prev?.hitRate != null ? prev.hitRate * 100 : null, 1, 'pp')}
-          caveat={<span class="st-caveat">{t('stats.gauge.hitRateCaveat')}</span>}
-          idle={t('common.notAvailable')}
+          caveat={
+            isGpu ? (
+              <span class="st-caveat">{t('stats.gauge.hitRateGpuCaveat')}</span>
+            ) : (
+              <span class="st-caveat">{t('stats.gauge.hitRateCaveat')}</span>
+            )
+          }
+          idle={isGpu ? t('stats.gauge.hitRateGpuNa') : t('common.notAvailable')}
         />
         <Gauge
           label={t('stats.gauge.residency')}
@@ -200,7 +252,7 @@ export function StatsPage() {
           unit="%"
           tone="ok"
           delta={delta(cur?.residency != null ? cur.residency * 100 : null, prev?.residency != null ? prev.residency * 100 : null, 1, 'pp')}
-          idle={t('stats.gauge.residencyNa')}
+          idle={isGpu ? t('stats.gauge.residencyGpuNa') : t('stats.gauge.residencyNa')}
         />
         <Gauge
           label={t('stats.gauge.speed')}
@@ -227,7 +279,7 @@ export function StatsPage() {
             1,
             'pp',
           )}
-          idle={t('stats.gauge.prefetchNa')}
+          idle={isGpu ? t('stats.gauge.prefetchGpuNa') : t('stats.gauge.prefetchNa')}
         />
         <Gauge
           label={t('stats.gauge.paging')}
@@ -238,7 +290,7 @@ export function StatsPage() {
           unit={t('stats.gauge.pagingUnit')}
           tone="error"
           delta={delta(cur?.faults ?? null, prev?.faults ?? null, 1, '')}
-          idle={t('stats.gauge.noGeneration')}
+          idle={idle ? t('stats.gauge.noGeneration') : t('stats.gauge.pagingNa')}
         />
       </div>
 
@@ -317,7 +369,13 @@ export function StatsPage() {
               </div>
             </dl>
           ) : (
-            <p class="st-paging__none">{idle ? t('stats.paging.idle') : t('stats.paging.unavailable')}</p>
+            <p class="st-paging__none">
+              {idle
+                ? t('stats.paging.idle')
+                : isGpu
+                  ? t('stats.paging.unavailableGpu')
+                  : t('stats.paging.unavailable')}
+            </p>
           )}
           {paging?.note ? <p class="st-paging__note">{paging.note}</p> : null}
         </Card>

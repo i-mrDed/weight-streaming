@@ -10,22 +10,35 @@
     "body": "Statistics appear after the first run — buffer, speed and paging counters start at zero.",
     "goChat": "Start a chat"
   },
+  "note": {
+    "gpuTitle": "GPU backend (llama-server)",
+    "gpuBody": "llama.cpp manages the weights inside its own process (GPU offload + its own mmap), so shard-buffer, prefetch-accuracy and RAM page-cache telemetry don't apply here. Generation speed, tokens, and (on Windows) paging demand below are real measurements; VRAM usage is reported live by llama-server.",
+    "gpuVram": "VRAM {{used}} / {{total}} MB · {{layers}} layers offloaded",
+    "gpuVramNoLayers": "VRAM {{used}} / {{total}} MB",
+    "gpuLayers": "{{layers}} layers offloaded"
+  },
   "gauge": {
     "hitRate": "Buffer hit rate",
     "hitRateTip": "Shard reads served from the streaming buffer vs total accesses.",
+    "hitRateGpuTip": "llama-server manages weights inside its own process — there is no shard-level buffer to measure.",
     "hitRateCaveat": "Real value — always 0% in practice: llama.cpp reads its own mmap, so the tracker never sees those reads (ADR-003). Use Paging Demand as the main signal.",
+    "hitRateGpuCaveat": "GPU backend: weights live inside llama-server (GPU offload), so there is no shard buffer to track. The VRAM note above is the real residency signal.",
+    "hitRateGpuNa": "n/a · GPU backend",
     "residency": "RAM residency",
     "residencyTip": "Share of the model file held in the OS page cache.",
     "residencyNa": "n/a · non-Windows",
+    "residencyGpuNa": "n/a · GPU backend",
     "speed": "Generation speed",
     "speedTip": "Tokens per second of the most recent generation on this model.",
     "prefetch": "Prefetch accuracy",
     "prefetchTip": "Useful prefetches divided by all prefetches. n/a when no prefetch activity was measured.",
     "prefetchNa": "n/a · no prefetch",
+    "prefetchGpuNa": "n/a · GPU backend",
     "paging": "Paging demand",
     "pagingTip": "Process-wide page faults per token during the last generation (dominated by the model mmap).",
     "pagingUnit": "faults/tok",
-    "noGeneration": "No generation yet"
+    "noGeneration": "No generation yet",
+    "pagingNa": "n/a · not measured by this backend"
   },
   "chart": {
     "tokTitle": "Generation speed",
@@ -49,7 +62,8 @@
     "srcFaults": "POSIX major faults",
     "srcResidency": "Windows residency estimate",
     "idle": "No generation yet — paging counters start after the first run.",
-    "unavailable": "Not measured on this platform (page cache tracking is Windows-only)."
+    "unavailable": "Not measured on this platform (page cache tracking is Windows-only).",
+    "unavailableGpu": "Not measured — llama-server runs inference in its own process; page-fault sampling is attached on Windows only."
   },
   "heatmap": {
     "title": "MoE expert activity",

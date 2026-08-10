@@ -17,7 +17,8 @@ import {
 } from 'lucide-preact'
 import { route, navigate, type PageId } from '@/core/router'
 import { t } from '@/i18n'
-import { openIssueCount, primaryModel, extraModelCount, health, serverVersion, serverHostPort } from '@/core/store'
+import { primaryModel, extraModelCount, health, serverVersion, serverHostPort } from '@/core/store'
+import { openIssueCount } from '@/core/issues'
 
 interface NavDef {
   id: PageId

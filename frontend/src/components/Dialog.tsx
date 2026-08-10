@@ -21,6 +21,12 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]), selec
 export function Dialog({ open, onClose, title, size = 'md', children, footer, hideClose }: Props) {
   const panelRef = useRef<HTMLDivElement>(null)
   const restoreRef = useRef<Element | null>(null)
+  // Keep the latest onClose in a ref so the focus-trap effect only runs when
+  // `open` changes. Inline arrows (e.g. `() => (x.value = …)`) are recreated on
+  // every parent render — depending on them directly would re-run the trap and
+  // steal focus back to the first focusable (the X button) after each keystroke.
+  const onCloseRef = useRef(onClose)
+  onCloseRef.current = onClose
 
   useEffect(() => {
     if (!open) return
@@ -32,7 +38,7 @@ export function Dialog({ open, onClose, title, size = 'md', children, footer, hi
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.stopPropagation()
-        onClose()
+        onCloseRef.current()
         return
       }
       if (e.key !== 'Tab' || !panel) return
@@ -56,7 +62,7 @@ export function Dialog({ open, onClose, title, size = 'md', children, footer, hi
       document.body.style.overflow = prevOverflow
       ;(restoreRef.current as HTMLElement | null)?.focus?.()
     }
-  }, [open, onClose])
+  }, [open])
 
   if (!open) return null
 

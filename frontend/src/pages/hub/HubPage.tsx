@@ -29,22 +29,36 @@ import {
   Heart,
   Inbox,
   Info,
+  Play,
   RefreshCw,
   Search,
+  Trash2,
   WifiOff,
   XCircle,
 } from 'lucide-preact'
-import { ApiError, apiJSON, type ModelStatus } from '@/core/api'
-import { models } from '@/core/store'
+import { ApiError } from '@/core/api'
 import {
-  HUB_TERMINAL,
+  activeDownloads,
+  cancelDownload,
+  clearFinished,
+  deleteDownload,
+  downloads,
+  downloadOrder,
+  downloadsLiveCount,
+  loadFromDownload,
+  loadingNow,
+  loadTarget,
+  openLoadNow,
+  progressLine,
+  refreshDownloads,
+  resumeDownload,
+  revealDownload,
+  startDownload,
+} from '@/core/downloads'
+import {
   fmtBytes,
-  fmtEta,
-  fmtSpeed,
   hfRepoUrl,
-  hubCancel,
-  hubDownload,
-  hubDownloads,
+  HUB_TERMINAL,
   hubModel,
   hubSearch,
   hubSearchPage,
@@ -52,14 +66,17 @@ import {
   modelFeatures,
   repoAuthor,
   repoName,
-  subscribeHubProgress,
   type HubDetailFile,
   type HubModelDetail,
   type HubSearchResult,
   type HubSort,
   type HubTask,
 } from '@/core/hub'
-import { browseDir, loadModel, suggestModelId } from '@/core/models'
+import { browseDir, suggestModelId } from '@/core/models'
+import { assistants, refreshAssistants } from '@/core/assistants'
+// conversations are client-side (localStorage ws-chat-index-v1) — the delete
+// dialogs count their references to a model file straight from the signal
+import { convIndex } from '@/pages/chat/store'
 import { fetchConfig, type ServerConfigResponse } from '@/core/config'
 import { hubFocusQuery } from '@/core/nav-hints'
 import { Badge } from '@/components/Badge'
@@ -70,7 +87,7 @@ import { Drawer } from '@/components/Drawer'
 import { EmptyState } from '@/components/EmptyState'
 import { Tip } from '@/components/Tip'
 import { Segmented } from '@/components/Segmented'
-import { armDismiss, toast, updateToast } from '@/components/Toast'
+import { toast } from '@/components/Toast'
 import { fmtNumber, fmtRelative, locale, t } from '@/i18n'
 import { ModelDetailDrawer, detailErrorMessage } from './ModelDetailDrawer'
 import { FilesDrawer } from './FilesDrawer'
@@ -122,6 +139,13 @@ export function HubPage() {
   const detailError = useSignal<DetailError | null>(null)
 
   const downloadsOpen = useSignal(false) // downloads-panel drawer
+  // confirm dialog for deleting a COMPLETED download (keep file vs delete too)
+  const deleteTarget = useSignal<HubTask | null>(null)
+  const deletingNow = useSignal(false)
+  // confirm dialog for clearing ALL finished downloads (keep files vs delete too)
+  const clearOpen = useSignal(false)
+  const clearingNow = useSignal(false)
+  const clearDeleteFiles = useSignal(false)
 
   // Latest GGUF feed (P5.2): a cursor-paginated "recent" browse shown on the
   // idle Hub (before any search) so users discover new models directly.
@@ -132,15 +156,7 @@ export function HubPage() {
   const latestLoading = useSignal(false)
   const latestError = useSignal<SearchError | null>(null)
 
-  const tasks = useSignal<Record<string, HubTask>>({})
-  const taskOrder = useSignal<string[]>([])
-  const loadTarget = useSignal<HubTask | null>(null) // "load now?" dialog
-  const loadingNow = useSignal(false)
-
   const seqRef = useRef(0) // debounce race guard: latest search wins
-  const subsRef = useRef<Map<string, () => void>>(new Map())
-  const toastIds = useRef<Map<string, number>>(new Map())
-  const fallbackTimers = useRef<Map<string, number>>(new Map())
 
   const loadLatest = async (page: number): Promise<void> => {
     if (latestPages.value[page]) {
@@ -213,8 +229,9 @@ export function HubPage() {
     void fetchConfig()
       .then((c) => (cfg.value = c))
       .catch(() => undefined)
-    // existing downloads survive page navigation (tasks live on the server)
-    void refreshTasks()
+    // existing downloads survive page navigation (tasks live on the server;
+    // the shared store keeps their SSE/progress alive across pages)
+    void refreshDownloads()
     // a Models-page "find in Hub" shortcut may carry a search term (once)
     const focus = hubFocusQuery.value
     if (focus) {
@@ -223,165 +240,46 @@ export function HubPage() {
     } else {
       void loadLatest(0) // idle browse: surface the newest GGUF models
     }
-    return () => {
-      subsRef.current.forEach((stop) => stop())
-      subsRef.current.clear()
-      fallbackTimers.current.forEach((id) => window.clearInterval(id))
-      fallbackTimers.current.clear()
-    }
   }, [])
 
-  const refreshTasks = async () => {
-    try {
-      const res = await hubDownloads()
-      applyTasks(res.downloads)
-      // re-attach the live feed to anything still running (e.g. a download
-      // started before a page navigation — tasks outlive the page component)
-      for (const task of res.downloads) {
-        if (!HUB_TERMINAL.includes(task.status)) watch(task.id)
-      }
-    } catch {
-      /* the panel shows the last known state; the health dot tells the story */
-    }
-  }
+  const activeTasks = activeDownloads.value
+  const liveCount = downloadsLiveCount.value
+  // finished rows (done/failed/cancelled) — candidates for "clear finished"
+  const finishedTasks = activeTasks.filter((t) => HUB_TERMINAL.includes(t.status))
+  // only DONE tasks own a model file — the checkbox is meaningful for those
+  const doneCount = activeTasks.filter((t) => t.status === 'done').length
 
-  const applyTasks = (list: HubTask[]) => {
-    const next: Record<string, HubTask> = {}
-    for (const task of list) next[task.id] = task
-    tasks.value = next
-    taskOrder.value = list.map((tk) => tk.id).reverse() // newest first
-  }
-
-  const setTask = (task: HubTask) => {
-    const prev = tasks.value[task.id]
-    tasks.value = { ...tasks.value, [task.id]: task }
-    if (!taskOrder.value.includes(task.id)) taskOrder.value = [task.id, ...taskOrder.value]
-    renderTaskToast(task, prev)
-    if (HUB_TERMINAL.includes(task.status)) {
-      stopWatching(task.id)
-      void refreshTasks() // settle the panel list (server is source of truth)
-    }
-  }
-
-  /* One live toast per download: created sticky at start, updated with REAL
-     numbers from each SSE frame, resolved to success/error at the end. */
-  const renderTaskToast = (task: HubTask, prev?: HubTask) => {
-    let id = toastIds.current.get(task.id)
-    if (prev && prev.status === task.status && prev.bytes_downloaded === task.bytes_downloaded) return
-    if (task.status === 'downloading' || task.status === 'queued') {
-      if (id == null) {
-        id = toast('info', t('hub.dlStarted'), {
-          body: t('hub.dlStartedBody', { filename: task.filename, dir: task.target_dir }),
-          sticky: true,
-        })
-        toastIds.current.set(task.id, id)
-      } else {
-        updateToast(id, { body: progressLine(task) })
-      }
-      return
-    }
-    if (id == null) return // terminal event for a task we did not start here
-    if (task.status === 'done') {
-      updateToast(id, {
-        kind: 'success',
-        title: t('hub.dlDone'),
-        body: t('hub.dlDoneBody', { filename: task.filename }),
-        actionLabel: t('hub.loadNow'),
-        onAction: () => (loadTarget.value = task),
-      })
-      armDismiss(id, 8000)
-    } else if (task.status === 'failed') {
-      updateToast(id, {
-        kind: 'error',
-        title: t('hub.dlFailed'),
-        body: task.error ?? undefined, // real server error, no dressing up
-      })
-    } else if (task.status === 'cancelled') {
-      updateToast(id, { kind: 'info', title: t('hub.dlCancelledToast'), body: task.filename })
-      armDismiss(id)
-    }
-    toastIds.current.delete(task.id)
-  }
-
-  const progressLine = (task: HubTask): string => {
-    const parts: string[] = []
-    parts.push(
-      task.percent != null
-        ? `${fmtNumber(task.percent, { maximumFractionDigits: 1 })}%`
-        : '–%',
-    )
-    parts.push(
-      task.total_bytes != null
-        ? t('hub.dlBytes', { done: fmtBytes(task.bytes_downloaded), total: fmtBytes(task.total_bytes) })
-        : t('hub.dlUnknownTotal', { done: fmtBytes(task.bytes_downloaded) }),
-    )
-    const speed = fmtSpeed(task.speed_bps)
-    if (speed) parts.push(t('hub.dlSpeed', { speed }))
-    const eta = fmtEta(task.eta_s)
-    if (eta) parts.push(t('hub.dlEta', { eta }))
-    return parts.join(' · ')
-  }
-
-  const watch = (taskId: string) => {
-    if (subsRef.current.has(taskId)) return
-    const stop = subscribeHubProgress(
-      taskId,
-      (frame) => setTask(frame),
-      () => startFallbackPoll(taskId), // SSE dropped mid-flight → poll until terminal
-    )
-    subsRef.current.set(taskId, stop)
-  }
-
-  const startFallbackPoll = (taskId: string) => {
-    if (fallbackTimers.current.has(taskId)) return
-    const timer = window.setInterval(async () => {
-      if (document.hidden) return // visibility-aware like the SSE path
-      try {
-        const res = await hubDownloads()
-        const task = res.downloads.find((tk) => tk.id === taskId)
-        if (task) setTask(task)
-        if (!task || HUB_TERMINAL.includes(task.status)) {
-          const t0 = fallbackTimers.current.get(taskId)
-          if (t0) window.clearInterval(t0)
-          fallbackTimers.current.delete(taskId)
-        }
-      } catch {
-        /* keep polling — the health dot shows the outage */
-      }
-    }, 2000)
-    fallbackTimers.current.set(taskId, timer)
-  }
-
-  const stopWatching = (taskId: string) => {
-    subsRef.current.get(taskId)?.()
-    subsRef.current.delete(taskId)
-    const timer = fallbackTimers.current.get(taskId)
-    if (timer) window.clearInterval(timer)
-    fallbackTimers.current.delete(taskId)
-  }
-
-  const startDownload = async (repoId: string, filename: string) => {
-    try {
-      const task = await hubDownload(repoId, filename, targetDir.value || undefined)
-      setTask(task)
-      watch(task.id)
-    } catch (e) {
-      toast('error', t('hub.dlFailed'), {
-        body: e instanceof ApiError && e.detail ? e.detail : String(e),
-      })
-    }
-  }
+  // Cross-feature model references for the delete/clear confirm dialogs.
+  // Conversations live client-side (convIndex signal) and assistants in the
+  // shared store — both matched by suggestModelId(filename), the same id the
+  // app uses when loading a downloaded model and creating conversations
+  // against it. WARN, never block: deleting the file just means those
+  // references cannot load the model until it is downloaded again.
+  const delModelId = deleteTarget.value ? suggestModelId(deleteTarget.value.filename) : null
+  const delConvRefs = delModelId ? convIndex.value.filter((c) => c.model === delModelId).length : 0
+  const delAssistantCount = delModelId
+    ? assistants.value.filter((a) => a.model_id === delModelId).length
+    : 0
+  const delRefsTotal = delConvRefs + delAssistantCount
+  // done tasks whose suggested model id appears in a conversation or assistant
+  const clearRefCount = clearDeleteFiles.value
+    ? finishedTasks.filter((tk) => tk.status === 'done').filter((tk) => {
+        const mid = suggestModelId(tk.filename)
+        return (
+          convIndex.value.some((c) => c.model === mid) ||
+          assistants.value.some((a) => a.model_id === mid)
+        )
+      }).length
+    : 0
 
   // Queue every shard of a quant one after another through the same
   // download+SSE flow (the server has no batch endpoint — honest and simple).
   const downloadGroup = async (repoId: string, files: HubDetailFile[]) => {
     for (const f of files) {
       // eslint-disable-next-line no-await-in-loop
-      await startDownload(repoId, f.filename)
+      await startDownload(repoId, f.filename, targetDir.value || undefined)
     }
   }
-
-  /* ── On-demand model detail (lazy, cached) ─────────────────────── */
 
   const ensureDetail = async (repoId: string) => {
     if (detailCache.value[repoId]) return
@@ -408,41 +306,24 @@ export function HubPage() {
     void ensureDetail(repoId)
   }
 
-  const doCancel = async (taskId: string) => {
+  const confirmDelete = async (task: HubTask, deleteFile: boolean) => {
+    deletingNow.value = true
     try {
-      const task = await hubCancel(taskId)
-      setTask(task)
-    } catch (e) {
-      toast('error', t('common.notAvailable'), {
-        body: e instanceof ApiError && e.detail ? e.detail : String(e),
-      })
+      await deleteDownload(task.id, deleteFile)
+      if (deleteTarget.value?.id === task.id) deleteTarget.value = null
+    } finally {
+      deletingNow.value = false
     }
   }
 
-  const doLoad = async () => {
-    const task = loadTarget.value
-    if (!task) return
-    loadingNow.value = true
-    const c = cfg.value
-    const buf = numVal(c?.config.default_buffer_mb?.value, 64)
-    const ctx = numVal(c?.config.default_n_ctx?.value, 2048)
+  const confirmClear = async () => {
+    clearingNow.value = true
     try {
-      await loadModel({
-        model_id: suggestModelId(task.filename),
-        model_path: task.target_path,
-        buffer_mb: buf,
-        n_ctx: ctx,
-      })
-      // refresh the shell's model chip honestly
-      models.value = await apiJSON<ModelStatus[]>('/v1/models', undefined, { timeoutMs: 5000 })
-      toast('success', t('hub.loadStarted', { id: suggestModelId(task.filename) }))
-      loadTarget.value = null
-    } catch (e) {
-      toast('error', t('hub.loadFailed'), {
-        body: e instanceof ApiError && e.detail ? e.detail : String(e),
-      })
+      await clearFinished(clearDeleteFiles.value)
+      clearOpen.value = false
+      clearDeleteFiles.value = false // reset for the next time
     } finally {
-      loadingNow.value = false
+      clearingNow.value = false
     }
   }
 
@@ -459,10 +340,6 @@ export function HubPage() {
   }
 
   const offline = searchError.value?.status === 502 || searchError.value?.status === 503
-  const activeTasks = taskOrder.value
-    .map((id) => tasks.value[id])
-    .filter((tk): tk is HubTask => !!tk)
-  const liveCount = activeTasks.filter((tk) => !HUB_TERMINAL.includes(tk.status)).length
 
   // detail-drawer view state
   const dRepo = detailRepo.value
@@ -476,7 +353,7 @@ export function HubPage() {
         <h1 class="page__title">
           <span aria-hidden="true">🌐</span> {t('nav.hub')}
         </h1>
-        <Button variant="ghost" onClick={() => { downloadsOpen.value = true; void refreshTasks() }}>
+        <Button variant="ghost" onClick={() => { downloadsOpen.value = true; void refreshDownloads() }}>
           <Inbox size={15} aria-hidden="true" /> {t('hub.dlTitle')}
           {liveCount > 0 ? <span class="nav-badge">{liveCount}</span> : null}
         </Button>
@@ -681,17 +558,35 @@ export function HubPage() {
         targetDir={targetDir.value}
         onTargetDir={(v) => (targetDir.value = v)}
         onBrowse={() => void onBrowseTarget()}
-        onDownloadFile={(repo, file) => void startDownload(repo, file)}
+        onDownloadFile={(repo, file) => void startDownload(repo, file, targetDir.value || undefined)}
         onDownloadGroup={(repo, files) => void downloadGroup(repo, files)}
       />
 
       {/* ── Downloads panel drawer (trigger = page header RIGHT → right sheet) ── */}
       <Drawer open={downloadsOpen.value} onClose={() => (downloadsOpen.value = false)} title={t('hub.dlTitle')} side="right">
+        {finishedTasks.length > 0 ? (
+          <div class="hub-dl__toolbar">
+            <Button
+              variant="soft"
+              size="sm"
+              onClick={() => {
+                clearDeleteFiles.value = false
+                clearOpen.value = true
+                void refreshAssistants() // fresh reference counts for the warning
+              }}
+            >
+              <Trash2 size={13} aria-hidden="true" /> {t('hub.dlClearAll', { count: finishedTasks.length })}
+            </Button>
+          </div>
+        ) : null}
         {activeTasks.length === 0 ? (
           <EmptyState emoji="📥" title={t('hub.dlEmpty')} />
         ) : (
           <ul class="hub-dllist">
-            {activeTasks.map((task) => (
+            {activeTasks.map((tk) => {
+              // live task from the shared store (SSE keeps it fresh)
+              const task = downloads.value[tk.id] ?? tk
+              return (
               <li key={task.id} class="hub-dl">
                 <div class="hub-dl__head">
                   <span class="hub-dl__name" title={`${task.repo_id}/${task.filename}`}>
@@ -699,8 +594,13 @@ export function HubPage() {
                   </span>
                   <Badge tone={statusTone(task.status)}>{t(`hub.dlStatus_${task.status}`)}</Badge>
                 </div>
+                {/* full path on disk + REAL file size for a completed download
+                    (server stat's it at serialization time — ADR-003 honest) */}
                 <div class="hub-dl__path dialog-text--dim" title={task.target_path}>
-                  → {task.target_dir}
+                  <span aria-hidden="true">📁</span> {task.target_path}
+                  {task.status === 'done' && task.file_size != null ? (
+                    <span class="hub-dl__size tnum"> · {fmtBytes(task.file_size)}</span>
+                  ) : null}
                 </div>
                 {task.status === 'downloading' || task.status === 'queued' ? (
                   <>
@@ -720,32 +620,51 @@ export function HubPage() {
                 {task.status === 'failed' && task.error ? <p class="hub-dl__error">{task.error}</p> : null}
                 <div class="hub-dl__actions">
                   {task.status === 'downloading' || task.status === 'queued' ? (
-                    <Button variant="danger" size="sm" onClick={() => void doCancel(task.id)}>
+                    <Button variant="danger" size="sm" onClick={() => void cancelDownload(task.id)}>
                       <XCircle size={13} aria-hidden="true" /> {t('hub.dlCancel')}
                     </Button>
                   ) : null}
                   {task.status === 'done' ? (
-                    <Button variant="primary" size="sm" onClick={() => (loadTarget.value = task)}>
-                      <HardDriveDownload size={13} aria-hidden="true" /> {t('hub.loadNow')}
-                    </Button>
-                  ) : null}
-                  {task.status === 'failed' || task.status === 'cancelled' ? (
                     <>
-                      <Button variant="soft" size="sm" onClick={() => void startDownload(task.repo_id, task.filename)}>
-                        <RefreshCw size={13} aria-hidden="true" /> {t('hub.dlRetry')}
+                      <Button variant="ghost" size="sm" onClick={() => void revealDownload(task.id)}>
+                        <FolderOpen size={13} aria-hidden="true" /> {t('hub.dlOpenFolder')}
                       </Button>
-                      <span class="hub-dl__retrynote">
-                        <Tip label={t('hub.dlRetryNote')} />
-                      </span>
+                      <Button variant="primary" size="sm" onClick={() => openLoadNow(task)}>
+                        <HardDriveDownload size={13} aria-hidden="true" /> {t('hub.loadNow')}
+                      </Button>
                     </>
                   ) : null}
+                  {task.status === 'failed' || task.status === 'cancelled' ? (
+                    // v1.1: resume appends the kept .part (Range) — cheap vs
+                    // the old retry that re-downloaded from byte 0.
+                    <Button variant="soft" size="sm" onClick={() => void resumeDownload(task.id)}>
+                      <Play size={13} aria-hidden="true" /> {t('hub.dlResume')}
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="hub-dl__delete"
+                    aria-label={t('hub.dlDelete')}
+                    title={t('hub.dlDeleteTitle')}
+                    onClick={() => {
+                      // a completed download may own a model file — ask first
+                      if (task.status === 'done') {
+                        deleteTarget.value = task
+                        void refreshAssistants() // fresh reference counts for the warning
+                      } else void deleteDownload(task.id)
+                    }}
+                  >
+                    <Trash2 size={13} aria-hidden="true" />
+                  </Button>
                 </div>
               </li>
-            ))}
+              )
+            })}
           </ul>
         )}
         <p class="set-note">
-          <Tip label={t('hub.resumeNa')} /> {t('hub.resumeNa')} · {t('hub.deleteNa')}
+          <Tip label={t('hub.dlNote')} /> {t('hub.dlNote')}
         </p>
       </Drawer>
 
@@ -760,7 +679,7 @@ export function HubPage() {
             <Button variant="ghost" disabled={loadingNow.value} onClick={() => (loadTarget.value = null)}>
               {t('common.cancel')}
             </Button>
-            <Button variant="primary" loading={loadingNow.value} onClick={() => void doLoad()}>
+            <Button variant="primary" loading={loadingNow.value} onClick={() => void loadFromDownload()}>
               <HardDriveDownload size={14} aria-hidden="true" /> {t('hub.loadNowGo')}
             </Button>
           </>
@@ -770,6 +689,82 @@ export function HubPage() {
           <FileBox size={15} aria-hidden="true" /> {t('hub.loadNowBody', { filename: loadTarget.value?.filename ?? '' })}
         </p>
         <p class="dialog-text dialog-text--dim">{t('hub.loadNowNote')}</p>
+      </Dialog>
+
+      {/* ── Delete confirm (done task: keep file vs delete file too) ── */}
+      <Dialog
+        open={deleteTarget.value !== null}
+        onClose={() => (deletingNow.value ? undefined : (deleteTarget.value = null))}
+        title={t('hub.dlDeleteDoneTitle')}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" disabled={deletingNow.value} onClick={() => (deleteTarget.value = null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="soft" disabled={deletingNow.value} onClick={() => { const tk = deleteTarget.value; if (tk) void confirmDelete(tk, false) }}>
+              {t('hub.dlDeleteKeepFile')}
+            </Button>
+            <Button variant="danger" disabled={deletingNow.value} onClick={() => { const tk = deleteTarget.value; if (tk) void confirmDelete(tk, true) }}>
+              <Trash2 size={14} aria-hidden="true" /> {t('hub.dlDeleteFileToo')}
+            </Button>
+          </>
+        }
+      >
+        <p class="dialog-text">
+          <FileBox size={15} aria-hidden="true" />{' '}
+          {t('hub.dlDeleteDoneBody', {
+            filename: deleteTarget.value?.filename ?? '',
+            size: fmtBytes(deleteTarget.value?.total_bytes ?? null),
+          })}
+        </p>
+        <p class="dialog-text dialog-text--dim">{t('hub.dlDeleteWarn')}</p>
+        {delRefsTotal > 0 ? (
+          <p class="dialog-text dialog-text--warn">
+            ⚠ {t('hub.dlDeleteRefs', { convs: delConvRefs, assistants: delAssistantCount })}
+          </p>
+        ) : null}
+      </Dialog>
+
+      {/* ── Clear-finished confirm (all terminal rows at once) ── */}
+      <Dialog
+        open={clearOpen.value}
+        onClose={() => (clearingNow.value ? undefined : (clearOpen.value = false))}
+        title={t('hub.dlClearAllTitle')}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" disabled={clearingNow.value} onClick={() => (clearOpen.value = false)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="danger" loading={clearingNow.value} onClick={() => void confirmClear()}>
+              <Trash2 size={14} aria-hidden="true" /> {t('hub.dlClearAllGo', { count: finishedTasks.length })}
+            </Button>
+          </>
+        }
+      >
+        <p class="dialog-text">
+          <FileBox size={15} aria-hidden="true" />{' '}
+          {t('hub.dlClearAllBody', { count: finishedTasks.length })}
+        </p>
+        {doneCount > 0 ? (
+          <label class="hub-clear-opt">
+            <input
+              type="checkbox"
+              checked={clearDeleteFiles.value}
+              onChange={(e) => (clearDeleteFiles.value = (e.target as HTMLInputElement).checked)}
+            />
+            <span>{t('hub.dlClearFilesToo', { count: doneCount })}</span>
+          </label>
+        ) : null}
+        <p class="dialog-text dialog-text--dim">
+          {doneCount > 0 ? t('hub.dlClearWarn') : t('hub.dlClearNoFiles')}
+        </p>
+        {clearRefCount > 0 ? (
+          <p class="dialog-text dialog-text--warn">
+            ⚠ {t('hub.dlClearRefs', { count: clearRefCount })}
+          </p>
+        ) : null}
       </Dialog>
 
     </div>
@@ -874,7 +869,3 @@ function statusTone(status: HubTask['status']): 'neutral' | 'info' | 'ok' | 'err
   return 'neutral'
 }
 
-function numVal(v: unknown, fallback: number): number {
-  const n = typeof v === 'number' ? v : Number(v)
-  return Number.isFinite(n) && n > 0 ? n : fallback
-}

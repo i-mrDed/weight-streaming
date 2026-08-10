@@ -147,34 +147,22 @@
   text-align: center;
 }
 .icon-btn { position: relative; }
-/* Thinking budget select (P7.1c) — compact, matches icon-btn height */
-.thinking-budget {
-  height: 28px;
-  padding: 0 6px;
-  border-radius: var(--ws-radius-sm);
-  border: 1px solid var(--ws-border-subtle);
-  background: var(--ws-surface-inset);
-  color: var(--ws-text-secondary);
-  font-size: 11px;
+/* Chat toolbar budget/assistant selectors — custom Menus, NOT native
+   <select>. Contrast fix (user feedback): Chrome on Windows draws its own
+   OS popup for a <select> that ignores option colours, so the dropdown text
+   blended into the background no matter what CSS we set. The Menu panel uses
+   --ws-surface-raised + --ws-text-primary/secondary — high contrast in every
+   theme, fully CSS-controlled. These trigger styles mirror the model/agent
+   text triggers; .chat__toolbar .menu__trigger already gets width:auto. */
+.chat__budget-trigger,
+.chat__assistant-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--ws-text-xs);
   font-weight: 600;
-  cursor: pointer;
-  max-width: 84px;
+  white-space: nowrap;
 }
-.thinking-budget:hover { border-color: var(--ws-accent-brand); color: var(--ws-text-primary); }
-/* Assistant selector (P7.2) — compact, matches icon-btn height */
-.assistant-select {
-  height: 28px;
-  padding: 0 6px;
-  border-radius: var(--ws-radius-sm);
-  border: 1px solid var(--ws-border-subtle);
-  background: var(--ws-surface-inset);
-  color: var(--ws-text-secondary);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-  max-width: 110px;
-}
-.assistant-select:hover { border-color: var(--ws-accent-primary); color: var(--ws-text-primary); }
 /* MCP settings list (P7.4) */
 .mcp-list { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
 .mcp-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 12px; border: 1px solid var(--ws-border-subtle); border-radius: var(--ws-radius-sm); background: var(--ws-surface-inset); }
@@ -183,7 +171,7 @@
 .mcp-item__cmd { font-size: 11px; color: var(--ws-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 /* Assistants grid (P7.2) */
 .assistants-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-.assistant-card { display: flex; flex-direction: column; gap: 10px; }
+.assistant-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
 .assistant-card__head { display: flex; align-items: center; gap: 10px; }
 .assistant-card__icon { font-size: 24px; }
 .assistant-card__name { font-size: 15px; font-weight: 700; margin: 0; }
@@ -508,7 +496,9 @@
   text-align: left;
   transition: background-color var(--ws-dur-fast);
 }
-.menu__item:hover { background: var(--ws-nav-item-hover); color: var(--ws-text-primary); }
+.menu__item:hover,
+.menu__item:focus-visible { background: var(--ws-nav-item-hover); color: var(--ws-text-primary); }
+.menu__item:focus-visible { outline: 2px solid var(--ws-border-focus); outline-offset: -2px; }
 .menu__item.is-active { color: var(--ws-text-primary); }
 .menu__item-icon { display: grid; place-items: center; width: 18px; }
 .menu__item-label { flex: 1; }

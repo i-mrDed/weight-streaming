@@ -6,8 +6,10 @@
   "close": "ปิด",
   "confirm": "ยืนยัน",
   "save": "บันทึก",
+  "edit": "แก้ไข",
   "copy": "คัดลอก",
   "copied": "คัดลอกแล้ว ✓",
+  "delete": "ลบ",
   "search": "ค้นหา",
   "notAvailable": "n/a",
   "comingSoon": "เร็วๆ นี้",
@@ -51,6 +53,7 @@
     "themeMenu": "เมนูธีม",
     "languageMenu": "เมนูภาษา",
     "userMenu": "โปรไฟล์",
+    "moreInfo": "ข้อมูลเพิ่มเติม",
     "closeDialog": "ปิดกล่องโต้ตอบ",
     "generating": "ผู้ช่วยกำลังตอบ",
     "generationDone": "การตอบกลับเสร็จสิ้น"

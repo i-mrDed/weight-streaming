@@ -6,6 +6,7 @@
    Endpoints are all pre-existing (P3 adds NO backend): POST/GET/GET export/
    GET {id}/PATCH {id}/POST {id}/verify. Debug context from /v1/debug/context
    (app_version here is the TRUTH — 0.13.0 — unlike /health's 0.11.0). */
+import { signal, computed } from '@preact/signals'
 import { apiJSON, ApiError } from './api'
 
 export type IssueStatus =
@@ -211,6 +212,23 @@ export function maintainerActions(status: IssueStatus): MaintainerAction[] {
     case 'closed':
       return []
   }
+}
+
+/* ── Shared list store (assistants.ts pattern) ─────────────────────
+   IssuesPage, the Sidebar badge and Overview read the SAME signal, so a
+   status change on the Issues page is reflected in the badge instantly
+   (the old design polled a separate count every 30s → stale badge). The
+   full list lives here; consumers filter client-side for display. */
+export const issues = signal<Issue[]>([])
+
+export const openIssueCount = computed(
+  () => issues.value.filter((i) => i.status === 'open').length,
+)
+
+/** Refetch the full issue list into the shared signal. Rejects on failure —
+    callers choose their error UX (page: toast/inline; poller: swallow). */
+export async function refreshIssues(): Promise<void> {
+  issues.value = await listIssues()
 }
 
 /* ── API helpers ─────────────────────────────────────────────────── */
