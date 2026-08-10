@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WASTE vs Speculative Weight Streaming — เปรียบเทียบเชิงลึก</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Fira+Code:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0e1a;--bg2:#111827;--card:#1a1f35;--card2:#222845;
+  --border:#2a3050;--border2:#3a4570;
+  --text:#e2e8f0;--text2:#94a3b8;--text3:#64748b;
+  --accent:#6366f1;--accent2:#818cf8;--accent3:#a5b4fc;
+  --green:#10b981;--green2:#34d399;
+  --blue:#3b82f6;--blue2:#60a5fa;
+  --purple:#a855f7;--purple2:#c084fc;
+  --orange:#f59e0b;--orange2:#fbbf24;
+  --red:#ef4444;--pink:#ec4899;
+  --cyan:#06b6d4;--teal:#14b8a6;
+  --gradient:linear-gradient(135deg,#6366f1,#a855f7,#ec4899);
+  --gradient2:linear-gradient(135deg,#06b6d4,#3b82f6,#6366f1);
+  --gradient3:linear-gradient(135deg,#10b981,#06b6d4);
+  --shadow:0 4px 30px rgba(0,0,0,.4);
+  --radius:16px;--radius-sm:10px;
+}
+html{scroll-behavior:smooth}
+body{font-family:'Inter','Noto Sans Thai',sans-serif;background:var(--bg);color:var(--text);line-height:1.7;overflow-x:hidden}
+a{color:var(--accent2);text-decoration:none;transition:.2s}
+a:hover{color:var(--accent3)}
+code{font-family:'Fira Code',monospace;font-size:.9em;background:rgba(99,102,241,.15);padding:.1em .4em;border-radius:5px;color:var(--accent3)}
+#bg-canvas{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none}
+
+/* NAV */
+.nav{position:fixed;top:0;left:0;right:0;z-index:100;background:rgba(10,14,26,.85);backdrop-filter:blur(20px);border-bottom:1px solid var(--border);padding:0 2rem;height:64px;display:flex;align-items:center;justify-content:space-between}
+.nav-brand{display:flex;align-items:center;gap:.6rem;font-weight:700;font-size:1.05rem}
+.nav-brand .icon{font-size:1.5rem}
+.nav-links{display:flex;gap:.25rem;list-style:none}
+.nav-links a{padding:.5rem .85rem;border-radius:var(--radius-sm);color:var(--text2);font-size:.85rem;font-weight:500;transition:.2s;white-space:nowrap}
+.nav-links a:hover,.nav-links a.active{color:var(--text);background:rgba(99,102,241,.15)}
+.nav-toggle{display:none;background:none;border:none;color:var(--text);font-size:1.5rem;cursor:pointer}
+
+/* HERO */
+.hero{position:relative;z-index:1;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center;padding:6rem 2rem 4rem}
+.hero-content{max-width:900px}
+.hero-badge{display:inline-block;padding:.4rem 1rem;border-radius:30px;font-size:.8rem;font-weight:600;margin-bottom:1.5rem;background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.3);color:var(--orange2)}
+.hero h1{font-size:clamp(2rem,5vw,3.6rem);font-weight:800;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;margin-bottom:1rem;line-height:1.2}
+.hero .subtitle{font-size:1.15rem;color:var(--text2);margin-bottom:2rem;max-width:680px;margin-inline:auto}
+.hero .stats{display:flex;gap:1.5rem;justify-content:center;flex-wrap:wrap;margin-top:2rem}
+.hero .stat{text-align:center}
+.hero .stat-num{font-size:1.8rem;font-weight:800;background:var(--gradient2);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.hero .stat-label{font-size:.75rem;color:var(--text3);text-transform:uppercase;letter-spacing:.06em}
+.hero .cta{margin-top:2.5rem;display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.btn{display:inline-block;padding:.8rem 1.6rem;border-radius:12px;font-weight:600;font-size:.92rem;transition:.25s;cursor:pointer}
+.btn-primary{background:var(--gradient);color:#fff}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:var(--shadow)}
+.btn-ghost{border:1px solid var(--border2);color:var(--text2)}
+.btn-ghost:hover{border-color:var(--accent);color:var(--text)}
+
+/* PAGE */
+.page{display:none;position:relative;z-index:1;padding:5rem 2rem 4rem;max-width:1200px;margin:0 auto}
+.page.active{display:block}
+.section-header{text-align:center;margin-bottom:3rem}
+.section-header h2{font-size:2rem;font-weight:800;margin-bottom:.5rem;background:var(--gradient);-webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text}
+.section-header p{color:var(--text2);max-width:680px;margin-inline:auto}
+
+/* CARDS */
+.cards{display:grid;gap:1.25rem}
+.cards-2{grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}
+.cards-3{grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;transition:.3s;position:relative;overflow:hidden}
+.card:hover{border-color:var(--accent);transform:translateY(-3px);box-shadow:var(--shadow)}
+.card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:var(--gradient);opacity:0;transition:.3s}
+.card:hover::before{opacity:1}
+.card-icon{width:56px;height:56px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;margin-bottom:1rem;background:rgba(99,102,241,.12);flex-shrink:0}
+.card-title{font-size:1.1rem;font-weight:700;margin-bottom:.4rem}
+.card-desc{font-size:.9rem;color:var(--text2);line-height:1.6}
+.card-meta{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem}
+.tag{display:inline-block;padding:.2rem .6rem;border-radius:20px;font-size:.72rem;font-weight:600}
+.tag-green{background:rgba(16,185,129,.15);color:var(--green2)}
+.tag-blue{background:rgba(59,130,246,.15);color:var(--blue2)}
+.tag-purple{background:rgba(168,85,247,.15);color:var(--purple2)}
+.tag-orange{background:rgba(245,158,11,.15);color:var(--orange2)}
+.tag-red{background:rgba(239,68,68,.15);color:var(--red)}
+.tag-cyan{background:rgba(6,182,212,.15);color:var(--cyan)}
+
+/* TABLE */
+.table-wrap{overflow-x:auto;margin:1rem 0;border-radius:var(--radius-sm);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;font-size:.85rem}
+th{background:var(--bg2);color:var(--text);font-weight:600;text-align:left;padding:.75rem 1rem;white-space:nowrap}
+td{padding:.65rem 1rem;border-top:1px solid var(--border);color:var(--text2);vertical-align:top}
+tr:hover td{background:rgba(99,102,241,.05)}
+td.best{color:var(--green2);font-weight:700}
+td.warn{color:var(--red);font-weight:600}
+td.ok{color:var(--orange2);font-weight:600}
+td.mine{background:rgba(99,102,241,.08)}
+td.theirs{background:rgba(6,182,212,.08)}
+
+/* VS BAR */
+.vs-tabs{display:flex;gap:1rem;justify-content:center;margin:1.5rem 0}
+.vs-tab{flex:1;max-width:420px;padding:1.25rem;border-radius:var(--radius);border:1px solid var(--border);cursor:pointer;transition:.25s;background:var(--card)}
+.vs-tab:hover{border-color:var(--accent);transform:translateY(-2px)}
+.vs-tab h3{font-size:1.1rem;font-weight:700;margin-bottom:.3rem}
+.vs-tab p{font-size:.85rem;color:var(--text2)}
+.vs-tab .vs-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text3);margin-bottom:.5rem;font-weight:700}
+.vs-tab.waste{border-color:rgba(6,182,212,.4)}
+.vs-tab.mine{border-color:rgba(99,102,241,.4)}
+
+/* ALERT */
+.alert{border-radius:var(--radius-sm);padding:1rem 1.25rem;margin:1rem 0;font-size:.88rem;display:flex;gap:.75rem;align-items:flex-start}
+.alert-warn{background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);color:var(--orange2)}
+.alert-info{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);color:var(--blue2)}
+.alert-danger{background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);color:var(--red)}
+.alert-success{background:rgba(16,185,129,.1);border:1px solid rgba(16,185,129,.3);color:var(--green2)}
+.alert .icon{font-size:1.3rem;flex-shrink:0;margin-top:.1rem}
+
+/* CODE */
+.code-block{background:var(--bg2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:1rem 1.25rem;font-family:'Fira Code',monospace;font-size:.8rem;color:var(--green2);overflow-x:auto;margin:.75rem 0;position:relative;line-height:1.6}
+.code-block .lang{position:absolute;top:.5rem;right:.75rem;font-size:.7rem;color:var(--text3);text-transform:uppercase}
+
+/* STEPS */
+.steps{display:flex;flex-direction:column;gap:1.5rem}
+.step{display:flex;gap:1.25rem;align-items:flex-start}
+.step-num{width:44px;height:44px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1rem;background:var(--gradient);color:#fff}
+.step-content h3{font-size:1rem;font-weight:600;margin-bottom:.3rem}
+.step-content p{font-size:.88rem;color:var(--text2)}
+
+/* COMPARE */
+.compare-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:1.5rem;margin-top:1.5rem}
+.compare-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:1.5rem;text-align:center}
+.compare-card h3{font-size:1.1rem;font-weight:700;margin:.75rem 0 .5rem}
+.compare-card .emoji{font-size:2.5rem}
+.compare-card ul{text-align:left;list-style:none;margin-top:.75rem}
+.compare-card li{padding:.3rem 0;font-size:.85rem;color:var(--text2);display:flex;align-items:center;gap:.5rem}
+.compare-card li.ok::before{content:'✓';color:var(--green);font-weight:700}
+.compare-card li.gap::before{content:'✗';color:var(--red);font-weight:700}
+
+/* FAQ */
+.faq-item{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);margin-bottom:.75rem;padding:1rem 1.25rem}
+.faq-item summary{cursor:pointer;font-weight:600;font-size:.95rem;list-style:none;display:flex;align-items:center;gap:.5rem}
+.faq-item summary::-webkit-details-marker{display:none}
+.faq-item summary::before{content:'▸';transition:.2s;color:var(--accent2)}
+.faq-item[open] summary::before{transform:rotate(90deg)}
+.faq-item .faq-body{margin-top:.75rem;font-size:.88rem;color:var(--text2);padding-left:1.75rem}
+
+/* FOOTER */
+.footer{position:relative;z-index:1;text-align:center;padding:3rem 2rem;border-top:1px solid var(--border);color:var(--text3);font-size:.85rem}
+::-webkit-scrollbar{width:8px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--accent)}
+
+@media(max-width:900px){
+  .nav-links{display:none;position:absolute;top:64px;left:0;right:0;background:rgba(10,14,26,.97);backdrop-filter:blur(20px);flex-direction:column;padding:1rem;gap:.25rem;border-bottom:1px solid var(--border);max-height:80vh;overflow-y:auto}
+  .nav-links.open{display:flex}
+  .nav-toggle{display:block}
+  .hero h1{font-size:1.9rem}
+  .cards-2,.cards-3{grid-template-columns:1fr}
+  .compare-grid{grid-template-columns:1fr}
+  .vs-tabs{flex-direction:column}
+}
+@keyframes fadeUp{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+.fade-up{animation:fadeUp .6s ease forwards}
+.delay-1{animation-delay:.1s;opacity:0}
+.delay-2{animation-delay:.2s;opacity:0}
+.delay-3{animation-delay:.3s;opacity:0}
+.delay-4{animation-delay:.4s;opacity:0}
+</style>
+</head>
+<body>
+
+<canvas id="bg-canvas"></canvas>
+
+<nav class="nav">
+  <div class="nav-brand"><span class="icon">⚖️</span><span>WASTE vs Weight-Streaming</span></div>
+  <button class="nav-toggle" onclick="document.querySelector('.nav-links').classList.toggle('open')">☰</button>
+  <ul class="nav-links">
+    <li><a href="#" data-page="home" class="active">🏠 หน้าแรก</a></li>
+    <li><a href="#" data-page="overview">🌐 ภาพรวม</a></li>
+    <li><a href="#" data-page="compare">⚖️ เปรียบเทียบ</a></li>
+    <li><a href="#" data-page="strengths">✅ จุดแข็งคุณ</a></li>
+    <li><a href="#" data-page="gaps">🔧 ช่องว่าง</a></li>
+    <li><a href="#" data-page="advice">🎯 คำแนะนำ</a></li>
+    <li><a href="#" data-page="plan">🗺️ แผนปฏิบัติ</a></li>
+    <li><a href="#" data-page="faq">❓ FAQ</a></li>
+  </ul>
+</nav>
+
+<!-- ============ HOME ============ -->
+<section class="page active" id="page-home">
+  <div class="hero">
+    <div class="hero-content">
+      <div class="hero-badge fade-up">🔍 Research เชิงลึก · 2026-08-03</div>
+      <h1 class="fade-up">WASTE vs Speculative Weight Streaming</h1>
+      <p class="subtitle fade-up delay-1">เปรียบเทียบเชิงลึกระหว่างเอนจินที่รัน Kimi K3 จริงได้ (WASTE) กับสถาปัตยกรรมของโปรเจคคุณ — เพื่อดูว่า "มาถูกทางไหม" และต้องปรับอะไรให้บรรลุเป้าหมาย</p>
+      <div class="stats fade-up delay-2">
+        <div class="stat"><div class="stat-num">2.78T</div><div class="stat-label">K3 (WASTE)</div></div>
+        <div class="stat"><div class="stat-num">0.62</div><div class="stat-label">tok/s WASTE</div></div>
+        <div class="stat"><div class="stat-num">17.9</div><div class="stat-label">tok/s คุณ</div></div>
+        <div class="stat"><div class="stat-num">2.7B</div><div class="stat-label">โมเดลคุณ</div></div>
+        <div class="stat"><div class="stat-num">4</div><div class="stat-label">channels</div></div>
+      </div>
+      <div class="cta fade-up delay-3">
+        <a href="#" class="btn btn-primary" onclick="goto('overview')">🎯 เริ่มดู</a>
+        <a href="#" class="btn btn-ghost" onclick="goto('advice')">📌 คำแนะนำ</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ OVERVIEW ============ -->
+<section class="page" id="page-overview">
+  <div class="section-header">
+    <h2>🌐 ภาพรวมทั้งสองโปรเจกต์</h2>
+    <p>เป้าหมายเดียวกัน แต่จุดโฟกัสและวุฒิภาวะต่างกัน</p>
+  </div>
+
+  <div class="vs-tabs">
+    <div class="vs-tab waste fade-up">
+      <div class="vs-label">⚡ WASTE (sqliteai)</div>
+      <h3>Weight-Aware Streaming Tensor Engine</h3>
+      <p>มี <strong>36-40 แกน</strong> — เอนจิน C ล้วน, ไม่พึ่ง dependency, รัน <strong>Kimi K3 2.78T จริง</strong> บน 64GB RAM ได้ 0.5–0.62 tok/s</p>
+      <div class="card-meta">
+        <span class="tag tag-cyan">C Engine</span>
+        <span class="tag tag-cyan">Container Custom</span>
+        <span class="tag tag-cyan">VQ3R</span>
+        <span class="tag tag-cyan">Router Lookahead</span>
+      </div>
+    </div>
+    <div class="vs-tab mine fade-up delay-1">
+      <div class="vs-label">🧠 โปรเจคคุณ (Weight-Streaming)</div>
+      <h3>Speculative Weight Streaming</h3>
+      <p>Python + llama-cpp-python, mmap + OS page cache, heuristic predictor — รัน <strong>Qwen 2.7B</strong> ได้ 17.9 tok/s, ยังไม่ถึง K3</p>
+      <div class="card-meta">
+        <span class="tag tag-purple">Python</span>
+        <span class="tag tag-purple">llama.cpp</span>
+        <span class="tag tag-purple">mmap</span>
+        <span class="tag tag-purple">Heuristic</span>
+      </div>
+    </div>
+  </div>
+
+  <h3 style="font-size:1.3rem;font-weight:700;margin:2rem 0 1rem;color:var(--accent2)">🎯 เป้าหมายเดียวกัน</h3>
+  <div class="cards cards-3">
+    <div class="card fade-up">
+      <div class="card-icon" style="background:rgba(6,182,212,.12)">🎯</div>
+      <div class="card-title">WASTE</div>
+      <div class="card-desc">รันโมเดล frontier (Kimi K3) บน consumer hardware โดยสตรีม activated weights จาก NVMe — <strong>พิสูจน์แล้วว่าได้จริง</strong></div>
+    </div>
+    <div class="card fade-up delay-1">
+      <div class="card-icon" style="background:rgba(99,102,241,.12)">🎯</div>
+      <div class="card-title">โปรเจคคุณ</div>
+      <div class="card-desc">รันโมเดล 100B–3T+ บนเครื่อง 32–64GB RAM + NVMe — <strong>แนวคิดถูก แต่ยังไม่พิสูจน์กับโมเดลใหญ่</strong></div>
+    </div>
+    <div class="card fade-up delay-2">
+      <div class="card-icon" style="background:rgba(245,158,11,.12)">🔑</div>
+      <div class="card-title">หลักเดียวกัน</div>
+      <div class="card-desc">ทั้งคู่ใช้หลัก <code>Predict → Prefetch → Stream → Execute</code> และ exploit MoE sparsity (~4% active per token)</div>
+    </div>
+  </div>
+
+  <div class="alert alert-info" style="margin-top:2rem">
+    <span class="icon">💡</span>
+    <div><strong>ข้อสรุปเบื้องต้น:</strong> คุณ <strong>มาถูกทางในแนวคิด</strong> (ตรงกับ WASTE 100%) — แต่ <strong>จุดคอขวดคุณอยู่ที่ "core engine ยังไม่ได้ถูกพิสูจน์"</strong> ขณะที่งานที่ทุ่มเทไปล่าสุดคือ dashboard/UI ซึ่งไม่ใช่หัวใจของเป้าหมาย</div>
+  </div>
+</section>
+
+<!-- ============ COMPARE ============ -->
+<section class="page" id="page-compare">
+  <div class="section-header">
+    <h2>⚖️ เปรียบเทียบเชิงลึก</h2>
+    <p>ทีละแกน — ดูว่า WASTE ทำอะไร และคุณทำอะไร ต่างกันตรงไหน</p>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th>แกน</th><th>WASTE</th><th>โปรเจคคุณ</th><th>สถานะ</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>Core Engine</strong></td>
+          <td class="theirs">C ล้วน, custom, ควบคุมทุกอย่าง (read path, buffer, compute)</td>
+          <td class="mine">Python + llama-cpp-python (llama.cpp อ่าน mmap แบบ opaque)</td>
+          <td class="warn">⚠️ ต่าง — คุณควบคุมการอ่านไฟล์ไม่ได้</td>
+        </tr>
+        <tr>
+          <td><strong>Container Format</strong></td>
+          <td class="theirs">Custom <code>.waste</code> — 1 expert = 1 coalesced read, 4KiB aligned, O_DIRECT</td>
+          <td class="mine">GGUF มาตรฐาน (llama.cpp จัดการเอง)</td>
+          <td class="warn">⚠️ ต่าง — คุณไม่ได้จัดวางไฟล์</td>
+        </tr>
+        <tr>
+          <td><strong>Quantization</strong></td>
+          <td class="theirs">VQ3R (3-bit experts) + 4-bit trunk — 19.4% error</td>
+          <td class="mine">GGUF quant (Q4_K_M / Q6_K)</td>
+          <td class="ok">🟡 พึ่ง quant ของ GGUF</td>
+        </tr>
+        <tr>
+          <td><strong>Predictor</strong></td>
+          <td class="theirs"><strong>Router lookahead</strong> — วิ่ง router ของ layer ถัดไป = 59% recall</td>
+          <td class="mine">Heuristic (frequency + temporal) — ที่ ADR-003 พบว่าไม่ critical</td>
+          <td class="warn">⚠️ ต่าง — heuristic prediction แพ้ (WASTE พิสูจน์ 29%)</td>
+        </tr>
+        <tr>
+          <td><strong>RAM Budget</strong></td>
+          <td class="theirs">Hard ceiling + floor + cgroup-aware (หลีกเลี่ยง paging cliff)</td>
+          <td class="mine">ไม่มี explicit budget control</td>
+          <td class="warn">⚠️ ยังขาด — เสี่ยง paging cliff เมื่อเครื่องเต็ม</td>
+        </tr>
+        <tr>
+          <td><strong>Chunked Prefill</strong></td>
+          <td class="theirs">3.3x อ่านน้อยลง (dedup overlapping experts)</td>
+          <td class="mine">ไม่มี</td>
+          <td class="warn">⚠️ ยังไม่ได้ exploit</td>
+        </tr>
+        <tr>
+          <td><strong>I/O Engine</strong></td>
+          <td class="theirs">Async prefetch (2 reader threads) + overlap</td>
+          <td class="mine">PrefetchVirtualMemory / madvise hint + OS page cache</td>
+          <td class="ok">🟡 ใช้ OS เป็นตัวกลาง — ถูกต้องสำหรับ Phase 1</td>
+        </tr>
+        <tr>
+          <td><strong>Telemetry</strong></td>
+          <td class="theirs">คุมทุกอย่าง — วัดได้แม่น (hit/miss, bytes read)</td>
+          <td class="mine">OS page faults + residency (เพราะ tracker เห็น <code>total_accesses=0</code>)</td>
+          <td class="warn">⚠️ gap ตัวจริง — วัดระดับ shard ไม่ได้</td>
+        </tr>
+        <tr>
+          <td><strong>Scaling</strong></td>
+          <td class="theirs">ถึง K3 (2.78T) จริง</td>
+          <td class="mine">ยังอยู่ Qwen 2.7B</td>
+          <td class="warn">⚠️ ยังห่างจาก K3</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="alert alert-success" style="margin-top:2rem">
+    <span class="icon">✅</span>
+    <div><strong>สิ่งที่คุณทำเหมือน WASTE อย่างถูกต้อง:</strong> ใช้ mmap + OS page cache (ไม่สร้างล้อใหม่), ใช้หลัก stream activated weights, เข้าใจ bandwidth-bound physics, มีวินัยบันทึก ADR + negative results — นี่คือรากฐานที่ถูกต้อง</div>
+  </div>
+</section>
+
+<!-- ============ STRENGTHS ============ -->
+<section class="page" id="page-strengths">
+  <div class="section-header">
+    <h2>✅ จุดแข็งของโปรเจคคุณ</h2>
+    <p>หลักฐานจริงที่คุณทำได้ดี — ตรงกับปรัชญา WASTE</p>
+  </div>
+
+  <div class="cards cards-2">
+    <div class="card fade-up">
+      <div class="card-icon" style="background:rgba(16,185,129,.12)">🧠</div>
+      <div class="card-title">ค้นพบว่า consumer CPU เป็น compute-bound ~92%</div>
+      <div class="card-desc">
+        EXP-003/004 + ADR-003 — ความเข้าใจว่า <code>tok/s ≈ bandwidth ÷ bytes/token</code>
+        และโมเดล F16 อ่าน 8.4 GB/token มากกว่า Q6_K 7.35 GB/token (วัด 2.8 tok/s ตรงคำทำนาย)
+        <br><span class="tag tag-green">นี่คือข้อค้นพบที่ "ฉลาด"</span>
+      </div>
+    </div>
+    <div class="card fade-up delay-1">
+      <div class="card-icon" style="background:rgba(16,185,129,.12)">💾</div>
+      <div class="card-title">ใช้ mmap + OS page cache ไม่สร้างล้อใหม่</div>
+      <div class="card-desc">
+        เข้าใจว่า "OS คือ page manager ที่ดีที่สุด" — ใช้ <code>PrefetchVirtualMemory</code> / <code>madvise</code>
+        แทนการเขียน custom I/O engine เอง (ตรงกับแนวทางที่ WASTE ใช้ในทางกลับกัน)
+        <br><span class="tag tag-green">ถูกต้องสำหรับ Phase 1</span>
+      </div>
+    </div>
+    <div class="card fade-up delay-2">
+      <div class="card-icon" style="background:rgba(16,185,129,.12)">📊</div>
+      <div class="card-title">Honest telemetry — ยอมรับจริงว่า <code>total_accesses=0</code></div>
+      <div class="card-desc">
+        ไม่ fake ตัวเลข (hit-rate 94.2%, prefetch 98.1% เดิมถูกลบ) — ใช้ OS paging demand เป็นสัญญาณจริง
+        (cold 7.86 → warm 0.0 MB/tok disk)
+        <br><span class="tag tag-green">วินัยที่ engineering ควรมี</span>
+      </div>
+    </div>
+    <div class="card fade-up delay-3">
+      <div class="card-icon" style="background:rgba(16,185,129,.12)">📚</div>
+      <div class="card-title">บันทึก ADR + negative results</div>
+      <div class="card-desc">
+        DECISIONS.md (ADR-001~003) + experiments (EXP-001~004) + รายงานผลจริง
+        ตรงกับปรัชญา WASTE ที่เก็บความล้มเหลวไว้ใน LEARNED.md
+        <br><span class="tag tag-green">วุฒิภาวะการ engineering ดี</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-success" style="margin-top:2rem">
+    <span class="icon">💡</span>
+    <div><strong>สรุป:</strong> คุณมี <strong>รากฐานที่ถูกต้อง</strong> — แนวคิด, วินัยการวัด, และความเข้าใจ physics ตรงกับ WASTE จุดที่ต้องปรับคือ "ลำดับการทำงาน และการควบคุม core" ไม่ใช่ "แนวคิด"</div>
+  </div>
+</section>
+
+<!-- ============ GAPS ============ -->
+<section class="page" id="page-gaps">
+  <div class="section-header">
+    <h2>🔧 ช่องว่างที่ต้องปิด (สำคัญที่สุด)</h2>
+    <p>สิ่งที่กันคุณออกจากเป้าหมาย "รัน 3T model" — เรียงตามความสำคัญ</p>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>Gap ตัวจริง: <code>total_accesses = 0</code> — tracker มองไม่เห็นการอ่าน</h3>
+        <p>llama.cpp อ่าน mmap ของมันเองแบบ opaque → <code>StreamingBuffer</code> ของคุณไม่เห็นการอ่านจริงเลย
+        <strong>ตราบใดที่ปิด gap นี้ไม่ได้ = วัดผล streaming จริงไม่ได้ = พิสูจน์ไม่ได้</strong> นี่คือ blocker ตัวจริง</p>
+        <div class="alert alert-danger" style="margin:.5rem 0"><span class="icon">🚧</span><div>ต้องแก้ก่อนทำอย่างอื่น — ไม่มีทางไปต่อได้โดยไม่เห็นการอ่านจริง</div></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>Predictor ยังเป็น heuristic — ต้องเป็น router-aware</h3>
+        <p>คุณพบเองว่า predictor "ไม่ critical" ที่ Qwen (เพราะ compute-bound) — แต่ <strong>เมื่อขนาดโมเดลใหญ่ขึ้น I/O จะกลายเป็นคอขวด</strong>
+        WASTE พิสูจน์ว่า heuristic prediction แพ้ (29% recall) แต่ <strong>router lookahead (วิ่ง router ของ layer ถัดไป) = 59% recall</strong></p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>ไม่สามารถจัดวางไฟล์ (container layout) ได้</h3>
+        <p>GGUF ถูกจัดวางโดย llama.cpp — คุณไม่มีทางทำให้ "1 expert = 1 coalesced read" ได้
+        WASTE พิสูจน์ว่า <strong>layout ตัดสินความเร็ว มากกว่า code</strong> (placement decides speed, never precision)</p>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <h3>ยังไม่มี RAM budget control + ยังไม่ exploit chunked prefill</h3>
+        <p>เมื่อคุณไปถึงโมเดลใหญ่ (K3) จะเจอ paging cliff (WASTE: ให้ RAM มากเกิน → ช้า 8 เท่า)
+        และ chunked prefill (dedup experts) ลดการอ่าน 3.3x — ยังไม่มีในโปรเจคคุณ</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-warn" style="margin-top:2rem">
+    <span class="icon">⚠️</span>
+    <div><strong>งานใน worktree (dashboard-theme) ไม่ได้ปิดช่องว่างพวกนี้เลย</strong> — มันสวยและดูดี แต่ห่างจากเป้าหมาย "รัน 3T model" อยู่มาก</div>
+  </div>
+</section>
+
+<!-- ============ ADVICE ============ -->
+<section class="page" id="page-advice">
+  <div class="section-header">
+    <h2>🎯 คำแนะนำเชิงกลยุทธ์</h2>
+    <p>3 ข้อที่ต้องตัดสินใจ — บันทึกไว้ใน docs/ADVISORY-2026-08-03-WASTE.md แล้ว</p>
+  </div>
+
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>ตัดสินใจเป้าหมาย: Research ก่อน Product</h3>
+        <p>งานที่ "เสร็จ" ล่าสุดคือ dashboard/UI — <strong>ไม่ใช่ core engine</strong> ยังไม่มีหลักฐานว่า core streaming ทำงานจริงกับโมเดลใหญ่พอ
+        <strong>แนะนำ: ทาง A (Research) ก่อน</strong> — พิสูจน์ core ก่อน แล้วค่อยสร้าง product shell</p>
+        <div class="card-meta"><span class="tag tag-orange">สูงสุด</span></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>ปิด gap <code>total_accesses=0</code> ก่อน (blocker)</h3>
+        <p>ทางเลือก: <strong>fork llama.cpp</strong> (expose expert routing + buffer hooks) หรือทำ <strong>native core จริง</strong>
+        (คุณมี <code>core/native/</code> — io_uring, IOCP, SIMD kernels — แต่ยังไม่ wire)</p>
+        <div class="card-meta"><span class="tag tag-red">blocker</span></div>
+      </div>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>ใช้ Kimi-Linear 48B แทน K3 เป็น stepping stone</h3>
+        <p>K3 = NVMe 1TB + RAM 64GB + convert 4.7 ชม. — <strong>แพงเกินจะ experiment บ่อย</strong>
+        Kimi-Linear 48B = container 19GB, RAM 1.28GB, 10.65 tok/s (คำแนะนำเดียวกับ WASTE) — พิสูจน์ core ก่อน</p>
+        <div class="card-meta"><span class="tag tag-cyan">stepping stone</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="alert alert-info" style="margin-top:2rem">
+    <span class="icon">💡</span>
+    <div><strong>เกี่ยวกับ worktree dashboard:</strong> งานสวยมาก แต่ควร <strong>"ส่งท้ายให้เสร็จแล้ว merge"</strong> (ไม่ปล่อยค้าง) แล้วกลับมาที่ core อย่างจริงจัง — อย่าปล่อยให้ feature creep ดึงออกจากเป้าหมาย</div>
+  </div>
+</section>
+
+<!-- ============ PLAN ============ -->
+<section class="page" id="page-plan">
+  <div class="section-header">
+    <h2>🗺️ แผนปฏิบัติที่แนะนำ</h2>
+    <p>ลำดับการทำที่ควรเป็น — จาก blocker → พิสูจน์ → ขยาย</p>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead><tr><th>#</th><th>งาน</th><th>เป้าหมาย</th><th>ผลลัพธ์ที่วัดได้</th></tr></thead>
+      <tbody>
+        <tr><td><strong>0</strong></td><td>ส่งท้าย + merge worktree dashboard</td><td>ไม่ปล่อยงานค้าง</td><td>git clean, feature/dashboard-theme merged</td></tr>
+        <tr><td><strong>1</strong></td><td>ตัดสินใจ: fork llama.cpp vs native core</td><td>ได้เส้นทางปิด gap</td><td>ADR-004</td></tr>
+        <tr><td><strong>2</strong></td><td>ปิด <code>total_accesses=0</code> — เห็นการอ่านจริง</td><td>วัดระดับ expert/shard ได้</td><td>tracker เห็น expert routing + hit/miss จริง</td></tr>
+        <tr><td><strong>3</strong></td><td>ยกระดับ predictor → router-aware lookahead</td><td>แม่นขึ้นเมื่อ I/O กลายเป็นคอขวด</td><td>recall > 50% (เทียบ WASTE 59%)</td></tr>
+        <tr><td><strong>4</strong></td><td>ทดสอบกับ Kimi-Linear 48B (19GB, 1.28GB RAM)</td><td>พิสูจน์ core กับโมเดลใหญ่ขึ้น</td><td>10+ tok/s เหมือน WASTE</td></tr>
+        <tr><td><strong>5</strong></td><td>เพิ่ม RAM budget control + chunked prefill</td><td>หลีกเลี่ยง paging cliff</td><td>ไม่มี degradation เมื่อ RAM ใกล้เต็ม</td></tr>
+        <tr><td><strong>6</strong></td><td>ค่อยขึ้น K3 (2.78T)</td><td>บรรลุเป้าหมาย</td><td>0.5+ tok/s บน 64GB</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="alert alert-warn" style="margin-top:2rem">
+    <span class="icon">⚠️</span>
+    <div><strong>หลัก "Measure before build":</strong> อย่าเพิ่งสร้าง K3 container — ตัวอย่างจาก WASTE ที่ "ลองของจริงชิ้นเล็กที่พอจะล้มสมมติฐานได้ก่อน" (เช่น วัด disk pattern เป็น test ก่อนโหลด 1.42 TB)</div>
+  </div>
+</section>
+
+<!-- ============ FAQ ============ -->
+<section class="page" id="page-faq">
+  <div class="section-header">
+    <h2>❓ คำถามที่พบบ่อย</h2>
+    <p>คำตอบสำหรับคำถามที่คุณอาจสงสัย</p>
+  </div>
+
+  <div style="max-width:800px;margin:0 auto">
+    <details class="faq-item" open>
+      <summary>🤔 ฉัน "มาถูกทาง" แล้วหรือยัง?</summary>
+      <div class="faq-body">
+        <strong>แนวคิด: ถูกต้อง 100%</strong> — Predict → Prefetch → Stream → Execute ตรงกับ WASTE ที่ทำสำเร็จ
+        แต่ <strong>ยังต้องพิสูจน์ core กับโมเดลใหญ่</strong> และตอนนี้กำลังเบนไปทางงาน UI/product มากเกินไป
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>🤔 ทำไม "total_accesses=0" ถึงเป็น blocker ใหญ่?</summary>
+      <div class="faq-body">
+        เพราะถ้า tracker ของคุณมองไม่เห็นการอ่านจริงของ llama.cpp คุณจะ <strong>วัดผล streaming ของตัวเองไม่ได้เลย</strong>
+        — ไม่รู้ว่า buffer ทำงานจริงไหม, predictor ถูกไหม, prefetch คุ้มไหม → พิสูจน์ไม่ได้ = ไปต่อไม่ได้
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>🤔 ทำไมต้องใช้ Kimi-Linear 48B ก่อน K3?</summary>
+      <div class="faq-body">
+        K3 ต้อง NVMe 1TB + RAM 64GB + convert 4.7 ชม. — <strong>แพงเกินจะ experiment บ่อย</strong>
+        Kimi-Linear 48B (19GB, 1.28GB RAM, 10.65 tok/s) เป็น stepping stone ที่พิสูจน์ core ได้ถูกกว่า
+        — WASTE เองก็แนะนำแบบนี้
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>🤔 predictor ของฉัน (heuristic) ใช้ไม่ได้เลยหรือ?</summary>
+      <div class="faq-body">
+        ใช้ได้ที่ <strong>โมเดลเล็ก (compute-bound)</strong> — คุณพิสูจน์แล้วว่าไม่ critical ที่ Qwen
+        แต่เมื่อโมเดลใหญ่ขึ้น <strong>I/O จะกลายเป็นคอขวด</strong> และ WASTE พิสูจน์ว่า heuristic แพ้ (29% recall)
+        — ต้องยกระดับเป็น router-aware (59% recall) ก่อนไปโมเดลใหญ่
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>🤔 การใช้ mmap + OS page cache ผิดหรือเปล่า?</summary>
+      <div class="faq-body">
+        <strong>ไม่ผิด</strong> — เป็นทางที่ถูกต้องสำหรับ Phase 1 (พิสูจน์ feasibility)
+        แต่เป็นข้อจำกัด: ควบคุมไม่ได้, วาง layout ไฟล์ไม่ได้, วัดระดับ shard ไม่ได้
+        เมื่อถึงจุดที่ต้องปรับปรุง performance → ต้อง fork llama.cpp หรือ native core
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>🤔 งาน dashboard ควรทำต่อไหม?</summary>
+      <div class="faq-body">
+        งานสวยและดูดีมาก แต่ <strong>ไม่ทำให้เป้าหมาย "รัน 3T model" ใกล้ขึ้น</strong>
+        แนะนำ: merge ให้เสร็จ (เป็น milestone) แล้ว <strong>กลับมาที่ core อย่างจริงจัง</strong> ก่อนสร้าง feature ใหม่
+      </div>
+    </details>
+
+    <details class="faq-item">
+      <summary>🤔 ฉันจะรู้ได้ยังไงว่า WASTE ชนะตรงไหน?</summary>
+      <div class="faq-body">
+        WASTE ชนะที่ <strong>การควบคุม</strong>: custom C engine + container format (1 expert = 1 read) + router lookahead + RAM budget
+        = ควบคุมทุกอย่างได้ → วัดได้แม่น → ไปถึง K3 ได้จริง
+        <strong>การควบคุมการอ่านไฟล์คือสิ่งที่คุณยังขาด</strong>
+      </div>
+    </details>
+  </div>
+</section>
+
+<footer class="footer">
+  <p>📚 เปรียบเทียบจาก <a href="https://github.com/sqliteai/waste" target="_blank">sqliteai/waste</a> vs โปรเจค Speculative Weight Streaming</p>
+  <p style="margin-top:.5rem">Research &amp; Compiled by OpenCode Agent · 3 สิงหาคม 2026 · คำแนะนำบันทึกที่ <code>docs/ADVISORY-2026-08-03-WASTE.md</code></p>
+</footer>
+
+<script>
+function goto(page){
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.getElementById('page-' + page).classList.add('active');
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+  const link = document.querySelector(`.nav-links a[data-page="${page}"]`);
+  if(link) link.classList.add('active');
+  document.querySelector('.nav-links').classList.remove('open');
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+document.querySelectorAll('.nav-links a').forEach(link => {
+  link.addEventListener('click', e => { e.preventDefault(); goto(link.dataset.page); });
+});
+
+const canvas = document.getElementById('bg-canvas');
+const ctx = canvas.getContext('2d');
+let W, H, mouse = { x: -1000, y: -1000 };
+let particles = [];
+function resize(){ W = canvas.width = window.innerWidth; H = canvas.height = window.innerHeight; }
+resize();
+window.addEventListener('resize', resize);
+document.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
+document.addEventListener('mouseleave', () => { mouse.x = -1000; mouse.y = -1000; });
+class Particle {
+  constructor(){ this.reset(); }
+  reset(){ this.x = Math.random()*W; this.y = Math.random()*H; this.vx=(Math.random()-.5)*.5; this.vy=(Math.random()-.5)*.5; this.r=Math.random()*2+1; this.alpha=Math.random()*.5+.2; }
+  update(){ this.x+=this.vx; this.y+=this.vy; if(this.x<0||this.x>W)this.vx*=-1; if(this.y<0||this.y>H)this.vy*=-1; }
+  draw(){ ctx.beginPath(); ctx.arc(this.x,this.y,this.r,0,Math.PI*2); ctx.fillStyle=`rgba(99,102,241,${this.alpha})`; ctx.fill(); }
+}
+const COUNT = Math.min(90, Math.floor(W*H/18000));
+for(let i=0;i<COUNT;i++) particles.push(new Particle());
+function animate(){
+  ctx.clearRect(0,0,W,H);
+  particles.forEach(p=>{p.update();p.draw();});
+  for(let i=0;i<particles.length;i++){
+    for(let j=i+1;j<particles.length;j++){
+      const a=particles[i],b=particles[j]; const dx=a.x-b.x,dy=a.y-b.y; const dist=Math.sqrt(dx*dx+dy*dy);
+      if(dist<130){ const alpha=(1-dist/130)*.25; ctx.strokeStyle=`rgba(129,140,248,${alpha})`; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+    }
+    const p=particles[i]; const mdx=p.x-mouse.x,mdy=p.y-mouse.y; const mdist=Math.sqrt(mdx*mdx+mdy*mdy);
+    if(mdist<160){ const alpha=(1-mdist/160)*.4; ctx.strokeStyle=`rgba(236,72,153,${alpha})`; ctx.beginPath(); ctx.moveTo(p.x,p.y); ctx.lineTo(mouse.x,mouse.y); ctx.stroke(); }
+  }
+  requestAnimationFrame(animate);
+}
+animate();
+</script>
+</body>
+</html>

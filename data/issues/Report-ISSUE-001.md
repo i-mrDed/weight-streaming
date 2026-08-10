@@ -1,9 +1,9 @@
 # Report-ISSUE-001: Smoke test issue report
 
-- **Status:** open
+- **Status:** triaged
 - **Severity:** low
 - **Created:** 2026-07-27T13:48:53Z by local-user
-- **Updated:** 2026-07-27T13:48:53Z
+- **Updated:** 2026-08-06T01:34:13Z
 
 ## Description
 Testing the full issue reporting pipeline from CLI
@@ -28,3 +28,4 @@ Testing the full issue reporting pipeline from CLI
 
 ## Timeline
 - `2026-07-27T13:48:53Z` **created** by local-user
+- `2026-08-06T01:34:13Z` **status:triaged** by maintainer
