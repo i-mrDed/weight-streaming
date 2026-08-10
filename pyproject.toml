@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "weight-streaming"
-version = "0.14.0"
+version = "0.15.0"
 description = "Run LLMs larger than your RAM — speculative weight streaming from NVMe"
 readme = "README.md"
 license = { text = "MIT" }
@@ -67,6 +67,11 @@ weight-streaming = "weight_stream.cli.main:main"
 
 [tool.setuptools.packages.find]
 include = ["weight_stream*"]
+
+[tool.setuptools.package-data]
+# The prebuilt web console (Vite output committed so pip users need no Node
+# toolchain) must ride along in the wheel — the server serves it at /console/.
+weight_stream = ["server/static/**", "server/static/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -8,7 +8,7 @@ Usage:
     output = model.generate("Hello, world")
 """
 
-__version__ = "0.14.0"
+__version__ = "0.15.0"
 
 from .backends.llama_cpp import WeightStreamModel
 from .core.exceptions import (

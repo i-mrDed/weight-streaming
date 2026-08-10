@@ -5,7 +5,11 @@
 
 ---
 
-## [0.14.1] - 2026-08-10
+## [0.15.0] - 2026-08-10
+
+> **Release prep:** wheel now ships the prebuilt console (`static/**` package-data —
+> previously `pip install` produced a server with no web UI). Version bumped 0.14.0 →
+> 0.15.0; 0.14.1 entries below folded in (never tagged). PyPI publish pending credentials.
 
 ### 🔐 API auth (B1) + frontend tests (B2) + thinking-marker fix (B3)
 - **B1 `WS_API_TOKEN`** — when set, every `/v1/*` request must carry `Authorization: Bearer <token>` (constant-time compare); `/health` + console/static stay open. Console: Settings → new "API access token" card stores it in `localStorage` and the API client (`api.ts`) attaches the header to JSON + SSE calls automatically. Tests cover required/optional/off-by-default.
