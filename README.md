@@ -57,7 +57,11 @@ fabricated value.
 ## Screenshots
 
 <p align="center">
-  <img src="docs/screenshots/demo-chat.gif" alt="Console demo — streaming chat with live telemetry" width="70%">
+  <video src="docs/screenshots/demo-chat.mp4" poster="docs/screenshots/03-stats.png" width="70%" autoplay loop muted playsinline>
+    <source src="docs/screenshots/demo-chat.mp4" type="video/mp4">
+    <source src="docs/screenshots/demo-chat.webm" type="video/webm">
+    <img src="docs/screenshots/demo-chat.gif" alt="Console demo — streaming chat with live telemetry">
+  </video>
   <br><em>Real session: streaming chat (thinking + answer) on Qwen3.6-35B-A3B, ending on the live-stats page.</em>
 </p>
 

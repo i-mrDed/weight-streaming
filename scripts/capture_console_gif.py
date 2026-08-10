@@ -7,6 +7,7 @@ UI and Pillow to compose frames.
 Usage: python scripts/capture_console_gif.py [--base http://127.0.0.1:8765]
 """
 import argparse
+import io
 import os
 import sys
 
@@ -20,6 +21,7 @@ PROMPT = (
 )
 FRAME_MS = 500
 GIF_WIDTH = 720
+FRAMES_DIR = os.path.join("scripts", ".demo_frames")
 
 
 def main() -> int:
@@ -43,6 +45,13 @@ def main() -> int:
 
         def snap():
             frames.append(page.screenshot())
+            # keep individual PNGs too, so ffmpeg can encode webm/mp4 with
+            # correct timing (imageio's GIF writer mangles frame delays)
+            os.makedirs(FRAMES_DIR, exist_ok=True)
+            with open(
+                os.path.join(FRAMES_DIR, f"frame_{len(frames):03d}.png"), "wb"
+            ) as f:
+                f.write(frames[-1])
 
         # frame 0: empty composer, model chip loaded
         snap()
@@ -84,24 +93,26 @@ def main() -> int:
         snap()
         browser.close()
 
-    # compose GIF (imageio writer — keeps every frame)
-    import imageio.v2 as iio
-
+    # compose GIF with Pillow directly: optimize=False keeps every frame and
+    # duration=FRAME_MS sets real timing (imageio wrote ~0 ms delays)
     imgs = []
     for f in frames:
-        im = Image.open(__import__("io").BytesIO(f)).convert("RGB")
+        im = Image.open(io.BytesIO(f)).convert("RGB")
         h = int(im.height * GIF_WIDTH / im.width)
         im = im.resize((GIF_WIDTH, h), Image.LANCZOS)
         imgs.append(im)
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    iio.mimsave(
+    imgs[0].save(
         OUT,
-        imgs,
-        duration=FRAME_MS / 1000.0,
+        save_all=True,
+        append_images=imgs[1:],
+        duration=FRAME_MS,
         loop=0,
+        optimize=False,
     )
     size_mb = os.path.getsize(OUT) / 1e6
     print(f"wrote {OUT}: {len(imgs)} frames, {GIF_WIDTH}px, {size_mb:.2f} MB")
+    print(f"frames kept in {FRAMES_DIR} for webm/mp4 encode")
     return 0
 
 
