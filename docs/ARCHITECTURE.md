@@ -8,6 +8,49 @@
 
 ---
 
+## Current Engine (v0.14.0, updated 2026-08-10)
+
+> **ระบบรันอะไรอยู่ตอนนี้ — อ่าน section นี้ก่อน section อื่น** (หัวข้อด้านล่าง
+> เป็น design history ของ Phase 2–3; สิ่งที่รันจริงเปลี่ยนไปหลัง P7.1b)
+
+### Engine หลัก: `LlamaServerBackend` (llama-server / llama.cpp GPU)
+
+- **Engine:** `llama-server` executable จาก llama.cpp **build bb7049f7**
+  (Jan CUDA 13 build, โฟลเดอร์ `b9967`) — spawn เป็น subprocess, คุยผ่าน
+  HTTP API (port 8805)
+- **วิธีเลือก binary** (`weight_stream/backends/llama_server.py`
+  `_find_llama_server()`): `WS_LLAMA_SERVER` env → Jan's bundled backends
+  (`%APPDATA%\Jan\data\llamacpp\backends\**` — เอา **newest by mtime**)
+  → PATH
+- **จุดที่เลือกใช้** (`server/model_manager.py` `_create_backend`):
+  `use_llama_server=True` + binary มี → `LlamaServerBackend`
+- **ความสามารถที่ได้:** GPU offload (`-ngl`), MoE tiering
+  (`--n-cpu-moe`/`-ot` ผ่าน `WS_LLAMA_EXTRA_ARGS`), KV cache type
+  (`-ctk/-ctv`), reasoning flags, tools, speculative (`--spec-type`)
+
+### Fallback: `WeightStreamModel` (llama-cpp-python + buffer/prefetcher)
+
+- `backends/llama_cpp.py` — ตัวที่เคยเป็นหลักก่อน P7.1b (CPU binding ผ่าน
+  llama-cpp-python) + `StreamingBuffer`/`Prefetcher` ของโปรเจค (LRU 64 MB,
+  `PrefetchVirtualMemory`/`madvise`)
+- **ตอนนี้เป็น fallback เท่านั้น** — ใช้เมื่อไม่มี llama-server binary หรือ
+  สร้าง `LlamaServerBackend` ไม่สำเร็จ (เช่น ไม่มี GPU)
+- **ผลกระทบที่เห็นในหน้า Stats:** เมื่อรันผ่าน LlamaServerBackend
+  ตัวเลข `buffer`/`prefetcher` จะเป็น `n/a` — เพราะ path หลักไม่ได้ใช้
+  buffer ของโปรเจคอีกต่อไป (OS page cache + mmap ของ llama.cpp ทำหน้าที่
+  แทน) — นี่คือพฤติกรรมที่ตั้งใจ ไม่ใช่บั๊ก
+
+### หมายเหตุการทดลอง (EXP-005..017)
+
+- ตัวเลข tok/s ทั้งหมด (Qwen3.6-35B-A3B, DS V4 Flash 104 GB) วัดผ่าน
+  `LlamaServerBackend` + `WS_LLAMA_EXTRA_ARGS` (GPU tiering / spec-decode
+  flags) — ดู `research/experiments/`
+- สรุป: บนเครื่องนี้ (12 GB VRAM, 64 GB RAM) กำไรที่เหลือคือ **ลด
+  bytes/token (quant)** — placement/spec-decode/CPU-lane ปิดหมดแล้ว
+  (EXP-015/016/017)
+
+---
+
 ## 0. As-Built Summary (ADR-003 → v0.13.0)
 
 > **Sections 1–9 document the Phase 2 research design and are preserved as-is** (design history). The shipped product diverged after empirical results (EXP-001–004, Phase 3b re-runs with real hardware timing). Authoritative decisions: `docs/DECISIONS.md` → **ADR-003**. This section summarizes what was actually built.
