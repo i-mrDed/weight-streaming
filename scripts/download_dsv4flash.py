@@ -18,9 +18,12 @@ Prereq: disk free >= 110 GB. Check with --dry-run first (no writes).
 import argparse
 import json
 import os
+import shutil
 import sys
 import time
 import urllib.request
+
+HEADROOM_GB = 6.0  # safety margin above total file size (peak = size + 1 .part)
 
 REPO = "unsloth/DeepSeek-V4-Flash-0731-GGUF"
 QUANT_DIR = "UD-IQ3_XXS"
@@ -75,14 +78,10 @@ def main():
 
     print(f"=== DS V4 Flash {args.variant} ({REPO}): {len(SHARDS)} shards, "
           f"{TOTAL_BYTES / 1e9:.2f} GB ===")
-    if args.dry_run:
-        for name, size in SHARDS:
-            print(f"  {name}: {size / 1e9:.2f} GB")
-        print(f"TOTAL: {TOTAL_BYTES / 1e9:.2f} GB — disk free must be "
-              f">= {TOTAL_BYTES / 1e9 + 6:.0f} GB")
-        return 0
 
     # Resolve target dir against the server's configured model dirs.
+    # Pick the dir with the MOST free space (never dirs[0] blindly — it
+    # may be the project root).
     if not args.target:
         cfg = req("GET", "/v1/config")
         dirs = cfg.get("models_dirs") or []
@@ -90,8 +89,32 @@ def main():
             print("ERROR: no model dirs on server — set WS_MODELS_DIR or "
                   "--target", file=sys.stderr)
             return 2
-        args.target = dirs[0]
-    print(f"target dir: {args.target}\n")
+        usable = [d for d in dirs if os.path.isdir(d)]
+        if not usable:
+            print("ERROR: none of the server model dirs exist on this machine:"
+                  + "".join(f"\n  {d}" for d in dirs), file=sys.stderr)
+            return 2
+        args.target = max(usable, key=lambda d: shutil.disk_usage(d).free)
+        print(f"(auto-selected target with most free space)\n")
+
+    required_gb = TOTAL_BYTES / 1e9 + HEADROOM_GB
+    free_gb = shutil.disk_usage(args.target).free / 1e9
+    if args.dry_run:
+        for name, size in SHARDS:
+            print(f"  {name}: {size / 1e9:.2f} GB")
+        print(f"TOTAL: {TOTAL_BYTES / 1e9:.2f} GB - need >= {required_gb:.0f} GB "
+              f"free on {args.target}")
+        print(f"disk free now: {free_gb:.1f} GB - "
+              + ("OK" if free_gb >= required_gb
+                 else f"short {required_gb - free_gb:.1f} GB (clear more)"))
+        return 0 if free_gb >= required_gb else 2
+
+    if free_gb < required_gb:
+        print(f"ABORT: need {required_gb:.0f} GB free on {args.target}, "
+              f"have {free_gb:.1f} GB (short {required_gb - free_gb:.1f} GB)",
+              file=sys.stderr)
+        return 2
+    print(f"target dir: {args.target} (disk free {free_gb:.1f} GB)\n")
 
     results = []
     for name, size in SHARDS:
