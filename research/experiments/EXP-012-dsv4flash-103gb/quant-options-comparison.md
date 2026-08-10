@@ -51,7 +51,9 @@ unsloth repo มี **quant เล็กกว่า** ที่ยังพอ�
 > หมายเหตุ: ตัวเลขจาก HF tree API 2026-08-10 (ขนาดจริงต่อ shard) —
 > สคริปต์ `download_dsv4flash.py` ถูกแก้ให้ใช้ค่าจริงแล้ว (เดิม hardcode
 > ต่างไป 0.1-1.8 MB ต่อ shard — ไม่กระทบ gate เพราะ hub ใช้ Content-Length
-> จริง แต่ ETA/dry-run จะตรงขึ้น)
+> จริง แต่ ETA/dry-run จะตรงขึ้น) และมี hard disk gate + auto-select
+> target (dir ที่ว่างที่สุด) + variant `--variant iq2m` พร้อมใช้:
+> `python scripts/download_dsv4flash.py --dry-run --variant iq2m`
 
 ## ข้อสรุปสำหรับ EXP-012
 

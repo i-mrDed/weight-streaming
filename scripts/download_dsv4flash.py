@@ -25,27 +25,47 @@ import urllib.request
 
 HEADROOM_GB = 6.0  # safety margin above total file size (peak = size + 1 .part)
 
-REPO = "unsloth/DeepSeek-V4-Flash-0731-GGUF"
-QUANT_DIR = "UD-IQ3_XXS"
-SHARDS = [
-    # (remote filename, exact size from HF tree API 2026-08-10)
-    ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00001-of-00004.gguf", 5_257_696),
-    ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00002-of-00004.gguf", 49_910_532_416),
-    ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00003-of-00004.gguf", 49_257_859_456),
-    ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00004-of-00004.gguf", 5_034_198_464),
-]
-TOTAL_BYTES = sum(s for _, s in SHARDS)
-
-# Alternative (EXP-012 quant-options-comparison.md): TacoTakumi's
-# expert-only requant — better KLD (0.263) + imatrix, 1.52x decode on
-# spill rigs, but +11 GB. Select with --variant tacotakumi.
-TACO_SHARDS = [
-    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00001-of-00004.gguf", 28_787_493_728),
-    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00002-of-00004.gguf", 28_772_928_160),
-    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00003-of-00004.gguf", 28_772_928_160),
-    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00004-of-00004.gguf", 28_924_047_424),
-]
-TACO_REPO = "TacoTakumi/DeepSeek-V4-Flash-0731-GGUF"
+# All shard sizes are EXACT values from the HF tree API (2026-08-10).
+# --variant selects the target; see EXP-012/quant-options-comparison.md
+# for the quality/size trade-offs.
+VARIANTS = {
+    # primary: unsloth UD-IQ3_XXS, smallest 3-bit-tier quant that fits
+    # 64 GB RAM + headroom
+    "unsloth": {
+        "repo": "unsloth/DeepSeek-V4-Flash-0731-GGUF",
+        "quant_dir": "UD-IQ3_XXS",
+        "shards": [
+            ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00001-of-00004.gguf", 5_257_696),
+            ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00002-of-00004.gguf", 49_910_532_416),
+            ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00003-of-00004.gguf", 49_257_859_456),
+            ("DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00004-of-00004.gguf", 5_034_198_464),
+        ],
+    },
+    # fallback when disk is tight (~96 GB): UD-IQ2_M is 13 GB smaller,
+    # quality still acceptable (unlike IQ1_M which failed Thai tones in
+    # EXP-009 on the 35B)
+    "iq2m": {
+        "repo": "unsloth/DeepSeek-V4-Flash-0731-GGUF",
+        "quant_dir": "UD-IQ2_M",
+        "shards": [
+            ("DeepSeek-V4-Flash-0731-UD-IQ2_M-00001-of-00003.gguf", 5_257_664),
+            ("DeepSeek-V4-Flash-0731-UD-IQ2_M-00002-of-00003.gguf", 49_956_780_160),
+            ("DeepSeek-V4-Flash-0731-UD-IQ2_M-00003-of-00003.gguf", 40_964_890_464),
+        ],
+    },
+    # alternative: TacoTakumi's expert-only requant — better KLD (0.263)
+    # + imatrix, 1.52x decode on spill rigs, but +11 GB
+    "tacotakumi": {
+        "repo": "TacoTakumi/DeepSeek-V4-Flash-0731-GGUF",
+        "quant_dir": "",
+        "shards": [
+            ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00001-of-00004.gguf", 28_787_493_728),
+            ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00002-of-00004.gguf", 28_772_928_160),
+            ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00003-of-00004.gguf", 28_772_928_160),
+            ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00004-of-00004.gguf", 28_924_047_424),
+        ],
+    },
+}
 
 
 def req(method, path, body=None, timeout=30):
@@ -63,18 +83,19 @@ def main():
     ap.add_argument("--target", default=os.environ.get("WS_MODELS_DIR", ""))
     ap.add_argument("--port", default=os.environ.get("WS_PORT", "8765"))
     ap.add_argument("--dry-run", action="store_true")
-    ap.add_argument("--variant", choices=["unsloth", "tacotakumi"],
+    ap.add_argument("--variant", choices=list(VARIANTS),
                     default="unsloth",
-                    help="unsloth UD-IQ3_XXS 104 GB (default) or "
-                         "TacoTakumi IQ3_XXS 115 GB (better KLD, imatrix)")
+                    help="unsloth UD-IQ3_XXS 104 GB (default), iq2m "
+                         "UD-IQ2_M 91 GB (disk-tight fallback), or "
+                         "tacotakumi IQ3_XXS 115 GB (better KLD, imatrix)")
     args = ap.parse_args()
     PORT = args.port
     global REPO, QUANT_DIR, SHARDS, TOTAL_BYTES
-    if args.variant == "tacotakumi":
-        REPO = TACO_REPO
-        QUANT_DIR = ""
-        SHARDS = TACO_SHARDS
-        TOTAL_BYTES = sum(s for _, s in SHARDS)
+    v = VARIANTS[args.variant]
+    REPO = v["repo"]
+    QUANT_DIR = v["quant_dir"]
+    SHARDS = v["shards"]
+    TOTAL_BYTES = sum(s for _, s in SHARDS)
 
     print(f"=== DS V4 Flash {args.variant} ({REPO}): {len(SHARDS)} shards, "
           f"{TOTAL_BYTES / 1e9:.2f} GB ===")
