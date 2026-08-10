@@ -40,3 +40,7 @@ scripts/.chat_quality_out.json
 scripts/.chat_quality_out.iq*.json
 scripts/_compare_chat.py
 scripts/_compare_side_by_side.py
+scripts/.dsv4_shard1_head.bin
+scripts/.dsv4_shard2_head.bin
+scripts/.dsv4_head2.bin
+scripts/_probe_gguf_split.py

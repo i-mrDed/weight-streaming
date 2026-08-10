@@ -486,10 +486,11 @@ def _verify_gguf_buffer(buf: Any, file_size: int) -> Dict[str, Any]:
     (meta_count,), pos = _gguf_struct(buf, pos, file_size, "<Q")
     if version not in (2, 3):
         _gguf_parse_fail(f"unsupported version {version}")
-    if tensor_count <= 0 or tensor_count > 1_000_000:
+    if tensor_count > 1_000_000:
         _gguf_parse_fail(f"implausible tensor count {tensor_count}")
 
     architecture: Optional[str] = None
+    split_count: Optional[int] = None  # metadata-only split shard? (see below)
     for _ in range(meta_count):
         key, pos = _gguf_str(buf, pos, file_size)
         (vtype,), pos = _gguf_struct(buf, pos, file_size, "<I")
@@ -518,7 +519,37 @@ def _verify_gguf_buffer(buf: Any, file_size: int) -> Dict[str, Any]:
                 _gguf_parse_fail(f"unknown metadata value type {vtype}")
             if pos + msize > file_size:
                 _gguf_parse_fail("metadata overruns file")
-            pos += msize
+            if key in ("split.count", "split.no"):
+                # llama.cpp multi-file GGUF (PR #6187): the FIRST shard of a
+                # large model may carry ONLY metadata (0 tensors) with the
+                # split bookkeeping here — unsloth ships DS V4 Flash this
+                # way (shard 1 = 5 MB metadata, shards 2-4 = 104 GB weights).
+                # Read the value so the tensor-count check below can accept
+                # a legitimately empty metadata shard.
+                if vtype in (2, 3):  # u16/i16
+                    fmt = "<H" if vtype == 2 else "<h"
+                    (sv,), pos = _gguf_struct(buf, pos, file_size, fmt)
+                    if key == "split.count":
+                        split_count = sv
+                elif vtype in (4, 5):  # u32/i32
+                    fmt = "<I" if vtype == 4 else "<i"
+                    (sv,), pos = _gguf_struct(buf, pos, file_size, fmt)
+                    if key == "split.count":
+                        split_count = sv
+                elif vtype in (0, 1):  # u8/i8
+                    (sv,), pos = _gguf_struct(buf, pos, file_size, "<B")
+                    if key == "split.count":
+                        split_count = sv
+                else:
+                    pos += msize
+            else:
+                pos += msize
+
+    # A metadata-only split shard (tensor_count == 0) is VALID when the file
+    # declares split.count > 1 — llama.cpp assembles tensors from the other
+    # shards. Anything else with 0 tensors is still corrupt.
+    if tensor_count == 0 and not (split_count and split_count > 1):
+        _gguf_parse_fail(f"implausible tensor count {tensor_count}")
 
     # Walk every tensor info first: the data section starts AFTER the last
     # one, so its size is only known once the whole table is consumed.

@@ -1460,6 +1460,58 @@ def test_gguf_structural_gate_rejects_offset_past_eof(tmp_path):
     assert "ends at byte" in str(ei.value) or "past" in str(ei.value)
 
 
+def _make_split_metadata_shard_bytes(split_count: int = 4, split_no: int = 0):
+    """A metadata-only FIRST shard of a multi-file GGUF (llama.cpp PR #6187
+    split format — unsloth ships DS V4 Flash this way: shard 1 carries only
+    metadata + ``split.*`` bookkeeping, 0 tensors, weights live in shards
+    2-N). Same header shape as ``_make_gguf_bytes`` but tensor_count=0 and a
+    ``split.count`` u16 metadata KV."""
+    parts = [
+        b"GGUF",
+        struct.pack("<I", 3),
+        struct.pack("<Q", 0),  # tensor_count = 0 (metadata-only shard)
+        struct.pack("<Q", 3),  # 3 metadata KVs
+        # kv 1: architecture string
+        struct.pack("<Q", len(b"general.architecture")), b"general.architecture",
+        struct.pack("<I", 8),
+        struct.pack("<Q", len(b"deepseek4")), b"deepseek4",
+        # kv 2: split.no (u16)
+        struct.pack("<Q", len(b"split.no")), b"split.no",
+        struct.pack("<I", 2),
+        struct.pack("<H", split_no),
+        # kv 3: split.count (u16)
+        struct.pack("<Q", len(b"split.count")), b"split.count",
+        struct.pack("<I", 2),
+        struct.pack("<H", split_count),
+    ]
+    return b"".join(parts)
+
+
+def test_gguf_structural_gate_accepts_metadata_only_split_shard(tmp_path):
+    """EXP-012 pre-flight: DS V4 Flash shard 1 is a 5 MB metadata-only file
+    (0 tensors, split.count=4). The gate must ACCEPT it — it is not corrupt,
+    it is the standard llama.cpp split layout. Without this, hub download
+    of the 104 GB model would fail on the first 5 MB shard."""
+    from weight_stream.server.hub import _verify_gguf_structure
+    p = tmp_path / "DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00001-of-00004.gguf"
+    p.write_bytes(_make_split_metadata_shard_bytes())
+    s = _verify_gguf_structure(str(p))
+    assert s["ok"] is True
+    assert s["tensor_count"] == 0
+    assert s["architecture"] == "deepseek4"
+
+
+def test_gguf_structural_gate_still_rejects_zero_tensor_non_split(tmp_path):
+    """The split exemption must NOT open a hole: a 0-tensor file WITHOUT
+    split metadata is still corrupt and must be rejected."""
+    from weight_stream.server.hub import HubValidationError, _verify_gguf_structure
+    p = tmp_path / "empty.gguf"
+    p.write_bytes(_make_split_metadata_shard_bytes(split_count=1))
+    with pytest.raises(HubValidationError) as ei:
+        _verify_gguf_structure(str(p))
+    assert "implausible tensor count" in str(ei.value)
+
+
 def test_download_of_garbage_is_rejected_and_part_removed(models_dir):
     """The structural gate's production scenario: a stream that delivers its
     FULL advertised byte count but whose content is not a GGUF (e.g. an

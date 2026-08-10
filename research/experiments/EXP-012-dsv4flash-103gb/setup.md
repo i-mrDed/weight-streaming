@@ -1,4 +1,4 @@
-# EXP-012: DeepSeek V4 Flash 0731 (IQ3_XXS 103 GB) — Prep Plan
+# EXP-012: DeepSeek V4 Flash 0731 (IQ3_XXS 104 GB / 4 shards) — Prep Plan
 
 > สถานะ: **PREP — ยังไม่เริ่มวัด** (รอเคลียร์ดิสก์ + verify support)
 > วันที่: 2026-08-10 · ผู้ริเริ่ม: ต่อจาก HARDWARE_100TPS_PLAN §6 (โมเดลใหญ่ที่ "รันได้จริง" ที่สุด)
@@ -15,17 +15,24 @@ params) รันได้จริงบนเครื่องนี้ผ่
 | field | value |
 |-------|-------|
 | ชื่อ | `unsloth/DeepSeek-V4-Flash-0731-GGUF` |
-| total / active | 284B / **13B active** (MoE, QAT MXFP4 experts — bit-exact กับ official) |
-| context | 1M (จริง: ขึ้นกับ RAM/VRAM) |
-| ไฟล์เป้า | **UD-IQ3_XXS = 103 GB** (แนะนำโดย unsloth สำหรับ 128GB RAM) |
-| ทางเลือก | 1-bit 92 GB · 2-bit 102 GB · UD-Q4_K_XL ~155 GB · UD-Q8_K_XL 162 GB (lossless) |
+| total / active | 284B / **13B active** (MoE; 43 layers, 256 experts, 6 used)
+  — **verified จาก shard-1 metadata จริง** (general.size_label = 256x8.4B) |
+| context | 1M (จริง: ขึ้นกับ RAM/VRAM — metadata ยืนยัน 1048576) |
+| ไฟล์เป้า | **UD-IQ3_XXS = 4 shards รวม 104.21 GB** (ไม่ใช่ไฟล์เดียว 103 GB!)
+  shard 1 = **5.26 MB metadata-only** (0 tensors) · shard 2 = 49.91 GB ·
+  shard 3 = 49.26 GB · shard 4 = 5.03 GB |
+| **Experts** | **IQ3_XXS (down) / IQ2_XS (gate) — k-quants ที่ถูก verify จาก
+  tensor table จริง** — ⚠️ **ไม่ใช่ MXFP4** อย่างที่ unsloth docs บอก
+  (docs ว่า "QAT MXFP4 bit-exact" แต่ไฟล์ UD-IQ3_XXS นี้ใช้ IQ3_XXS/IQ2_XS;
+  ถ้าต้องการ MXFP4 จริงต้องหาตัวแปรอื่น — บันทึกเพื่อไม่ให้เข้าใจผิดเรื่อง
+  คุณภาพ lossless) |
 | DSpark | speculative decoding 1.5-1.9× (ต้องการ llama.cpp ≥ PR 25784) |
 
 ## 3. ความจริงของเครื่องนี้ (ตรวจแล้ว 2026-08-10)
 
 | ทรัพยากร | ค่า | ผลกระทบ |
 |----------|-----|---------|
-| RAM | **64 GB** | < 103 GB ไฟล์ → **full-RAM เป็นไปไม่ได้** — ต้อง disk-streaming path (คือจุดของโปรเจคนี้) |
+| RAM | **64 GB** | < 104 GB ไฟล์ → **full-RAM เป็นไปไม่ได้** — ต้อง disk-streaming path (คือจุดของโปรเจคนี้) |
 | GPU | RTX 3060 12 GB | attention+shared (~4% ของโมเดล ≈ 4-5 GB) ลง VRAM ได้ |
 | ดิสก์ D: | เหลือ **24 GB** (95% full) | **ไม่พอ** — ต้องเคลียร์ ≥ 110 GB |
 | ดิสก์ C: | เหลือ **70 GB** | ไม่พอเหมือนกัน (103 + headroom) |
@@ -34,7 +41,7 @@ params) รันได้จริงบนเครื่องนี้ผ่
 **ข้อสรุปก่อนลุย:** งานนี้มี 2 gate ก่อนดาวน์โหลด — (a) ดิสก์ว่าง ≥ 110 GB,
 (b) llama-server ที่ใช้รองรับโมเดล (ตรวจผ่าน `--version` / test load ไฟล์เล็ก
 หรือเช็ค changelog). ถ้า (b) ไม่ผ่าน ต้องอัปเดต Jan backend / llama.cpp ก่อน
-— **อย่าดาวน์โหลด 103 GB ก่อน verify นี้** (บทเรียนจาก EXP-011b: ดาวน์โหลด
+— **อย่าดาวน์โหลด 104 GB ก่อน verify นี้** (บทเรียนจาก EXP-011b: ดาวน์โหลด
 เสร็จแล้วเจอว่าใช้ไม่ได้ = เสียเวลา + พื้นที่)
 
 ## 4. แผนดำเนินการ (ตามลำดับ)
@@ -54,7 +61,12 @@ params) รันได้จริงบนเครื่องนี้ผ่
       + generate 30 tokens + `/v1/stats` มี paging (faults 4251, 0.58 MB/tok)
 - [x] รัน `scripts/check_clean_environment.py` → CLEAN ✓
 
-### Phase 1 — ดาวน์โหลด (103 GB, หลายชั่วโมง ตามเน็ต)
+### Phase 1 — ดาวน์โหลด (104 GB / 4 shards, หลายชั่วโมง ตามเน็ต)
+- [x] **Pre-flight verify โครงสร้างจริง (2026-08-10, ไม่ต้องดาวน์โหลด 104 GB):**
+      ดึง header shard 1 + 2 ผ่าน HTTP Range (~9 MB) — ยืนยัน arch
+      `deepseek4`, split.count=4, experts IQ3_XXS/IQ2_XS, 43 layers/
+      256 experts/6 used/1M ctx — **gate ใหม่รองรับ metadata-only shard
+      แล้ว** (commit นี้) — ตัวเลข 104.21 GB จาก HF tree API
 - [ ] ผ่าน hub ของระบบเรา (`POST /v1/hub/download` หรือ CLI) — ได้ประโยชน์
       จาก integrity gate (EXP-011b: ตรวจ bytes ครบก่อน done + resume จาก .part)
 - [ ] ยืนยันผล: ขนาดไฟล์ตรงกับ HF (103 GB), GGUF magic ถูกต้อง
@@ -82,8 +94,9 @@ params) รันได้จริงบนเครื่องนี้ผ่
 
 ## 5. ประมาณการ tok/s (ทำนายก่อนวัด — เพื่อเทียบหลังวัด)
 
-โมเดล 13B active + MXFP4 experts (0.53 B/param) → ~7 GB weights/token
-(Reddit: ~8 GB/forward) — คอขวดอยู่ที่ RAM/disk ไม่ใช่ VRAM:
+โมเดล 13B active + experts IQ3_XXS/IQ2_XS (~0.35-0.4 B/param) →
+~5-7 GB weights/token (Reddit: ~8 GB/forward สำหรับ MXFP4) — คอขวดอยู่ที่
+RAM/disk ไม่ใช่ VRAM (ตัวเลขเดิมอิง MXFP4; k-quants เบากว่าเล็กน้อย):
 
 | path | bandwidth | tok/s โดยประมาณ |
 |------|-----------|:---:|
@@ -94,14 +107,14 @@ params) รันได้จริงบนเครื่องนี้ผ่
 
 **ที่ตั้งสมมติฐาน:** 13B active × ~0.55 B/param ≈ 7 GB/token จาก RAM
 → 45/7 ≈ 6.4 tok/s ถ้า hot; เครื่องนี้ RAM 64 GB เก็บ page cache ได้ ~60 GB
-ของไฟล์ 103 GB → บางส่วน spill ไป disk → **คาดการณ์จริง ~2-5 tok/s**
+ของไฟล์ 104 GB → บางส่วน spill ไป disk → **คาดการณ์จริง ~2-5 tok/s**
 (ใช้ได้กับงาน agentic ที่ไม่เร่ง แต่ไม่ใช่แชทโต้ตอบ)
 
 ## 6. ความเสี่ยง + การลด
 
 | ความเสี่ยง | ผล | การลด |
 |-----------|-----|-------|
-| llama.cpp ยังไม่รองรับ DS V4 arch | ดาวน์โหลด 103 GB เปล่า | **verify ก่อนดาวน์โหลด (Phase 0)** |
+| llama.cpp ยังไม่รองรับ DS V4 arch | ดาวน์โหลด 104 GB เปล่า | **verify ก่อนดาวน์โหลด (Phase 0)** — arch `deepseek4` ยืนยันแล้ว |
 | ดิสก์เต็มระหว่างดาวน์โหลด | .part ค้าง | เช็ค ≥ 110 GB + hub resume (EXP-011b gate) |
 | RAM 64 GB → thrash | tok/s ต่ำมาก | วัดแบบ honest + บันทึก page-fault เป็นหลักฐาน (ไม่ใช่ failure — คือผลที่คาดไว้) |
 | DSpark ต้อง build ใหม่ | ไม่ได้ speculative gain | ไม่ blocking — วัด baseline ก่อน |
@@ -118,5 +131,8 @@ params) รันได้จริงบนเครื่องนี้ผ่
 
 - ถ้าดาวน์โหลด 92 GB (1-bit) ไว้ก่อน: ใช้ได้เหมือนกัน แต่คุณภาพต่ำ — เลือก
   IQ3_XXS เป็นเป้าแรก (unsloth แนะนำ), ถ้าดิสก์ไม่พอค่อยลดเป็น 1-bit
+- **ไฟล์เป็น sharded (4 ไฟล์) — โหลดผ่าน llama-server ได้โดยชี้ที่ shard 1**
+  (llama.cpp auto-detect พี่น้องจาก split metadata, PR #6187); hub ของเรา
+  ดาวน์โหลดทีละ shard และ gate ยอมรับ metadata-only shard 1 แล้ว
 - โมเดลนี้เป็น reasoning model (think default on) — วัด tok/s จะรวม think
   tokens ด้วย (เหมือน EXP-011: ใช้ `reasoning_mode: off` ถ้าต้องการเปรียบตรง)
