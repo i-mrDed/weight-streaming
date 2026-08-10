@@ -188,3 +188,41 @@ RAM/disk ไม่ใช่ VRAM (ตัวเลขเดิมอิง MXFP4;
   อาจช้า — เครื่องเรา spill 100% ต้องวัดจริง (ตัดสินใจหลัง baseline)
 - โมเดลนี้เป็น reasoning model (think default on) — วัด tok/s จะรวม think
   tokens ด้วย (เหมือน EXP-011: ใช้ `reasoning_mode: off` ถ้าต้องการเปรียบตรง)
+
+## P8 (2026-08-10): threads / flash-attn / KV-q8 sweep บน Qwen IQ1_M
+
+ก่อนวัด DS V4 Flash — ยืนยันจุด optimum บนเครื่องนี้ด้วย Qwen3.6-35B-A3B
+IQ1_M (10 GB, โหลดบน GPU 12 GB, `n-cpu-moe 0` = experts ทั้งหมดบน GPU)
+ทุก config ผ่าน value-aware flag verification ใหม่ใน harness (ตรวจค่า
+`-t`/`-fa`/`-ctk` จริงใน cmdline ของ process ที่ spawn — ไม่ใช่แค่ presence
+เพราะ load request จะ emit `-t 8` เสมอ และ extra args ต่อท้าย = ค่าที่มีผล)
+
+| config | cold tok/s | warm tok/s | cold f/t | warm f/t |
+|---|---:|---:|---:|---:|
+| ncm0 t4 | 75.0 | 71.0 | 141 | 551 |
+| ncm0 t6 | 76.4 | 73.2 | 142 | 550 |
+| **ncm0 t8 (anchor)** | **75.9** | **73.9** | 141 | 550 |
+| ncm0 t10 | 74.8 | 74.0 | 141 | 551 |
+| ncm0 t12 | 74.9 | 72.8 | 141 | 551 |
+| ncm0 t16 | 76.3 | 72.5 | 141 | 550 |
+| ncm0 t8 fa-off | 74.7 | 70.4 | 141 | 551 |
+| ncm0 t8 kv-q8 (-ctk/-ctv q8_0) | 74.6 | 73.1 | 141 | 547 |
+
+**ข้อสรุป (สำคัญสำหรับ DS V4 Flash):**
+
+1. **Threads แทบไม่มีผลเมื่อ experts อยู่ GPU** — 74.6–76.4 cold, 70.4–74.0
+   warm ตลอด t4→t16 (i9-9900KF 8C/16T) → GPU เป็น bottleneck, CPU threads
+   ไม่ใช่ตัวแปรรบกวน → **สำหรับ DS V4 (experts บน CPU) threads จะมีผลจริง
+   ต่างหาก** — sweep threads ต้องทำกับ DS V4 เอง ไม่ใช่เอา curve นี้ไป extrapolate
+2. **flash-attn on ดีกว่า off เล็กน้อย** (warm 73.9 vs 70.4, −4.7%) → ใช้
+   `-fa on` กับ DS V4 ต่อไป (สำคัญขึ้นเมื่อ ctx ใหญ่ — KV บน GPU)
+3. **KV q8 เป็นกลาง** ที่ ctx 2048 (74.6 vs 75.9 ≈ noise) → ปลอดภัยใช้
+   `-ctk/-ctv q8_0` กับ DS V4 Flash (KV ใหญ่ ~5 GB ที่ 32k ctx — q8 ลดครึ่ง
+   โดยไม่เสีย tok/s บนเครื่องนี้)
+4. **anchor t8 ใหม่ = 75.9/73.9** — สูงกว่า baseline เก่า 66.1/60.8
+   (commit b73faa1) เพราะ page cache อุ่นขึ้น (faults 282→141 cold) →
+   **เปรียบเทียบ DS V4 กับ Qwen ต้องใช้ anchor ใน session เดียวกัน**
+   (harness ใส่ anchor ไว้ใน matrix เดียวกับ DS V4 configs เสมอ)
+
+ผลเต็มอยู่ใน `scripts/.qwen_threads_out.json` (8 configs) — harness แก้
+เพิ่ม value-aware verification (จะ fail ทันทีถ้า flag ถูก override เงียบ)

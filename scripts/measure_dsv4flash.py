@@ -195,11 +195,36 @@ def measure_one(extra):
     time.sleep(1)
     cmd = llama_cmdline()
     cmd_toks = cmd.split()
-    expected = [t for t in extra.split() if t.startswith("-")]
-    if expected and not all(e in cmd_toks for e in expected):
+
+    def _flag_value(toks, flag):
+        # LAST occurrence wins — llama.cpp keeps the final value, and the
+        # load request always emits `-t 8` BEFORE the extra args.
+        idx = [i for i, t in enumerate(toks) if t == flag]
+        if not idx:
+            return None
+        i = idx[-1]
+        return toks[i + 1] if i + 1 < len(toks) else None
+
+    extra_toks = extra.split()
+    expected = [t for t in extra_toks if t.startswith("-")]
+    missing = [e for e in expected if e not in cmd_toks]
+    if missing:
         raise RuntimeError(
-            f"spawned llama-server missing expected flags {expected}:\n{cmd}"
+            f"spawned llama-server missing expected flags {missing}:\n{cmd}"
         )
+    # Value-aware verification (P8): a threads/KV sweep only works because
+    # extra args are appended LAST — assert the ACTUAL values on the spawned
+    # process, or a silent override (e.g. -t 16 being dropped back to 8)
+    # would invalidate the whole sweep while passing the presence-only check.
+    for flag in ("-t", "-fa", "-ctk", "-ctv"):
+        if flag in extra_toks:
+            want = _flag_value(extra_toks, flag)
+            got = _flag_value(cmd_toks, flag)
+            if got != want:
+                raise RuntimeError(
+                    f"spawned llama-server {flag}={got}, "
+                    f"expected {flag}={want}:\n{cmd}"
+                )
     # Cold: page cache has only the warmup's touch — the real weights are
     # being faulted in WHILE generating, so this is the disk-bound number.
     cold = _generate("Summarize the plot of Dune in 3 sentences.", GEN_TOKENS)

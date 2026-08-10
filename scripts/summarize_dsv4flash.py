@@ -20,13 +20,17 @@ import sys
 DEFAULT_MATRIX = "scripts/.dsv4flash_matrix_out.json"
 RESULTS_DOC = "research/experiments/EXP-012-dsv4flash-103gb/results.md"
 
-# Qwen3.6-35B-A3B IQ1_M baseline (10 GB, fits RAM) — recorded in commit b73faa1.
-# Reference only: shows how expert offload scales on the SAME machine/flags.
+# Qwen3.6-35B-A3B IQ1_M baseline (10 GB, fits RAM) — reference for how
+# expert offload scales on the SAME machine/flags.
+# NOTE 2026-08-10 P8: re-measured n-cpu-moe 0 t8 same-session = 75.9/73.9
+# (old 66.1/60.8 from commit b73faa1 had colder page cache; faults/tok
+# dropped 282->141 cold as the file became resident). Use the SAME-SESSION
+# anchor from the DS V4 matrix for comparison, not this absolute number.
 QWEN_BASELINE = {
     "cpu-moe t8":      {"cold": 14.2, "warm": 14.6, "cf": 7978, "wf": 4226},
     "n-cpu-moe 10 t8": {"cold": 36.9, "warm": 39.8, "cf": 2193, "wf": 1779},
     "n-cpu-moe 5 t8":  {"cold": 46.7, "warm": 44.1, "cf": 1386, "wf": 1370},
-    "n-cpu-moe 0 t8":  {"cold": 66.1, "warm": 60.8, "cf": 282,  "wf": 1095},
+    "n-cpu-moe 0 t8":  {"cold": 75.9, "warm": 73.9, "cf": 141,  "wf": 550},
     "cpu-moe t16":     {"cold": 14.3, "warm": 13.6, "cf": 7978, "wf": 4109},
 }
 
