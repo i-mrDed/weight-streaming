@@ -1131,9 +1131,17 @@ class DownloadManager:
                             status=400,
                         )
                     free = shutil.disk_usage(task.target_dir).free
-                    if task.total_bytes > free:
+                    # On resume the existing .part bytes are ALREADY on disk:
+                    # only the REMAINING bytes add to usage. Requiring the
+                    # full file size free would deadlock a resume once the
+                    # .part itself consumes the slack — EXP-012 hit exactly
+                    # this: 24 GB .part + 45 GB free, gate demanded 49 GB
+                    # for a 49 GB file, so the resume failed forever.
+                    need = task.total_bytes - start
+                    if need > free:
                         raise HubValidationError(
-                            f"insufficient disk space: need {task.total_bytes} bytes, free {free}",
+                            f"insufficient disk space: need {need} more bytes "
+                            f"(resume {start} of {task.total_bytes}), free {free}",
                             status=400,
                         )
                 task.bytes_downloaded = start

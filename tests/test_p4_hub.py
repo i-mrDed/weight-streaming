@@ -774,6 +774,35 @@ def test_size_guard_insufficient_disk(monkeypatch, models_dir):
     assert not (models_dir / "big.gguf").exists()
 
 
+def test_size_guard_resume_counts_only_remaining(monkeypatch, models_dir):
+    """P8 regression: the disk gate must NOT demand the full file size free
+    when a .part already exists — resume only adds the REMAINING bytes, so
+    it must pass with free >= remainder even when free < total file size.
+    (EXP-012 dl-3 deadlock: 24 GB .part + 45 GB free, gate demanded 49 GB.)"""
+
+    class _Usage:
+        free = 5_000  # enough for the 4,553-byte remainder, not the full 16,553
+
+    monkeypatch.setattr(hubmod.shutil, "disk_usage", lambda p: _Usage())
+
+    class _ResumeStream(FakeStream):
+        status = 206
+        content_range_start = 12_000
+        content_range_total = len(_GGUF)
+
+        def __init__(self):
+            super().__init__(_GGUF[12_000:], content_length=len(_GGUF) - 12_000)
+
+    (models_dir / "big.gguf.part").write_bytes(_GGUF[:12_000])  # already on disk
+    mgr = _mgr(stream=lambda u, t, start=0: _ResumeStream())
+    task = mgr.create_download("org/m", "big.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "done"
+    final = models_dir / "big.gguf"
+    assert final.exists()
+    assert final.read_bytes() == _GGUF  # resume appended the remainder, no dup
+
+
 # ── Endpoint contracts ────────────────────────────────────────────────
 
 
