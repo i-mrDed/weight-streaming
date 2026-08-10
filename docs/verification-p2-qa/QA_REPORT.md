@@ -94,7 +94,7 @@ Dev explicitly could not runtime-test (no model), and this box **did** have GGUF
 1. **Defect #2 above** (tok/s footer dead due to `?model=` stats shape) — honest but non-functional.
 2. **Dev's VERIFICATION.md size numbers are stale**: claims JS 277.99 kB / 88.92 kB gzip; actual committed+rebuilt = 286.81 kB / 92.67 kB gzip (Thai batch + rebuild). Within budget; doc accuracy only.
 3. EN unit inconsistency (known): overview `faults/token` vs stats `faults/tok` (`locales/en/overview.json:37` / `stats.json:27`). TH is consistent (ฟอลต์/โทเคน vs ฟอลต์/tok mirrors EN per page).
-4. Scan late-response race: two overlapping scans — the earlier (slow) response can overwrite the later scan's results (observed: Jan results rendered under a `C:/Users/dedch/models` dir input). `runScan` has no request-sequence guard.
+4. Scan late-response race: two overlapping scans — the earlier (slow) response can overwrite the later scan's results (observed: Jan results rendered under a `~/models` dir input). `runScan` has no request-sequence guard.
 5. Mobile touch targets <44px: P1 shell `icon-btn` (34px), `btn--md` quick actions (37px), `tip__trigger` (17px) — pre-existing, accepted at P1.
 6. TH phrasing suggestions (optional polish): "อัตราการฮิตของบัฟเฟอร์" is glossary-locked but "ฮิต" transliteration reads slightly informal — consider "อัตรา命中" no — keep per glossary; `stats.idle.body` "ตัวนับ paging เริ่มจากศูนย์" is fine; `models.scan.tip` "การแยกส่วน header" → "การอ่านส่วนหัว GGUF" would read smoother; `overview.hero.uptimeTip` "เชื่อมติด" → "เชื่อมต่อ". None wrong, all understandable.
 7. Heatmap tooltip (TH) is a 4-clause run-on; readable but long for a tooltip.

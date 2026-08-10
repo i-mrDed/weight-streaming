@@ -103,3 +103,4 @@ scripts/.ws-server-mtp.log
 
 # One-off QA screenshot (P5.2 models-library "before" state)
 p52-models-lib-before.jpeg
+SESSION_LOG.md

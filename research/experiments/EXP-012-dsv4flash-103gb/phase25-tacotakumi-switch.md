@@ -40,10 +40,10 @@ python scripts/download_dsv4flash.py --dry-run --variant tacotakumi
 python scripts/download_dsv4flash.py --variant tacotakumi
 
 # 3. ลบ UD-IQ3_XXS ชุดเดิม (คืน 104 GB) — หลัง verify TacoTakumi โหลดได้
-rm -rf "C:/Users/dedch/models/UD-IQ3_XXS"
+rm -rf "~/models/UD-IQ3_XXS"
 
 # 4. วัด matrix เดิม (เปรียบเทียบ apples-to-apples)
-WS_TEST_MODEL="C:/Users/dedch/models/DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00001-of-00004.gguf" \
+WS_TEST_MODEL="~/models/DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00001-of-00004.gguf" \
   WS_TEST_MODEL_ID="dsv4flash" python scripts/measure_dsv4flash.py
 ```
 

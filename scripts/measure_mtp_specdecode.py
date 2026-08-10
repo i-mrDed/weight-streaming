@@ -27,7 +27,7 @@ PORT = os.environ.get("WS_PORT", "8765")
 BASE = f"http://127.0.0.1:{PORT}"
 MODEL = os.environ.get(
     "WS_TEST_MODEL",
-    "C:/Users/dedch/models/Qwen3.6-35B-A3B-UD-IQ1_M.gguf",
+    "<HOME>/models/Qwen3.6-35B-A3B-UD-IQ1_M.gguf",
 )
 MODEL_ID = os.environ.get("WS_TEST_MODEL_ID", "qwen36-mtp")
 N_CTX = int(os.environ.get("WS_CTX", "2048"))

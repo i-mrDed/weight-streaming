@@ -26,7 +26,7 @@ RTX 3060 12 GB (360 GB/s, ~12.7 TFLOPS FP16) · i9-9900KF · 64 GB RAM
 `--n-cpu-moe 10` default server flags), clean-room gate enforced:
 
 ```
-WS_TEST_MODEL="C:/Users/dedch/models/Qwen3.6-35B-A3B-UD-IQ1_M.gguf"
+WS_TEST_MODEL="~/models/Qwen3.6-35B-A3B-UD-IQ1_M.gguf"
 WS_TEST_MODEL_ID="qwen36a3b_iq1m"
 WS_MATRIX_CONFIGS='{"n-cpu-moe 10": "--n-cpu-moe 10 -fa on",
                     "n-cpu-moe 0 (all GPU)": "--n-cpu-moe 0 -fa on"}'

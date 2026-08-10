@@ -17,7 +17,7 @@ token read from RAM.
 
 - **Target:** Qwen3.6-35B-A3B UD-IQ2_M (D:/models)
 - **Draft candidates:**
-  1. Qwen3-0.6B-Q8_0 (639 MB, `C:/Users/dedch/models/`) — official Qwen,
+  1. Qwen3-0.6B-Q8_0 (639 MB, `~/models/`) — official Qwen,
      Qwen3 tokenizer (151,936 tokens)
   2. ngram-simple — no draft model (uses the target's own context)
   3. MTP variant (`unsloth/Qwen3.6-35B-A3B-MTP-GGUF`) — same model family,
