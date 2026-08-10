@@ -6,6 +6,22 @@
 
 ---
 
+## ✅ P7 + EXP-009…013 + Repo Release Prep (2026-08-04 → 2026-08-10)
+
+| สถานะ | Task | Priority | Notes |
+|-------|------|----------|-------|
+| ✅ | P7.1b LlamaServerBackend (GPU) | 🔴 | spawn llama-server: `-ngl`/`--n-cpu-moe`, reasoning mode, date injection, subprocess page-fault telemetry, readiness 300s |
+| ✅ | P7.2 Assistants CRUD + UI | 🔴 | `/v1/assistants` + AssistantsPage + assistant-ref guards on hub delete/clear |
+| ✅ | P7.3 tool calling + P7.4 MCP host | 🔴 | `tools`/`tool_calls` protocol + stdio/SSE MCP mgmt + settings UI |
+| ✅ | P7.5 GPU load options | 🔴 | `gpu_layers`/`kv_cache_type` (ModelLoadRequest + Settings) + quant advisor `/v1/hardware` |
+| ✅ | EXP-009 KV q8 no-op · EXP-010 spec-decode dead end | 🟡 | clean-room gate (check_clean_environment.py) + EXP-005/006 re-validated (contaminated) |
+| ✅ | EXP-011 IQ1_M 72–78 tok/s + Thai tonal quality | 🟡 | IQ1_M vs IQ2_M: 8/9 dimensions equal, Thai tonal broken |
+| ✅ | EXP-012 DS V4 Flash 104 GB | 🔴 | 1.48–1.89 tok/s disk-bound; harness + download script + fixes (priority, disk-gate resume, timeout) |
+| ✅ | EXP-013 kimi-k3-in-c deep-research | 🟡 | scored 87/120 vs theirs 71/120; takeaways → hardware plan |
+| ✅ | Repo restructure + GitHub CI green | 🔴 | project at repo root (`i-mrDed/weight-streaming`); Python (Windows) + frontend CI; deps declared |
+
+---
+
 ## ✅ Current Operational Reliability — SPA Chat (2026-07-28 → 2026-07-29)
 
 | สถานะ | Task | Priority | Notes |

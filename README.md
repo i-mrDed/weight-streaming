@@ -2,31 +2,51 @@
 
 **Run LLMs larger than your RAM — using NVMe as an extension of memory, measured honestly.**
 
+[![CI](https://github.com/i-mrDed/weight-streaming/actions/workflows/ci.yml/badge.svg)](https://github.com/i-mrDed/weight-streaming/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/i-mrDed/weight-streaming)](https://github.com/i-mrDed/weight-streaming/releases)
+
 `weight-streaming` is a local inference platform for large language models
 (100B–3T+ parameters, especially MoE) on consumer hardware with 32–64 GB
 RAM. Instead of pretending a 104 GB model fits in 12 GB of VRAM, it runs
 the model anyway and **reports the real cost** — tok/s, page faults per
 token, and disk traffic — so you can see exactly what the machine is
-doing and where the bottleneck is.
+doing and where the bottleneck is. The project's ground rule is honest
+telemetry: every number comes from real measurement, or it shows `n/a` —
+never a fabricated value.
 
-## What it is now
+## Features
 
-A full local platform in one package (not just a library):
-
-- **API server** (`python -m weight_stream.server`) — OpenAI-compatible
-  `/v1/*` endpoints, model load/unload with per-model context, threads,
-  GPU layers and KV-cache type, request queueing, process-priority
-  etiquette (the inference child runs below-normal so your desktop stays
-  usable while a 100 GB model thrashes CPU/disk)
-- **Web console** (SPA at `http://localhost:8765/app`) — live stats
-  (tok/s, page-fault demand, VRAM), MoE expert heatmap, chat, model
-  library, hub downloads, issue reporting, settings
-- **Dual backend** — llama-server subprocess (GPU offload + native
-  reasoning control) with graceful fallback
-- **Hub** — download GGUF models directly from Hugging Face (sharded
-  repos, subdirectories, Xet storage, resumable `.part` downloads with a
-  GGUF structural gate before rename)
-- **MCP host** — connect stdio/SSE MCP servers for tool calling
+- **API server** — OpenAI-compatible `/v1/*` endpoints plus Anthropic
+  `/v1/messages` and an SSE `/v1/generate`. Model load/unload with
+  per-model context length, threads, GPU layers and KV-cache type,
+  request queueing, live stats, usage history, log tailing, and an issue
+  tracking system.
+- **Web console** — SPA at `http://localhost:8765/console/` (the root
+  `/` redirects there; the pre-P6 UI is kept at `/app-legacy` for one
+  release as a rollback path). Chat with streaming thinking/answer
+  separation, live stats (tok/s, page-fault demand, VRAM), model library
+  with a quant advisor, hub downloads with progress, assistants, MCP
+  settings, issue reports, i18n (TH/EN), and a theme registry.
+- **Dual backend** — llama-server subprocess (GPU offload with
+  `-ngl` / `--n-cpu-moe`, native reasoning control, real subprocess
+  page-fault telemetry) and the llama-cpp-python CPU binding, with
+  graceful fallback between them.
+- **Assistants** — CRUD store with system prompts, selectable in chat,
+  and used as a safety guard so a model an assistant still references
+  cannot be deleted from the hub.
+- **MCP host** — manage stdio/SSE MCP servers and list/call their tools
+  (P7.4).
+- **Hub** — download GGUF models directly from Hugging Face: sharded
+  repos, per-quant subdirectories, Xet storage, resumable `.part`
+  downloads with a GGUF structural gate (byte-count parity +
+  header/tensor-table parse) before rename, plus delete / clear / reveal
+  endpoints.
+- **CLI / TUI / Gradio** — `weight-streaming` ships `run`, `stats`,
+  `benchmark`, `server` (alias `serve`), `auto-tune`, `repack`,
+  `inspect`, `ui` (Gradio), `tui` (Textual) and `issues` subcommands.
+- **CPU etiquette** — inference child processes run below-normal
+  priority by default so the desktop, browser and IDE stay usable while
+  a 100 GB model thrashes CPU and disk.
 
 ## Real measured results (EXP-012, 2026-08-10)
 
@@ -46,8 +66,10 @@ The honest headline: a 104 GB model **does run** on this 64 GB machine at
 ≈150–300 MB read from disk per token) proves the bottleneck is the
 disk→RAM→CPU pipeline — not the GPU, not the CPU. Config tweaks move the
 number only ~15%. The path to 15–30+ tok/s is more RAM (128 GB keeps the
-whole file in page cache) or more VRAM (see
-[`research/experiments/EXP-012`](research/experiments/EXP-012-dsv4flash-103gb/)).
+whole file in page cache) or more VRAM — see
+[`research/experiments/EXP-012`](research/experiments/EXP-012-dsv4flash-103gb/)
+and the
+[`HARDWARE_100TPS_PLAN`](research/HARDWARE_100TPS_PLAN.md).
 That is the whole point of the project: measure the real cost of running
 models bigger than your hardware, then close the gap.
 
@@ -68,37 +90,106 @@ token. The platform:
 ## Quick start
 
 ```bash
-# install (server extras: fastapi/uvicorn; test: pytest/httpx)
+# install (server extras: fastapi/uvicorn; test: pytest/httpx/requests)
 pip install -e ".[server,test]"
 
-# start the API server + web console
-python -m weight_stream.server --port 8765
+# API server + web console (default port 8765)
+weight-streaming server            # or: python -m weight_stream.server --port 8765
 
-# open http://localhost:8765/app
+# open http://localhost:8765/console/
 ```
+
+Other front doors:
 
 ```bash
-# run the test suite (287 tests)
-python -m pytest
+weight-streaming run model.gguf -p "Hello"          # CLI generation
+weight-streaming benchmark model.gguf --max-tokens 256
+weight-streaming tui --server http://127.0.0.1:8765 # Textual TUI
+weight-streaming ui                                 # Gradio web UI
 ```
+
+## Configuration (environment variables)
+
+All server options have an env-var form (`WS_*`), so the same config
+applies to the SPA, CLI and API:
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `WS_PORT` / `WS_HOST` | `8765` / `127.0.0.1` | API server bind |
+| `WS_MODELS_DIR` | platform model dir | Where the hub writes downloads / scans for models |
+| `WS_N_THREADS` | half of logical cores | Default inference threads per model |
+| `WS_N_CTX` | model default | Default context length |
+| `WS_GPU_LAYERS` | `-1` (auto) | GPU offload: `-1` auto, `0` CPU-only, `N` offload N layers (llama-server backend) |
+| `WS_KV_CACHE_TYPE` | empty (f16) | KV cache data type, e.g. `q8_0` to halve KV VRAM |
+| `WS_BUFFER_MB` | `64` | Streaming buffer size for the CPU binding |
+| `WS_IDLE_TIMEOUT` | `0` (keep loaded) | Seconds of idle before auto-unload |
+| `WS_LOWER_PRIORITY` | `1` | Run inference children below-normal priority |
+| `WS_MAX_MODELS` / `WS_MAX_REQUESTS` / `WS_QUEUE_DEPTH` | — | Concurrency limits |
+| `WS_LOG_LEVEL` | `info` | Log verbosity |
+
+Extra llama-server flags can be passed through with `WS_LLAMA_EXTRA_ARGS`
+(e.g. `--cpu-moe`, `--n-cpu-moe`, `-fa`).
 
 ## Downloading big models (hub)
 
 Models are downloaded from Hugging Face through the hub — sharded repos,
 per-quant subdirectories, resumable partials, and a GGUF structural gate
 (byte-count parity + header/tensor-table parse) before a `.part` is ever
-renamed into place. See `scripts/download_dsv4flash.py` and
-`research/experiments/EXP-012-dsv4flash-103gb/` for the 104 GB
-DeepSeek-V4-Flash walkthrough.
+renamed into place. Downloads survive restarts, can be paused/resumed per
+task, and deletion is guarded against models an assistant still
+references. See `scripts/download_dsv4flash.py` and
+[`research/experiments/EXP-012-dsv4flash-103gb/`](research/experiments/EXP-012-dsv4flash-103gb/)
+for the 104 GB DeepSeek-V4-Flash walkthrough (download + measure + the
+honest verdict).
+
+## API overview
+
+| Family | Endpoints |
+|---|---|
+| Chat / generate | `POST /v1/chat/completions`, `POST /v1/messages` (Anthropic), `POST /v1/generate` (SSE) |
+| Models | `GET /v1/models`, `POST /v1/models/load`, `POST /v1/models/unload`, `GET /v1/models/scan` |
+| Telemetry / config | `GET /v1/stats`, `GET/PATCH /v1/config`, `GET /v1/hardware`, `GET /v1/usage/history`, `GET /v1/logs/tail` |
+| Hub | `GET /v1/hub/search`, `GET /v1/hub/model/{repo}`, `POST /v1/hub/download`, `GET /v1/hub/downloads`, `POST /v1/hub/download/{id}/{cancel,resume,delete,reveal}`, `POST /v1/hub/downloads/clear` |
+| Assistants | `GET/POST /v1/assistants`, `GET/PATCH/DELETE /v1/assistants/{id}` |
+| Issues | `GET/POST /v1/issues`, `GET/PATCH /v1/issues/{id}`, `GET /v1/issues/export` |
+| System | `GET /health`, `GET /api`, `GET /v1/browse`, `GET /v1/browse-dir` |
+
+## Tests & CI
+
+GitHub Actions runs on every push/PR (`windows-latest` for Python,
+`ubuntu-latest` for the frontend): the full Python suite (~290 tests:
+hub download semantics, API contract, backends, telemetry, process
+priority, config) plus `tsc --noEmit` typecheck and a production `vite
+build` of the console. Locally:
+
+```bash
+python -m pytest           # full Python suite
+cd frontend && npm ci && npm run typecheck && npm run build
+```
 
 ## Documentation & research
 
-- [`docs/`](docs/) — architecture, issue system, IDE integration
-- [`research/experiments/`](research/experiments/) — EXP-001..EXP-012:
+- [`docs/`](docs/) — architecture, ADRs/decisions, model guide, issue
+  system, IDE integration, dashboard-theme spec
+- [`research/experiments/`](research/experiments/) — EXP-001…EXP-013:
   buffer/prefetch simulation, KV-cache scaling, MoE CPU/GPU tiering,
-  quant quality (Thai tonal probes), and the DS V4 Flash >RAM measurement
+  quant quality (Thai tonal probes), spec-decode dead-end, IQ1_M vs
+  IQ2_M, DS V4 Flash >RAM measurement, kimi-k3-in-c deep-research
 - [`research/HARDWARE_100TPS_PLAN.md`](research/HARDWARE_100TPS_PLAN.md) —
-  hardware roadmap informed by measured results
+  hardware roadmap calibrated with measured results (2026-08-10 market
+  prices)
+- [`CHANGELOG.md`](CHANGELOG.md) — semantic-version release history
+
+## Repository layout
+
+```
+weight_stream/        core package: backends, server, hub, issues, io, tui, ui, gguf
+frontend/             Vite/React console (built into weight_stream/server/static/console)
+scripts/              measurement/download harnesses (EXP-00x)
+tests/                Python test suite
+research/             experiments + hardware plan + deep-research notes
+docs/                 architecture, ADRs, guides
+```
 
 ## License
 

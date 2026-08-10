@@ -5,7 +5,36 @@
 
 ---
 
-## [Unreleased]
+## [0.14.0] - 2026-08-10
+
+### 🤖 P7 — Assistants, MCP, GPU backend & tool calling
+- **P7.1b `LlamaServerBackend` (GPU)** — spawn llama-server subprocess with GPU offload (`-ngl`/`--n-cpu-moe`), native reasoning control, date injection, subprocess page-fault telemetry (`page_fault_count(pid=...)` on Windows), and honest stats for the GPU path. Readiness wait raised 60s → 300s for >RAM model loads (a 104 GB load takes ~69s cold).
+- **P7.1c Jan-style chat controls** — thinking budget, per-model effort, streaming-safe thinking/answer split, `parseThinks` fixes.
+- **P7.2 Assistants** — CRUD API + JSON store (`/v1/assistants`), console Assistants page + selector; assistant references now guard hub delete/clear.
+- **P7.3 Tool calling** — OpenAI-compatible `tools`/`tool_calls`/`tool` role protocol.
+- **P7.4 MCP host** — manage stdio/SSE MCP servers, list/call tools, settings UI section.
+- **P7.5 GPU load options** — `gpu_layers` (`-ngl`) and `kv_cache_type` (`-ctk/-ctv`) on `ModelLoadRequest`, surfaced in Settings/load form; `WS_GPU_LAYERS`/`WS_KV_CACHE_TYPE` env defaults; quant advisor (`/v1/hardware` VRAM fit + sibling-quant suggestion).
+- **Offline-first audit** + P7 status docs synced.
+
+### 🔬 EXP-009…EXP-011 — quant & telemetry hardening
+- **Clean-room gate** (`scripts/check_clean_environment.py`) — refuses to measure with stale servers/orphans; EXP-005/006 re-validated (old numbers were contaminated by a stale Jan llama-server on port 8805).
+- **EXP-009** KV cache `q8_0` vs f16: **no-op on this machine** (~10 MiB VRAM, same tok/s) — KV lives mostly in host RAM. **EXP-010** speculative decoding: dead end recorded (no backend support).
+- **Hub integrity gate** after download + `stream_timeout` + `Content-Range /total` size fallback; resume-after-truncation regression test.
+- **EXP-011** IQ1_M on Qwen3.6-35B-A3B: **72–78 tok/s**, tonal determinism probe (IQ1_M 0/6 deterministic), IQ1_M vs IQ2_M quality eval (8/9 dimensions equal, Thai tonal broken).
+
+### 📡 EXP-012 — DeepSeek-V4-Flash 0731 (104 GB) measured
+- Full harness (`scripts/measure_dsv4flash.py`) with cold/warm paging + value-aware flag verification; one failed config no longer wipes the matrix.
+- Download script: 4 shards, hard disk-free gate, safe target auto-selection, `--variant iq2m` fallback, synced sizes from HF tree API.
+- Proved `deepseek4` arch + MXFP4 (type 39) tensors run on the pinned backend; hub learned subdir/sharded/Xet + metadata-only shard gate.
+- **Result: 1.48–1.89 tok/s, disk-bound** (36–77k faults/token ≈ 150–300 MB disk/token); config moves the number ~15% only. P8 sweep (threads 4–16, fa-off, KV-q8) confirmed flat — GPU-bound configs are thread-insensitive.
+- **Fixes en route**: llama-server child lowered below-normal (desktop stays usable), hub disk gate counts only remaining bytes on resume (unblocked a stuck 24 GB `.part`), `_wait_ready` 300s timeout.
+
+### 🏠 Repo restructure, CI & packaging
+- Moved to **https://github.com/i-mrDed/weight-streaming** — the project now lives at the repo root (was `.Weight-Streaming/` inside a workspace repo with unrelated projects); history rewritten clean, private/unrelated folders never pushed.
+- **GitHub Actions CI green** (Python suite on Windows + frontend typecheck/build on Linux), workflow at repo-root `.github/workflows/ci.yml`.
+- **Packaging fixes**: declared `gguf`, `aiofiles`, `starlette`, `pydantic`, `requests` (were imported but undeclared); GGUF fixture tests skip in CI (5.9 GB local model); `*.log` + model/env/secret ignores hardened.
+- **Flake fixes**: tok/s and hub speed report real values when a generation/download finishes inside one clock tick (elapsed floored at 1e-9).
+- Docs: `ARCHITECTURE_REVIEW.md`, `ADVISORY-2026-08-03-WASTE.md`, `DASHBOARD_THEME_SPEC.md`, waste-comparison research, EXP-012/013 records added.
 
 ### 🎉 Console Promoted to Production (P6) — 2026-08-04
 - **Console (dashboard UI) กลายเป็น UI หลัก** — merge `feature/dashboard-theme` → `main` (`--no-ff`, HEAD `1dba698`) ตามมติผู้ใช้ trial-first

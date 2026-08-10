@@ -4,7 +4,9 @@
 > โดยไม่ต้องโหลด weights ทั้งหมดเข้า RAM — ใช้ predictive streaming จาก NVMe แทน  
 >
 > *เป้าหมาย: ครอบคลุมโมเดลใหญ่ทุกรูปแบบ (dense, MoE, hybrid)*  
-> *เริ่มต้นที่: Kimi K3 (2.8T params, MoE, open weights July 2026)*
+> *เริ่มต้นที่: Kimi K3 (2.8T params, MoE, open weights July 2026)*  
+>
+> **สถานะปัจจุบัน (2026-08-10):** จากแนวคิดสู่แพลตฟอร์มจริง — ดู [README.md](README.md) (ภาพรวม + ผลวัดจริง EXP-012) และ [research/HARDWARE_100TPS_PLAN.md](research/HARDWARE_100TPS_PLAN.md) (แผน hardware). เอกสารนี้คือ vision เริ่มต้น — ส่วนที่ build-as-designed แยกไว้ใน [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §0
 
 ---
 
