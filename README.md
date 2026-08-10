@@ -1,6 +1,9 @@
 # weight-streaming
 
-![weight-streaming](docs/screenshots/banner.png)
+<p align="center">
+  <img src="docs/screenshots/boot-splash.png" alt="Weight Streaming console boot splash" width="70%">
+  <br><em>The console boot splash — real screen, real connection status (v0.15.0).</em>
+</p>
 
 **Run LLMs larger than your RAM — using NVMe as an extension of memory, measured honestly.**
 
