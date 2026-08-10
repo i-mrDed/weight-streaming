@@ -123,6 +123,42 @@ def test_patch_gated_key_returns_next_load_note(monkeypatch, tmp_path):
         assert mgr._cfg.default_n_ctx == 4096  # noqa: SLF001
 
 
+def test_patch_gpu_gated_keys_apply_with_auto_allowed(monkeypatch, tmp_path):
+    """P7.5: default_gpu_layers/default_kv_cache_type are gated keys
+    (next-load note); -1 (auto) is a VALID gpu_layers value, while
+    other int keys still reject < 1."""
+    app, mgr = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        r = c.patch("/v1/config", json={
+            "default_gpu_layers": -1,
+            "default_kv_cache_type": "q8_0",
+        })
+        assert r.status_code == 200
+        body = r.json()
+        assert "default_gpu_layers" in body["notes"]
+        assert "default_kv_cache_type" in body["notes"]
+        assert body["applied"]["default_gpu_layers"] == {"value": -1, "source": "runtime"}
+    assert mgr._cfg.default_gpu_layers == -1  # noqa: SLF001
+    assert mgr._cfg.default_kv_cache_type == "q8_0"  # noqa: SLF001
+
+
+def test_patch_gpu_layers_zero_is_cpu_only(monkeypatch, tmp_path):
+    """0 = CPU-only is a VALID default_gpu_layers (not < 1 rejection)."""
+    app, mgr = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        r = c.patch("/v1/config", json={"default_gpu_layers": 0})
+        assert r.status_code == 200
+    assert mgr._cfg.default_gpu_layers == 0  # noqa: SLF001
+
+
+def test_patch_gpu_layers_below_auto_rejected(monkeypatch, tmp_path):
+    """-2 or lower is not a valid gpu_layers value (auto = -1)."""
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        r = c.patch("/v1/config", json={"default_gpu_layers": -2})
+        assert r.status_code == 400
+
+
 def test_patch_runtime_source_is_reflected_in_get(monkeypatch, tmp_path):
     app, _ = _app(monkeypatch, tmp_path)
     with TestClient(app) as c:

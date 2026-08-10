@@ -161,12 +161,48 @@ def test_local_server_defaults_keep_cpu_headroom_and_model_loaded(monkeypatch):
     assert config.idle_unload_timeout == 0
 
 
+def test_gpu_load_defaults_from_config(monkeypatch):
+    """P7.5: gpu_layers/kv_cache_type defaults must coalesce from the
+    configured defaults exactly like n_threads — never crash on None."""
+    captured = {}
+
+    class _FakeModel:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+        def close(self):
+            pass
+
+    monkeypatch.setattr(
+        "weight_stream.server.model_manager.WeightStreamModel", _FakeModel
+    )
+    manager = ModelManager(ServerConfig(default_gpu_layers=0, default_kv_cache_type="q8_0"))
+
+    # use_llama_server=False exercises the CPU path: gpu-only args must be
+    # POPPED before the binding is constructed (it would reject them).
+    asyncio.run(
+        manager.load(
+            "m", "fake.gguf", buffer_mb=64, n_ctx=512,
+            gpu_layers=None, kv_cache_type=None, use_llama_server=False,
+        )
+    )
+    assert "gpu_layers" not in captured
+    assert "kv_cache_type" not in captured
+
+
 def test_application_factory_passes_its_config_to_model_manager():
     config = ServerConfig(default_n_threads=3, idle_unload_timeout=0)
     _, manager = create_app(config)
 
     assert manager._cfg is config
     assert manager._cfg.default_n_threads == 3
+
+
+def test_config_defaults_gpu_keys():
+    """P7.5: new GPU-load defaults exist with sane built-ins."""
+    cfg = ServerConfig()
+    assert cfg.default_gpu_layers == -1  # auto
+    assert cfg.default_kv_cache_type == ""  # llama-server's own default
 
 
 # -- Manager consumes the public wrapper, never _llm ------------------------
