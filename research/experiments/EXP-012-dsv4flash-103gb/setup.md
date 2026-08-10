@@ -67,6 +67,15 @@ params) รันได้จริงบนเครื่องนี้ผ่
       `deepseek4`, split.count=4, experts IQ3_XXS/IQ2_XS, 43 layers/
       256 experts/6 used/1M ctx — **gate ใหม่รองรับ metadata-only shard
       แล้ว** (commit นี้) — ตัวเลข 104.21 GB จาก HF tree API
+- [x] **สคริปต์ดาวน์โหลดพร้อม:** `scripts/download_dsv4flash.py` — ส่ง
+      4 shards ผ่าน `POST /v1/hub/download` (ทีละ task), poll progress,
+      resume จาก .part อัตโนมัติ, verify ครบก่อน rename (gate EXP-011b),
+      dry-run ตรวจพื้นที่ก่อน (ต้องว่าง ≥ 110 GB)
+- [x] **Research MXFP4 (2026-08-10):** Reddit LocalLLaMA ยืนยันว่า
+      "MXFP4 ไม่ถูกต้องทางเทคนิค — มี BF16 และ Q8 ปน" (ตรงกับ tensor table
+      ที่เราพบ) + มี community requant "expert-only IQ3" ที่ KLD ดีกว่า
+      UD-IQ3_S และ **decode เร็วขึ้น 1.4× บน CPU-spill rig** (ตรงกับ
+      เส้นทาง --cpu-moe ของเรา) — บันทึกไว้พิจารณาหลังวัด baseline
 - [ ] ผ่าน hub ของระบบเรา (`POST /v1/hub/download` หรือ CLI) — ได้ประโยชน์
       จาก integrity gate (EXP-011b: ตรวจ bytes ครบก่อน done + resume จาก .part)
 - [ ] ยืนยันผล: ขนาดไฟล์ตรงกับ HF (103 GB), GGUF magic ถูกต้อง
@@ -77,6 +86,12 @@ params) รันได้จริงบนเครื่องนี้ผ่
       measure_ncmoe_matrix) — มี clean-room gate อัตโนมัติ + verify flags
       จริงบน cmdline ของ llama-server + วัด **cold vs warm paging** แยก
       (สำคัญสำหรับโมเดล > RAM: บอกว่า expert มาจาก page cache หรือ disk)
+- [x] **Validate เส้นทาง restart จริง (2026-08-10)** — รัน 2 configs ผ่าน
+      restart server จริง (kill → restart → load → verify flag → วัด):
+      `cpu-moe t8` = 8.1 tok/s (experts ทั้งหมดบน CPU — ช้าตามคาดสำหรับ
+      35B) · `n-cpu-moe 0 t8` = 48.5 tok/s — ตัวเลขสอดคล้องกับ EXP-008
+      เดิม → harness พร้อมใช้กับ DS V4 Flash 100% (จุดนี้ไม่เคยทดสอบ
+      ก่อนหน้า — ถ้าพังจะเจอตอนรัน 104 GB)
 - [x] **Validate harness กับโมเดลจริง (Qwen IQ1_M, 10 GB)** 2026-08-10:
       cold 68.9 / warm 64.8 tok/s, faults 212→823/tok, fault_mb 0.87→3.37
       — ค่า paging อ่านจาก `/v1/stats` ได้จริง; ปลดโหลดคืนสะอาด ✓
