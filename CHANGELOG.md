@@ -40,6 +40,32 @@
   cmdline verification, /v1/stats shape normalization, quality-gate flow
   with fake transport, report formatting).
 
+### 🐛 Report-ISSUE-003 fixed — loading a 2nd model no longer breaks silently
+- Loading model B while model A (llama-server backend, single fixed port) is
+  loaded used to register BOTH as loaded; every generate on B then failed
+  with a confusing port-collision ModelError. Now `load()` evicts the idle
+  llama-server model (response carries `evicted=[...]`) or fails fast with a
+  clear ModelError when it is generating. Tests: `tests/test_p4_model_conflict.py`
+  (6 offline tests).
+
+### ⚡ Bench harness: `--sweep-threads` + Gemma 4 channel-think support
+- New `--sweep-threads 4,8,12,16` convenience flag — builds the config
+  matrix from a base `--extra-args` plus `-t N` per value (the hand-written
+  `--matrix` JSON remains for arbitrary sweeps).
+- `split_think` now also handles Gemma 4's `<|channel>thought …<channel|>`
+  thinking format (test added).
+- New `docs/BENCHMARKING.md` — official methodology (clean room, cmdline
+  verify, cold/warm, page-cache variance, reproducibility checklist).
+
+### 🧪 EXP-019: Gemma 4 26B-A4B QAT+MTP — new Thai-safe daily driver
+- **Thai gate 9/9 + tonal 6/6 PERFECT** (first model on this machine to
+  pass the tonal discriminator at a usable speed) — QAT sidesteps the
+  IQ-quant quality cliff (EXP-011/018).
+- **MTP works: +20%** (37.6 → 45.1 warm) via `--spec-type draft-mtp`,
+  unlike DS V4's embedded MTP (EXP-015, −11–18%).
+- Verdict: Gemma 4 QAT+MTP (45–47 tok/s) replaces Qwen3.6 IQ2_M as the
+  Thai daily driver; Qwen IQ2_XXS stays the non-Thai speed king.
+
 ### 🧪 Frontend test coverage (api client)
 - New `frontend/src/core/api.test.ts` (13 tests) covering the API client used
   by every page: `authHeaders()`/`setApiToken()` (B1 token store + Bearer

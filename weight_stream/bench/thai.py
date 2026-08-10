@@ -78,12 +78,21 @@ def _req(base: str, method: str, path: str, body: Optional[dict] = None) -> Any:
 def split_think(content: str) -> tuple[str, str]:
     """Split raw model output into (thinking, final_answer).
 
-    The backend may emit <think>…</think> blocks regardless of
-    reasoning_mode; the FINAL answer after the close tag is what quality
-    is judged on.
+    The backend may emit thinking blocks regardless of reasoning_mode; the
+    FINAL answer after the block closes is what quality is judged on.
+    Handles two known formats:
+
+    - ``<think>…</think>`` (Qwen family, EXP-011/018)
+    - ``<|channel>thought …<channel|>`` (Gemma 4, EXP-019)
     """
     import re
 
+    # Gemma 4 emits <|channel>thought …<channel|> (or an unclosed variant).
+    m = re.search(r"<channel\|>\s*(.*)", content, re.S)
+    if m:
+        think = re.sub(r"<\|channel\|?\s*>", "", content[: m.start()],
+                       flags=re.S)
+        return think.strip(), m.group(1).strip()
     m = re.search(r"</think>\s*(.*)", content, re.S)
     if m:
         think = re.sub(r"<think>\s*", "", content[: m.start()], flags=re.S)

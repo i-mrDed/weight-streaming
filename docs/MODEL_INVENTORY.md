@@ -10,7 +10,10 @@
 | โมเดล | quant | ขนาด | ที่อยู่ (เครื่องนี้) | แหล่ง | บทบาท | สถานะ |
 |---|---|---|---|---|---|---|
 | DeepSeek-V4-Flash-0731 | UD-IQ3_XXS | 98 GB | `C:\Users\dedch\models\UD-IQ3_XXS\` | unsloth (HF) | **โมเดลหลักของ EXP-012** — พิสูจน์รัน 104 GB บน 64 GB RAM | ✅ วัดเสร็จ (EXP-012: 1.5–1.9 tok/s, disk-bound) · ⏸ รอตัดสินใจลบเพื่อคืนที่ให้ IQ2_M |
-| Qwen3.6-35B-A3B | UD-IQ2_M | 10.7 GB | `D:\models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ2_M.gguf` | unsloth (HF) | **โมเดล benchmark หลักบน 12 GB VRAM** (43–56 tok/s) — ใช้ถ่ายภาพ console, เทียบ quant, ทดสอบ config | ✅ ใช้ประจำ |
+| Qwen3.6-35B-A3B | UD-IQ2_M | 10.7 GB | `D:\models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ2_M.gguf` | unsloth (HF) | **Thai-safe benchmark บน 12 GB** (43–56 tok/s) — ก่อน EXP-019 เป็น daily driver ไทย | ✅ ใช้ประจำ |
+| Qwen3.6-35B-A3B | UD-IQ2_XXS | 10.0 GB | `D:\models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf` | unsloth (HF) | non-Thai speed king (61–66 tok/s) — Thai tonal FAIL (EXP-018) | ✅ วัดเสร็จ (EXP-018) |
+| Qwen3.6-35B-A3B | UD-IQ1_M | 9.4 GB | `D:\models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ1_M.gguf` | unsloth (HF) | speed-first (74.7 tok/s) — Thai tonal FAIL | ✅ วัดเสร็จ (EXP-011) |
+| **Gemma 4 26B-A4B** | QAT UD-Q4_K_XL + MTP draft Q8_0 | 14.25 + 0.46 GB | `C:\Users\dedch\models\Gemma4-26B-A4B-QAT\` (+ `MTP\`) | unsloth (HF) | **NEW daily driver (ไทย): Thai gate 9/9 + tonal 6/6 PERFECT, 45–47 tok/s ด้วย MTP (EXP-019)** | ✅ วัดเสร็จ (EXP-019) — ใช้กับ `--spec-type draft-mtp` |
 | Qwen3-0.6B-Q8_0 | Q8_0 | 0.6 GB | `C:\Users\dedch\models\Qwen3-0.6B-Q8_0.gguf` | — | draft/helper ขนาดเล็ก | ✅ |
 
 ## 🧠 Embedding models
@@ -30,11 +33,12 @@
 | Llama-3.2-1B-Instruct | Q2_K | 0.6 GB | test/smoke |
 | qwenpus0.6B | Q2_K | 0.3 GB | test/smoke |
 
-## 📥 เป้าหมายดาวน์โหลดถัดไป (ตาม ROADMAP Phase 4)
+## 📥 เป้าหมายดาวน์โหลดถัดไป
 
 | โมเดล | quant | ขนาด | ต้องการพื้นที่ | สถานะ |
 |---|---|---|---|---|
-| DeepSeek-V4-Flash-0731 | **UD-IQ2_M** (`--variant iq2m`) | ~96 GB | ~40 GB (ต้องเคลียร์ — ตัวเลือกหลักคือลบ IQ3_XXS 98 GB) | ⏸ รอดิสก์ · script พร้อม (`scripts/download_dsv4flash.py --variant iq2m`) |
+| Gemma 4 26B-A4B | QAT Q4_K_M (เล็กลงจาก Q4_K_XL ถ้าต้องการประหยัด VRAM) | ~12–13 GB | ~13 GB | ⏸ ตัวเลือกถ้า Q4_K_XL spill รบกวน (ตอนนี้ 45–47 tok/s ใช้ได้) |
+| DeepSeek-V4-Flash-0731 | **UD-IQ2_M** (`--variant iq2m`) | ~96 GB | ~40 GB | ⏸ เลื่อนก่อน (กำไร 8% ไม่คุ้ม — ตัดสินใจแล้ว) |
 
 ## 🗑️ ประวัติการลบ
 

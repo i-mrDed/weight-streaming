@@ -32,6 +32,14 @@ def test_split_think_no_think_block():
     assert final == "plain answer"
 
 
+def test_split_think_gemma4_channel_format():
+    # Gemma 4 (EXP-019) emits <|channel>thought …<channel|> blocks.
+    content = "<|channel>thought here<channel|>Final Thai answer."
+    think, final = split_think(content)
+    assert think == "thought here"
+    assert final == "Final Thai answer."
+
+
 def test_quality_gate_keeps_full_think_evidence():
     # The JSON record must keep the FULL think — it is the evidence (e.g.
     # EXP-018: the wrong Thai tones live in the think; truncating hides the

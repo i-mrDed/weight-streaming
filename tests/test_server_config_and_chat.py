@@ -530,6 +530,15 @@ def test_load_lowers_process_priority_once_and_unload_restores_once(monkeypatch)
     monkeypatch.setattr(
         "weight_stream.server.model_manager.WeightStreamModel", _FakeModel
     )
+    # Keep the backend factory on the CPU path: with the single-port fix
+    # (Report-ISSUE-003) a second llama-server load would EVICT the first
+    # (and re-lower priority). This test is about priority call-count in the
+    # plain lifecycle, not about model-replacement semantics (which has its
+    # own test in tests/test_p4_model_conflict.py).
+    monkeypatch.setattr(
+        "weight_stream.backends.llama_server.LlamaServerBackend.is_available",
+        staticmethod(lambda: False),
+    )
     manager = ModelManager(ServerConfig(lower_process_priority=True))
 
     async def scenario():

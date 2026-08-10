@@ -93,6 +93,11 @@ def main():
                          help='JSON dict name->extra args, e.g. '
                               '"{\"cpu-moe t8\": \"--cpu-moe -fa on -t 8\"}" — '
                               'overrides --extra-args')
+    bench_p.add_argument("--sweep-threads", default="",
+                         help="Comma-separated thread counts to sweep, e.g. "
+                              "'4,8,12,16' — builds a matrix with the base "
+                              "--extra-args plus '-t N' per value "
+                              "(mutually exclusive with --matrix)")
     bench_p.add_argument("--thai", action="store_true",
                          help="Run the Thai quality gate (9 fixed questions) after measuring")
     bench_p.add_argument("--quality-max-tokens", type=int, default=2048,
@@ -491,7 +496,11 @@ def cmd_bench(args):
     base = f"http://127.0.0.1:{args.port}"
     project_root = _Path(__file__).resolve().parents[2]
 
-    # Matrix from --matrix JSON, else a single config from --extra-args.
+    # Matrix from --matrix JSON or --sweep-threads, else a single config.
+    if args.matrix.strip() and args.sweep_threads.strip():
+        print("Error: --matrix and --sweep-threads are mutually exclusive",
+              file=sys.stderr)
+        sys.exit(1)
     if args.matrix.strip():
         try:
             configs = _json.loads(args.matrix)
@@ -502,6 +511,16 @@ def cmd_bench(args):
             print("Error: --matrix must be a non-empty JSON object",
                   file=sys.stderr)
             sys.exit(1)
+    elif args.sweep_threads.strip():
+        base = args.extra_args.strip()
+        configs = {}
+        for t in args.sweep_threads.split(","):
+            t = t.strip()
+            if not t.isdigit():
+                print(f"Error: bad thread count '{t}' in --sweep-threads",
+                      file=sys.stderr)
+                sys.exit(1)
+            configs[f"t{t}"] = f"{base} -t {t}".strip()
     else:
         configs = {args.extra_args or "default": args.extra_args}
 

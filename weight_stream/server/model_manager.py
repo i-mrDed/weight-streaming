@@ -43,6 +43,30 @@ from .usage import UsageRecorder
 logger = logging.getLogger(__name__)
 
 
+def _find_llama_server_conflict(
+    models: Dict[str, Any], generating: Dict[str, bool]
+) -> tuple[Optional[str], Optional[str]]:
+    """Return ``(evict_id, blocked_id)`` for the single-port backend.
+
+    The llama-server backend owns ONE fixed backend port, so only one such
+    model can actually serve (Report-ISSUE-003). When a new llama-server
+    model is about to load:
+
+    - an IDLE loaded llama-server model can be evicted (``evict_id``), or
+    - a GENERATING one cannot be evicted mid-request (``blocked_id``) and
+      the load must fail fast instead of registering a ghost model that
+      errors at generate time.
+
+    Pure function — unit-testable without spawning any subprocess.
+    """
+    for mid, model in models.items():
+        if isinstance(model, LlamaServerBackend):
+            if generating.get(mid, False):
+                return None, mid
+            return mid, None
+    return None, None
+
+
 class ModelManager:
     """
     Manages multiple WeightStreamModel instances.
@@ -165,6 +189,8 @@ class ModelManager:
             if kv_cache_type is None:
                 kv_cache_type = self._cfg.default_kv_cache_type or None
             verbose = kwargs.pop("verbose", False)
+            # Forwarded to _create_backend unchanged (it pops it itself).
+            use_llama_server = kwargs.get("use_llama_server", True)
 
             # Enforce max models — find the eviction candidate here, but
             # unload it OUTSIDE the lock: unload() re-acquires _dict_lock
@@ -187,9 +213,44 @@ class ModelManager:
                         f"and all are busy generating."
                     )
 
+            # Single-port constraint (Report-ISSUE-003): the llama-server
+            # backend owns ONE fixed backend port — only one such model can
+            # actually serve. Loading a second while the first is loaded used
+            # to register BOTH as loaded and then fail every generate on the
+            # second with a port-collision ModelError. Now: if the new model
+            # will use the llama-server backend, evict the existing idle
+            # llama-server model (same silent-eviction semantics as the
+            # max_models path) or fail fast with a clear error when it is
+            # generating (it cannot be evicted mid-request).
+            will_use_server = bool(use_llama_server) and LlamaServerBackend.is_available()
+            conflict_evict: Optional[str] = None
+            conflict_blocked: Optional[str] = None
+            if will_use_server:
+                conflict_evict, conflict_blocked = _find_llama_server_conflict(
+                    self._models, self._generating
+                )
+                if conflict_blocked:
+                    raise ModelError(
+                        f"Model '{conflict_blocked}' uses the single-port "
+                        f"llama-server backend and is currently generating — "
+                        f"unload it (or wait for it to finish) before loading "
+                        f"another llama-server model.",
+                        details={"generating_model": conflict_blocked},
+                    )
+            evict_ids: set[str] = set()
+            if evict_id is not None:
+                evict_ids.add(evict_id)
+            if conflict_evict is not None:
+                evict_ids.add(conflict_evict)
+
         # Phase 2 — evict OUTSIDE the lock (unload re-enters _dict_lock).
-        if evict_id is not None:
-            await self.unload(evict_id)
+        evicted: list[str] = []
+        for mid in sorted(evict_ids):
+            try:
+                await self.unload(mid)
+                evicted.append(mid)
+            except Exception as e:
+                logger.warning("load eviction of %s failed: %s", mid, e)
 
         # Phase 3 — re-acquire and perform the actual load.
         async with self._dict_lock:
@@ -241,7 +302,12 @@ class ModelManager:
         if self._cleanup_task is None:
             self._cleanup_task = asyncio.create_task(self._auto_cleanup())
 
-        return {"status": "loaded", "model_id": model_id}
+        result: Dict[str, Any] = {"status": "loaded", "model_id": model_id}
+        if evicted:
+            # Transparency for the single-port eviction (ISSUE-003): the
+            # caller should know an older model was silently replaced.
+            result["evicted"] = evicted
+        return result
 
     async def unload(self, model_id: str) -> dict:
         """

@@ -7,29 +7,32 @@
 
 ---
 
-## 🏆 Tier 1 — ตัวหลัก (ใช้ของเดิม + ปรับ config ที่ยังไม่เคยวัด)
+## 🏆 Tier 1 — ตัวหลัก (วัดแล้วทุกตัว — EXP-011/018/019)
 
 ### 1. Qwen3.6-35B-A3B (มีอยู่แล้ว — D:\models\Qwen3.6-35B-A3B-GGUF\)
 Community verdict 2026: *"INSANE even for VRAM-constrained systems"* — เป็นตัวชูโรงของคลาส 12 GB
-(SWE-bench 73.4, coding/reasoning/multilingual เก่ง รวมไทย)
 
-| quant | ขนาด | สถานะ | คาดการณ์บนเครื่องเรา |
+| quant | ขนาด | สถานะ | วัดจริงบนเครื่องเรา |
 |---|---|---|---|
-| UD-IQ1_M | 9.36 GB | ✅ วัดแล้ว | **74.7 tok/s** แต่ **Thai tones ล้ม** (EXP-011) |
-| UD-IQ2_M | 10.73 GB | ✅ วัดแล้ว | 43–56 tok/s, ไทยผ่าน — VRAM เต็ม (10.9 GB) → ช้าลง |
-| **UD-IQ2_XXS** | **10.02 GB** | ⏸ **ยังไม่เคยวัด** | **จุดหวานที่พลาดไป**: ใหญ่กว่า IQ1_M นิดเดียว (fit มีเผื่อ) → น่าจะ ~60–75 tok/s + คุณภาพ > IQ1_M (ไทยน่าจะผ่าน) |
-| **UD-IQ3_XXS** | 12.30 GB | ⏸ ยังไม่เคยวัด | เกิน VRAM นิดหน่อย → `--fit on` spill ~0.3 GB (EXP-017 บอก spill น้อย = ยังเร็ว) — คุณภาพขยับชัด |
+| UD-IQ1_M | 9.36 GB | ✅ วัดแล้ว | **74.7 tok/s** แต่ **Thai tones ล้ม 0/6** (EXP-011) |
+| UD-IQ2_M | 10.73 GB | ✅ วัดแล้ว | 43–56 tok/s, ไทยผ่าน (EXP-011) — VRAM เต็ม (10.9 GB) |
+| UD-IQ2_XXS | 10.02 GB | ✅ วัดแล้ว | **61–66 tok/s** แต่ **Thai tones ล้ม 1/6** (EXP-018) — ใช้ได้สำหรับ non-Thai |
 
-**บทเรียน:** เราวัดแค่หัวกับท้ายของบันได quant — **IQ2_XXS (จุดกลาง) ไม่เคยถูกวัด** = lever ฟรีจากของเดิม
+### 2. Gemma 4 26B-A4B QAT + MTP (ดาวน์โหลดแล้ว — C:\Users\dedch\models\Gemma4-26B-A4B-QAT\)
+- ไฟล์: `gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf` 14.25 GB + `MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf` 0.46 GB
+- Benchmark 2026-07 (RTX 4070 12 GB): QAT+MTP **100.6 tok/s**; บน 3060 เรา: **45–47 tok/s** (EXP-019)
+- **✅ วัดแล้ว (EXP-019): Thai gate 9/9 + Thai tonal 6/6 PERFECT — คำแรกบนเครื่องนี้ที่ผ่านครบที่ความเร็วใช้ได้**
+- MTP บน build เรา: `--spec-draft-model <draft> --spec-type draft-mtp --spec-draft-n-max 2` → **+20%** (37.6→45.1 warm)
+- **จุดแข็ง:** QAT Q4 ≈ คุณภาพ Q8 — ข้ามหน้าผาคุณภาพของ IQ quant (EXP-011/018) ได้ทั้งหมด
 
-### 2. Gemma 4 26B-A4B QAT + MTP (ดาวน์โหลดใหม่ ~14 GB)
-- ไฟล์: `unsloth/gemma-4-26B-A4B-it-qat-GGUF` — **UD-Q4_K_XL 13.27 GB** + MTP draft Q8_0 **0.43 GB**
-- Benchmark 2026-07 (RTX 4070 12 GB, llama.cpp mainline): baseline 38.5 → QAT 69 → **QAT+MTP 100.6 tok/s**
-  (`--fit on --fit-target 1536 --spec-draft-model ... --spec-type draft-mtp --spec-draft-n-max 2 --flash-attn on -ctk f16 -ctv f16`)
-- บน 3060 ของเรา (bandwidth ~70% ของ 4070): คาด **~45–60 tok/s (ไม่ใช้ MTP) / ~65–85 tok/s (ใช้ MTP)**
-- **จุดแข็ง:** QAT Q4 ≈ คุณภาพ Q8 (intelligence-per-byte สูง) + 128K–262K context
-- **ความเสี่ยง (ต้องวัด):** Thai ยังไม่มีหลักฐานบน Gemma 4 · QAT flat quant มีรายงาน regression ในงาน multi-constraint (blogger กำลัง benchmark)
-- ✅ **Feasibility ยืนยันแล้วบน build เรา** (bb7049f7 รู้จัก Gemma4 arch — probe ด้วย MTP draft ผ่าน)
+## 🏆 สรุป verdict (หลัง EXP-019)
+
+| ใช้เมื่อ | โมเดล | tok/s | หมายเหตุ |
+|---|---|---|---|
+| **ภาษาไทย / คุณภาพสูงสุด** | **Gemma 4 26B QAT+MTP** | **45–47** | Thai 9/9 + tonal 6/6 — daily driver ใหม่ |
+| เร็วสุดที่ไทยผ่าน | Qwen3.6 IQ2_M | 43–56 | ตัวเดิม (EXP-011) |
+| non-Thai speed | Qwen3.6 IQ2_XXS | 61–66 | Thai tonal ล้ม (EXP-018) |
+| speed-first | Qwen3.6 IQ1_M | 74.7 | Thai tonal ล้ม (EXP-011) |
 
 ---
 
@@ -43,11 +46,13 @@ Community verdict 2026: *"INSANE even for VRAM-constrained systems"* — เป�
 
 ---
 
-## 🎯 แผนทดสอบที่แนะนำ (test-first, ค่าใช้จ่ายต่ำสุดก่อน)
+## 🎯 แผนทดสอบ (ทำเสร็จหมดแล้ว — EXP-018/019)
 
-1. **[ฟรี] วัด UD-IQ2_XXS ของ Qwen3.6** (10.02 GB — ดาวน์โหลด ~10 GB) → tok/s + ชุดไทย 9 ข้อ (เดียวกับ EXP-011) → ถ้าผ่านไทย + ≥60 tok/s = **ได้ทั้งเร็วทั้งดีจากของเดิมทันที**
-2. **[14 GB] วัด Gemma 4 26B QAT+MTP** → tok/s + ชุดไทย 9 ข้อ → เทียบกับ Qwen3.6 IQ2_XXS/IQ3_XXS
-3. **ตัวชนะ = daily driver** ของระบบ (บันทึกลง MODEL_INVENTORY + EXP ใหม่)
+1. ✅ **วัด UD-IQ2_XXS ของ Qwen3.6** → 61–66 tok/s แต่ **ไทยล้ม 1/6** → reject (EXP-018)
+2. ✅ **วัด Gemma 4 26B QAT+MTP** → **45–47 tok/s + ไทย 9/9 + tonal 6/6** → **ชนะ = daily driver ไทยใหม่** (EXP-019)
+3. ✅ **บันทึก** MODEL_INVENTORY + EXP ใหม่
+
+> ถัดไปถ้าอยากได้เร็วขึ้น: `ik_llama.cpp` fork (+45% บน Qwen3.6 — ต้อง build เอง) หรือ Gemma 4 Q4_K_M (เล็กลง → spill น้อยลง → เร็วขึ้น)
 
 ## 🔍 ที่มาข้อมูล (2026-07/08)
 
