@@ -5,6 +5,18 @@
 
 ---
 
+## [Unreleased]
+
+### 🧪 Frontend test coverage (api client)
+- New `frontend/src/core/api.test.ts` (13 tests) covering the API client used
+  by every page: `authHeaders()`/`setApiToken()` (B1 token store + Bearer
+  attach, incl. storage-unavailable), `apiJSON()` (Content-Type only with
+  body, auth on GET/POST, HTTP-error taxonomy with parsed `detail`, network
+  wrapping) and `sseRequest()` (SSE auth header + `abort()`). Frontend suite
+  now 20 tests (thinks 7 + api 13).
+
+---
+
 ## [0.15.0] - 2026-08-10
 
 > **Release prep:** wheel now ships the prebuilt console (`static/**` package-data —
