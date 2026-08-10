@@ -174,7 +174,10 @@ per-quant subdirectories, resumable partials, and a GGUF structural gate
 (byte-count parity + header/tensor-table parse) before a `.part` is ever
 renamed into place. Downloads survive restarts, can be paused/resumed per
 task, and deletion is guarded against models an assistant still
-references. See `scripts/download_dsv4flash.py` and
+references. Files land in the configured models dir (`WS_MODELS_DIR`, else
+the default locations incl. `~/models`) — see
+[`docs/MODEL_INVENTORY.md`](docs/MODEL_INVENTORY.md) for where each model
+lives on this machine. See `scripts/download_dsv4flash.py` and
 [`research/experiments/EXP-012-dsv4flash-103gb/`](research/experiments/EXP-012-dsv4flash-103gb/)
 for the 104 GB DeepSeek-V4-Flash walkthrough (download + measure + the
 honest verdict).
@@ -206,8 +209,9 @@ cd frontend && npm ci && npm run typecheck && npm run build
 
 ## Documentation & research
 
-- [`docs/`](docs/) — architecture, ADRs/decisions, model guide, issue
-  system, IDE integration, dashboard-theme spec
+- [`docs/`](docs/) — architecture, ADRs/decisions, model guide, model
+  inventory (download locations), issue system, IDE integration,
+  dashboard-theme spec
 - [`research/experiments/`](research/experiments/) — EXP-001…EXP-017:
   buffer/prefetch simulation, KV-cache scaling, MoE CPU/GPU tiering,
   quant quality (Thai tonal probes), spec-decode dead-end, IQ1_M vs
