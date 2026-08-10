@@ -71,6 +71,16 @@ params) รันได้จริงบนเครื่องนี้ผ่
       4 shards ผ่าน `POST /v1/hub/download` (ทีละ task), poll progress,
       resume จาก .part อัตโนมัติ, verify ครบก่อน rename (gate EXP-011b),
       dry-run ตรวจพื้นที่ก่อน (ต้องว่าง ≥ 110 GB)
+- [x] **Hub รองรับ subdir + sharded + Xet (2026-08-10, commit 91007a3):**
+      เจอ + แก้ 2 บั๊กที่ block ดาวน์โหลด DS V4 Flash โดยตรง — (a) tree
+      call ไม่ recursive → ไฟล์ใต้ `UD-IQ3_XXS/` ไม่โชว์ใน hub detail
+      (โชว์แค่ Q8_0 ที่ root), (b) `_sanitize_filename` reject path
+      separators → ดาวน์โหลดไม่ได้ต่อให้โชว์ แก้เป็น recursive=true +
+      ยอมรับ repo-relative path (ยัง block absolute/.. traversal)
+- [x] **ทดสอบ end-to-end จริง (2026-08-10):** ดาวน์โหลด shard 1 (5.26 MB)
+      ผ่าน hub API บน server จริง → done 5,257,696 bytes ครบเป๊ะ, subdir
+      `UD-IQ3_XXS/` สร้างอัตโนมัติ, **gate ยอมรับ metadata-only shard**
+      (ok: True, arch: deepseek4) → pipeline พร้อม 100% สำหรับ 104 GB
 - [x] **Research MXFP4 (2026-08-10):** Reddit LocalLLaMA ยืนยันว่า
       "MXFP4 ไม่ถูกต้องทางเทคนิค — มี BF16 และ Q8 ปน" (ตรงกับ tensor table
       ที่เราพบ) + มี community requant "expert-only IQ3" ที่ KLD ดีกว่า
@@ -149,5 +159,11 @@ RAM/disk ไม่ใช่ VRAM (ตัวเลขเดิมอิง MXFP4;
 - **ไฟล์เป็น sharded (4 ไฟล์) — โหลดผ่าน llama-server ได้โดยชี้ที่ shard 1**
   (llama.cpp auto-detect พี่น้องจาก split metadata, PR #6187); hub ของเรา
   ดาวน์โหลดทีละ shard และ gate ยอมรับ metadata-only shard 1 แล้ว
+- **ตัวเลือกไฟล์ (2026-08-10):** มีทางเลือก 3 — unsloth UD-IQ3_XXS
+  104.21 GB (เป้าหมายเดิม, เล็กสุดพอดี RAM 64 GB) · TacoTakumi IQ3_XXS
+  115.26 GB (KLD 0.263, imatrix, 1.52× decode บน spill rig) ·
+  IQ3_XXS-D_IQ3_S 119.59 GB (KLD 0.239 ดีสุด) — เทียบเต็ม:
+  `quant-options-comparison.md`. **คำเตือนจากผู้ทำ:** IQ dequant บน CPU
+  อาจช้า — เครื่องเรา spill 100% ต้องวัดจริง (ตัดสินใจหลัง baseline)
 - โมเดลนี้เป็น reasoning model (think default on) — วัด tok/s จะรวม think
   tokens ด้วย (เหมือน EXP-011: ใช้ `reasoning_mode: off` ถ้าต้องการเปรียบตรง)
