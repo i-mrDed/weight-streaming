@@ -6,6 +6,9 @@
 /* ── Shared bits ───────────────────────────────────────────── */
 .dialog-text { margin: 0 0 8px; color: var(--ws-text-secondary); font-size: var(--ws-text-sm); line-height: 1.6; }
 .dialog-text--dim { color: var(--ws-text-tertiary); font-size: var(--ws-text-xs); }
+/* Destructive-action warning inside a dialog (e.g. "referenced by…" before
+   deleting a model file) — amber, never hidden in the tertiary grey. */
+.dialog-text--warn { color: var(--ws-status-warn); font-weight: 600; }
 
 .md-input {
   width: 100%;
@@ -21,6 +24,28 @@
 .md-input:focus { outline: none; border-color: var(--ws-accent-brand); }
 .md-input::placeholder { color: var(--ws-text-tertiary); }
 select.md-input { cursor: pointer; }
+
+/* Dialog form fields (P7.2 Assistants / P7.4 MCP) — used by AssistantsPage
+   and MCPSection. Without these rules the fields fall back to inline flow:
+   labels and inputs sit on the same line and overlap. Kept in the shared
+   form-bits area next to .md-input so both dialogs stay consistent. */
+.form { display: flex; flex-direction: column; gap: 10px; }
+.form__label { font-size: var(--ws-text-xs); font-weight: 600; color: var(--ws-text-secondary); }
+.form__input, .form__textarea {
+  width: 100%;
+  background: var(--ws-surface-input);
+  border: 1px solid var(--ws-border-default);
+  border-radius: var(--ws-radius-sm);
+  color: var(--ws-text-primary);
+  font-family: inherit;
+  font-size: var(--ws-text-sm);
+  padding: 9px 11px;
+  transition: border-color var(--ws-dur-fast);
+}
+.form__input:focus, .form__textarea:focus { outline: none; border-color: var(--ws-accent-brand); }
+.form__input::placeholder, .form__textarea::placeholder { color: var(--ws-text-tertiary); }
+.form__textarea { resize: vertical; line-height: 1.5; }
+.form__actions { display: flex; justify-content: flex-end; gap: 8px; }
 
 /* Tooltip (honest telemetry explanations) */
 .tip { position: relative; display: inline-flex; vertical-align: middle; }
@@ -207,6 +232,39 @@ select.md-input { cursor: pointer; }
 .st-idle > div { flex: 1; }
 .st-idle__title { font-weight: 700; font-size: var(--ws-text-sm); color: var(--ws-text-primary); }
 .st-idle__body { font-size: var(--ws-text-xs); color: var(--ws-text-secondary); margin-top: 2px; }
+
+/* GPU backend (llama-server) honest-telemetry note — mirrors .st-idle
+   visual weight; the note is informational, not a call-to-action. */
+.st-gpu-note {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 18px;
+  margin-bottom: 16px;
+}
+.st-gpu-note__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: var(--ws-text-sm);
+  color: var(--ws-accent-brand);
+}
+.st-gpu-note__body {
+  margin: 0;
+  font-size: var(--ws-text-xs);
+  line-height: 1.5;
+  color: var(--ws-text-secondary);
+}
+.st-gpu-note__vram {
+  font-size: var(--ws-text-xs);
+  color: var(--ws-text-secondary);
+  background: color-mix(in srgb, var(--ws-accent-brand) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ws-accent-brand) 22%, transparent);
+  border-radius: 6px;
+  padding: 5px 9px;
+  align-self: flex-start;
+}
 
 .st-gauges {
   display: grid;
@@ -433,6 +491,45 @@ select.md-input { cursor: pointer; }
 }
 .md-advisory--full { background: var(--ws-status-warn-soft); border-color: var(--ws-status-warn); color: var(--ws-status-warn); }
 .md-advisory--low { background: var(--ws-status-error-soft); border-color: var(--ws-status-error); color: var(--ws-status-error); }
+/* Quant advisor (EXP-011): sibling quants + VRAM-fit suggestion in the
+   load form. Semantic tokens only; the "best fit" row gets the brand tint
+   so it reads as the recommended pick without a hard call-to-action. */
+.md-quant-advisor {
+  margin: 0 0 12px;
+  padding: 10px 13px;
+  border: 1px solid var(--ws-border-default);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface-inset);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.md-quant-advisor__title {
+  margin: 0 0 2px;
+  font-size: var(--ws-text-xs);
+  font-weight: 700;
+  color: var(--ws-text-primary);
+}
+.md-quant-advisor__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: var(--ws-text-xs);
+  color: var(--ws-text-secondary);
+}
+.md-quant-advisor__row--warn { color: var(--ws-status-warn); font-weight: 600; }
+.md-quant-advisor__row--best {
+  background: var(--ws-accent-brand-soft);
+  border: 1px solid color-mix(in srgb, var(--ws-accent-brand) 30%, transparent);
+  border-radius: var(--ws-radius-xs);
+  padding: 4px 8px;
+}
+.md-quant-advisor__quant {
+  font-family: var(--ws-font-mono);
+  font-weight: 700;
+  color: var(--ws-text-primary);
+}
 .md-load__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .md-load__fields label { display: flex; flex-direction: column; gap: 6px; font-size: var(--ws-text-xs); font-weight: 600; color: var(--ws-text-secondary); }
 .md-load__submit { display: flex; justify-content: flex-end; }
@@ -1184,6 +1281,38 @@ select.md-input { cursor: pointer; }
 
 /* downloads panel drawer */
 .hub-dllist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }
+/* "Clear finished" toolbar row — sits above the task list, only when there
+   are terminal rows. Right-aligned, separated from the list by a hairline. */
+/* full on-disk path can be long in the narrow drawer — wrap, never clip */
+.hub-dl__path {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
+  font-size: var(--ws-text-xs);
+  line-height: 1.45;
+}
+.hub-dl__size { color: var(--ws-text-tertiary); white-space: nowrap; }
+.hub-dl__toolbar {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--ws-border-subtle);
+}
+/* checkbox row inside the clear-confirm dialog */
+.hub-clear-opt {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 12px 0 4px;
+  font-size: var(--ws-text-sm);
+  font-weight: 600;
+  color: var(--ws-text-primary);
+  cursor: pointer;
+}
 .hub-dl { display: flex; flex-direction: column; gap: 6px; padding: 10px; border: 1px solid var(--ws-border-subtle); border-radius: var(--ws-radius-sm); background: var(--ws-surface-inset); }
 .hub-dl__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .hub-dl__name { font-family: var(--ws-font-mono); font-size: var(--ws-text-xs); color: var(--ws-text-primary); word-break: break-all; min-width: 0; }
@@ -1194,7 +1323,11 @@ select.md-input { cursor: pointer; }
 .hub-dl__nums { font-size: var(--ws-text-xs); color: var(--ws-text-secondary); }
 .hub-dl__error { margin: 0; font-size: var(--ws-text-xs); color: var(--ws-status-error); word-break: break-word; }
 .hub-dl__actions { display: flex; align-items: center; gap: 8px; }
-.hub-dl__retrynote { display: inline-flex; }
+/* Delete is destructive but secondary — compact icon button, muted, turns
+   red on hover. Scoped to the button (not .btn--sm) so Cancel/Resume/Load
+   keep their standard widths. */
+.hub-dl__delete { padding: 6px 8px; color: var(--ws-text-tertiary); }
+.hub-dl__delete:hover { color: var(--ws-status-error); border-color: var(--ws-status-error); }
 
 @media (max-width: 640px) {
   .hub-grid { grid-template-columns: 1fr; }

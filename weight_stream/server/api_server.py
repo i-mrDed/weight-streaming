@@ -385,6 +385,47 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     async def list_models():
         """List all loaded models."""
         return await manager.list_models()
+
+    @app.get("/v1/hardware")
+    async def hardware():
+        """
+        GPU info (total VRAM) via nvidia-smi — lets the Console suggest a
+        quant that FITS before anything is loaded (the load dialog needs
+        headroom; per-model stats only exist once a model runs).
+
+        Returns ``{"gpu": null, "source": "nvidia-smi"}`` when nvidia-smi
+        is unavailable — honest, never a fake number. Blocking subprocess
+        runs in a worker thread (never the event loop).
+        """
+        def _probe() -> dict:
+            import subprocess
+            try:
+                out = subprocess.run(
+                    ["nvidia-smi", "--query-gpu=name,memory.total",
+                     "--format=csv,noheader"],
+                    capture_output=True, text=True, timeout=10,
+                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                ).stdout or ""
+                for line in out.splitlines():
+                    name, _, total = line.partition(",")
+                    total = total.strip()
+                    if total.endswith("MiB"):
+                        try:
+                            return {
+                                "gpu": {
+                                    "name": name.strip(),
+                                    "total_vram_mb": int(float(total[:-3])),
+                                },
+                                "source": "nvidia-smi",
+                            }
+                        except ValueError:
+                            pass
+            except Exception:
+                pass
+            return {"gpu": None, "source": "nvidia-smi"}
+
+        loop = asyncio.get_running_loop()
+        return await loop.run_in_executor(None, _probe)
     
     def _run_browse_dialog(mode: str = "file") -> dict:
         """Run native browse dialog via helper script (subprocess)."""

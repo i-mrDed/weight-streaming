@@ -33,6 +33,11 @@ export interface LoadModelParams {
   buffer_mb: number
   n_ctx: number
   n_threads?: number | null
+  /** GPU layers to offload: -1 = auto, 0 = CPU only, N = first N layers.
+      GPU backend only; null = server default. */
+  gpu_layers?: number | null
+  /** KV cache data type (f16, q8_0, …). GPU backend only; null = server default. */
+  kv_cache_type?: string | null
   force?: boolean
 }
 
@@ -93,4 +98,55 @@ export function quantAdvisory(quant: string | null): 'full' | 'low' | null {
 export function suggestModelId(path: string): string {
   const base = path.split(/[\\/]/).pop() ?? path
   return base.replace(/\.gguf$/i, '') || 'model'
+}
+
+export interface HardwareInfo {
+  gpu: { name: string; total_vram_mb: number } | null
+  source: string
+}
+
+/** GPU info from nvidia-smi (total VRAM — for quant-fit advice before any
+    model is loaded). gpu: null when the server cannot see a GPU. */
+export function fetchHardware(): Promise<HardwareInfo> {
+  return apiJSON<HardwareInfo>('/v1/hardware', undefined, { timeoutMs: 15_000 })
+}
+
+/** Strip a quant tag from a GGUF basename to get the "same model" key.
+    Mirrors the server's quant regex: IQ1_M / IQ2_M / Q4_K_M / F16 / … */
+export function modelBaseKey(nameOrPath: string): string {
+  const base = nameOrPath.split(/[\\/]/).pop() ?? nameOrPath
+  return base.replace(/\.gguf$/i, '').replace(QUANT_RE, '').replace(/[-_.]+$/i, '')
+}
+
+/** Sibling quants of the SAME model from scan results (same base key,
+    different file). Sorted by size ascending — the smallest first. */
+export function quantSiblings(
+  path: string,
+  scanResults: ScanModel[] | null,
+): ScanModel[] {
+  if (!scanResults?.length) return []
+  const base = modelBaseKey(path)
+  if (!base) return []
+  const norm = path.replace(/\\/g, '/')
+  return scanResults
+    .filter((m) => m.path.replace(/\\/g, '/') !== norm && modelBaseKey(m.path) === base)
+    .sort((a, b) => a.size_bytes - b.size_bytes)
+}
+
+/** Measured tok/s on THIS machine (EXP-011, Qwen3.6-35B-A3B, n-cpu-moe 0,
+    temp 0, same question set). Honest reference for the quant advisor —
+    only listed for quants we actually measured, never extrapolated. */
+export const MEASURED_TOK_S: Record<string, number> = {
+  IQ1_M: 79.1,
+  IQ2_M: 56.4,
+}
+
+/** Rough VRAM needed for a model file, MiB: weights ≈ file size + KV cache
+    + compute buffers. Calibrated from EXP-011 on this machine (IQ1_M 10.05
+    GB file → 10,803 MiB; IQ2_M 11.5 GB → ~12,067 MiB). */
+export function estimateVramMiB(sizeBytes: number, ctx = 2048): number {
+  const fileMiB = sizeBytes / (1024 * 1024)
+  // KV + compute overhead ≈ 0.9 GiB at 2048 ctx (measured delta between
+  // file size and VRAM usage on this box).
+  return Math.round(fileMiB + (0.9 + ctx / 2048 * 0.25) * 1024)
 }

@@ -34,12 +34,17 @@ import { fetchConfig } from '@/core/config'
 import {
   browseDir,
   browseFile,
+  estimateVramMiB,
+  fetchHardware,
   guessQuant,
   loadModel,
+  MEASURED_TOK_S,
   quantAdvisory,
+  quantSiblings,
   scanModels,
   suggestModelId,
   unloadModel,
+  type HardwareInfo,
   type ScanModel,
 } from '@/core/models'
 import { fmtDateTime, fmtNumber, locale, relativeDay, t } from '@/i18n'
@@ -81,7 +86,13 @@ export function ModelsPage() {
   const loadBuf = useSignal(64)
   const loadCtx = useSignal(2048)
   const loadThreads = useSignal(defaultThreads())
+  // GPU-only (P7.5): -1 = auto, 0 = CPU, N = layers; '' = server default
+  const loadGpuLayers = useSignal<number>(-1)
+  const loadKvCache = useSignal('')
   const loadingModel = useSignal(false)
+
+  // quant advisor (EXP-011): sibling quants + VRAM headroom
+  const hw = useSignal<HardwareInfo | null>(null)
 
   // dialogs
   const unloadTarget = useSignal<string | null>(null)
@@ -96,6 +107,9 @@ export function ModelsPage() {
     void fetchConfig()
       .then((c) => (libDirs.value = c.models_dirs))
       .catch(() => (libDirs.value = []))
+    void fetchHardware()
+      .then((h) => (hw.value = h))
+      .catch(() => (hw.value = null))
   }, [])
 
   /** Loaded models whose file lives under a given scan dir (string prefix —
@@ -209,6 +223,8 @@ export function ModelsPage() {
         buffer_mb: loadBuf.value,
         n_ctx: loadCtx.value,
         n_threads: loadThreads.value,
+        gpu_layers: loadGpuLayers.value,
+        kv_cache_type: loadKvCache.value.trim() === '' ? null : loadKvCache.value.trim(),
       })
       await refreshModels()
       toast('success', t('models.load.done', { id: loadId.value.trim() }), {
@@ -235,6 +251,38 @@ export function ModelsPage() {
 
   const loadQuant = guessQuant(loadPath.value)
   const advisory = quantAdvisory(loadQuant)
+
+  // ── Quant advisor (EXP-011) ────────────────────────────────────────
+  // When a model path is picked and scan results are available, list the
+  // sibling quants and (if the GPU is known) suggest the smallest quant
+  // that FITS total VRAM — the trade measured on this machine (IQ1_M 79
+  // vs IQ2_M 56 tok/s at n-cpu-moe 0). Honest: no GPU info → show the
+  // siblings without a fit claim.
+  const siblings = loadPath.value ? quantSiblings(loadPath.value, scanResults.value) : []
+  const totalVram = hw.value?.gpu?.total_vram_mb ?? null
+  const pickedSize = scanResults.value?.find(
+    (m) => m.path.replace(/\\/g, '/') === loadPath.value.replace(/\\/g, '/'),
+  )?.size_bytes ?? 0
+  const pickedVram = pickedSize > 0 ? estimateVramMiB(pickedSize, loadCtx.value) : null
+  const picksGpu = loadGpuLayers.value !== 0 // -1 (auto) or N>0 → GPU offload
+  const overVram = pickedVram != null && totalVram != null && picksGpu && pickedVram > totalVram
+  const bestFit =
+    totalVram != null && picksGpu
+      ? siblings.find((s) => estimateVramMiB(s.size_bytes, loadCtx.value) <= totalVram) ?? null
+      : null
+  const bestQuant = bestFit ? guessQuant(bestFit.path) : null
+  const bestTokS = bestQuant ? MEASURED_TOK_S[bestQuant] : null
+  const pickedTokS = loadQuant ? MEASURED_TOK_S[loadQuant] : null
+  const showQuantAdvisor =
+    (siblings.length > 0 || overVram) && (bestFit || overVram)
+
+  const switchToQuant = (path: string) => {
+    loadPath.value = path
+    // The id follows the file (same rule as the scan "Use in load form"):
+    // swapping quant must not leave a stale id from the other file — a
+    // load with mismatched id/path would register under the wrong name.
+    loadId.value = suggestModelId(path)
+  }
 
   return (
     <div class="page">
@@ -427,6 +475,41 @@ export function ModelsPage() {
                 : t('models.load.advLow', { quant: loadQuant ?? '' })}
             </p>
           ) : null}
+          {showQuantAdvisor ? (
+            <div class="md-quant-advisor">
+              <p class="md-quant-advisor__title">
+                {t('models.load.quantTitle')} <span class="dialog-text--dim">{t('models.load.quantMeasured')}</span>
+              </p>
+              {overVram ? (
+                <p class={`md-quant-advisor__row${bestFit ? '' : ' md-quant-advisor__row--warn'}`}>
+                  ⚠️ {t('models.load.quantOverVram', {
+                    quant: loadQuant ?? '?',
+                    need: fmtNumber(Math.round((pickedVram ?? 0) / 1024)),
+                    total: fmtNumber(Math.round((totalVram ?? 0) / 1024)),
+                  })}
+                </p>
+              ) : null}
+              {siblings.map((s) => {
+                const q = guessQuant(s.path)
+                const tokS = q ? MEASURED_TOK_S[q] : null
+                const isBest = bestFit != null && s.path.replace(/\\/g, '/') === bestFit.path.replace(/\\/g, '/')
+                const fits = totalVram != null ? estimateVramMiB(s.size_bytes, loadCtx.value) <= totalVram : null
+                return (
+                  <div key={s.path} class={`md-quant-advisor__row${isBest ? ' md-quant-advisor__row--best' : ''}`}>
+                    <span class="md-quant-advisor__quant">{q ?? '?'}</span>
+                    <span class="tnum">{fmtNumber(s.size_gb, { maximumFractionDigits: 2 })} GB</span>
+                    {tokS != null ? <Badge tone="brand">~{fmtNumber(tokS)} tok/s</Badge> : null}
+                    {fits === false ? <Badge tone="warn">{t('models.load.quantNoFit')}</Badge> : null}
+                    {fits === true ? <Badge tone="ok">{t('models.load.quantFits')}</Badge> : null}
+                    {isBest ? <Badge tone="info">{t('models.load.quantBest')}</Badge> : null}
+                    <Button variant="ghost" size="sm" onClick={() => switchToQuant(s.path)}>
+                      {t('models.load.quantUse')}
+                    </Button>
+                  </div>
+                )
+              })}
+            </div>
+          ) : null}
           <div class="md-load__fields">
             <label>
               {t('models.load.modelId')}
@@ -467,6 +550,32 @@ export function ModelsPage() {
                 min={1}
                 value={loadThreads.value}
                 onInput={(e) => (loadThreads.value = Number((e.target as HTMLInputElement).value) || 1)}
+              />
+            </label>
+            <label>
+              {t('models.load.gpuLayers')}
+              <input
+                class="md-input tnum"
+                type="number"
+                min={-1}
+                step={1}
+                value={loadGpuLayers.value}
+                onInput={(e) => {
+                  // Explicit null check: 0 is a VALID value (CPU-only) and
+                  // must survive the falsy-coalescing trap (`x || -1`).
+                  const n = Number((e.target as HTMLInputElement).value)
+                  loadGpuLayers.value = Number.isNaN(n) ? -1 : n
+                }}
+              />
+            </label>
+            <label>
+              {t('models.load.kvCache')}
+              <input
+                class="md-input"
+                type="text"
+                placeholder={t('models.load.kvCachePlaceholder')}
+                value={loadKvCache.value}
+                onInput={(e) => (loadKvCache.value = (e.target as HTMLInputElement).value)}
               />
             </label>
           </div>

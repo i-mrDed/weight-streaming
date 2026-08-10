@@ -180,3 +180,40 @@ def test_config_env_keys_cover_every_field():
     """The source map must stay in sync with ServerConfig fields."""
     for field_name in ServerConfig().__dataclass_fields__:  # noqa: SLF001
         assert field_name in CONFIG_ENV_KEYS
+
+
+# ── GET /v1/hardware (quant-fit advisory data) ────────────────────────
+
+
+def test_hardware_reports_nvidia_gpu_when_available(monkeypatch, tmp_path):
+    """Parses nvidia-smi output into {gpu: {name, total_vram_mb}}."""
+    import subprocess
+
+    real_run = subprocess.run
+
+    def fake_run(cmd, *args, **kwargs):
+        assert cmd[0] == "nvidia-smi"
+        assert "--query-gpu=name,memory.total" in cmd
+        return type("R", (), {"stdout": "NVIDIA GeForce RTX 3060, 12288 MiB\n"})()
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        d = c.get("/v1/hardware").json()
+    assert d["source"] == "nvidia-smi"
+    assert d["gpu"] == {"name": "NVIDIA GeForce RTX 3060", "total_vram_mb": 12288}
+
+
+def test_hardware_honest_null_when_nvidia_smi_unavailable(monkeypatch, tmp_path):
+    """No GPU tooling → gpu: null (never a fake number)."""
+    import subprocess
+
+    def boom(cmd, *args, **kwargs):
+        raise FileNotFoundError("nvidia-smi not installed")
+
+    monkeypatch.setattr(subprocess, "run", boom)
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        d = c.get("/v1/hardware").json()
+    assert d["source"] == "nvidia-smi"
+    assert d["gpu"] is None
