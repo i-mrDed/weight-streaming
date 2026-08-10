@@ -467,7 +467,14 @@ class LlamaServerBackend(WeightStreamBackend):
         ):
             _lower_child_priority(getattr(self._proc, "pid", None))
         try:
-            self._wait_ready(timeout=60)
+            # 60 s was a false-negative source for >RAM models: a 104 GB
+            # sharded GGUF on a cold page cache takes ~70 s+ to finish
+            # loading before /health answers (measured EXP-012: cpu-moe t16
+            # loaded cleanly in 69 s but the 60 s cap failed it every time).
+            # Crashes are still caught fast — _wait_ready raises on process
+            # exit within one poll (0.5 s), so only a slow-but-alive load
+            # waits the full budget.
+            self._wait_ready(timeout=300)
         except Exception:
             # Never leak the just-spawned subprocess when the port guard
             # fails (a collision the sweep could not clear, a timeout, an
