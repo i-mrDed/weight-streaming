@@ -32,7 +32,10 @@ def test_split_think_no_think_block():
     assert final == "plain answer"
 
 
-def test_quality_gate_truncates_think_to_400_chars():
+def test_quality_gate_keeps_full_think_evidence():
+    # The JSON record must keep the FULL think — it is the evidence (e.g.
+    # EXP-018: the wrong Thai tones live in the think; truncating hides the
+    # finding). Display layers truncate; the record must not.
     class _LongThinkHttp:
         def __call__(self, method, path, body=None):
             if path == "/v1/chat/completions":
@@ -42,8 +45,9 @@ def test_quality_gate_truncates_think_to_400_chars():
             raise AssertionError(f"unexpected request: {method} {path}")
 
     gate = thai.run_quality_gate("http://x", "bench", http=_LongThinkHttp())
-    think = gate["answers"]["fact_thai"]["think"]
-    assert len(think) == 400
+    a = gate["answers"]["fact_thai"]
+    assert len(a["think"]) == 500  # full, not truncated
+    assert a["final"] == "done"
 
 
 # ── thai: quality gate with fake transport ─────────────────────────────

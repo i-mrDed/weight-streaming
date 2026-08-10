@@ -95,6 +95,9 @@ def main():
                               'overrides --extra-args')
     bench_p.add_argument("--thai", action="store_true",
                          help="Run the Thai quality gate (9 fixed questions) after measuring")
+    bench_p.add_argument("--quality-max-tokens", type=int, default=2048,
+                         help="Max tokens per quality-gate question (default: 2048; "
+                              "raise for long-think questions like thai_tonal)")
     bench_p.add_argument("--port", type=int, default=8765,
                          help="API server port (default: 8765)")
     bench_p.add_argument("--no-restart", action="store_true",
@@ -502,7 +505,7 @@ def cmd_bench(args):
     else:
         configs = {args.extra_args or "default": args.extra_args}
 
-    print(f"⚡ Bench harness — real engine, clean room")
+    print(f"[bench] honest harness — real engine, clean room")
     print(f"   model : {model_path}")
     print(f"   ctx   : {args.ctx}  threads: {args.threads}  "
           f"gen tokens: {args.gen_tokens}")
@@ -528,12 +531,19 @@ def cmd_bench(args):
               f"{w.get('disk_mb_per_token')} disk MB/tok)  "
               f"VRAM {w.get('used_vram_mb')} MiB")
 
-    # Optional Thai quality gate on the last loaded config.
+    # Optional Thai quality gate — measurement unloads the model, so reload
+    # it first with the same params as the measurement.
     gate = None
     if args.thai:
-        print("\n🎯 Running Thai quality gate (9 fixed questions)…")
+        print("\n[bench] running Thai quality gate (9 fixed questions)...")
         try:
-            gate = thai.run_quality_gate(base, args.model_id)
+            measure.req(base, "POST", "/v1/models/load", {
+                "model_id": args.model_id, "model_path": model_path,
+                "n_ctx": args.ctx, "n_threads": args.threads,
+                "buffer_mb": args.buffer_mb,
+            }, timeout=3600)
+            gate = thai.run_quality_gate(base, args.model_id,
+                                          max_tokens=args.quality_max_tokens)
             print(f"   tok/s={gate['tok_s']}  wall={gate['wall_s']}s")
             for qid, a in gate["answers"].items():
                 final = (a["final"] or "").replace("\n", " ").strip()
@@ -541,6 +551,16 @@ def cmd_bench(args):
         except Exception as e:
             print(f"   quality gate failed: {e}")
             gate = None
+
+    # Clean-room discipline: the harness leaves the machine as it found it.
+    # A leftover loaded model makes the server unloadable/confusable for the
+    # next user (the llama-server backend owns ONE fixed port) and would
+    # contaminate any later measurement that forgets its own clean room.
+    try:
+        measure.req(base, "POST", "/v1/models/unload",
+                    {"model_id": args.model_id}, timeout=120)
+    except Exception:
+        pass
 
     out = {"model": model_path, "configs": results}
     if gate:
@@ -553,7 +573,9 @@ def cmd_bench(args):
         base_out.parent.mkdir(parents=True, exist_ok=True)
         json_path = base_out.with_suffix(".json")
         md_path = base_out.with_suffix(".md")
-        json_path.write_text(report.matrix_to_json(results, model_path),
+        # JSON is the FULL diffable record (matrix + quality gate with
+        # complete answers); markdown is the human-readable summary.
+        json_path.write_text(_json.dumps(out, ensure_ascii=False, indent=2),
                              encoding="utf-8")
         md_path.write_text(report.matrix_to_markdown(results, model_path),
                            encoding="utf-8")

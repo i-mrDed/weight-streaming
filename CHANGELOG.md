@@ -21,8 +21,21 @@
   - `report` — JSON + markdown matrix/quality reports (honest FAILED rows
     with error, never silently dropped).
 - New CLI subcommand: `python -m weight_stream bench <model.gguf>`
-  (`--matrix`, `--extra-args`, `--thai`, `--export`, `--no-restart`, …) —
-  replaces the legacy simulated benchmark for real numbers.
+  (`--matrix`, `--extra-args`, `--thai`, `--quality-max-tokens`, `--export`,
+  `--no-restart`, …) — replaces the legacy simulated benchmark for real
+  numbers. Validated end-to-end on Qwen3.6-35B-A3B IQ2_XXS (EXP-018).
+- Harness details hardened by the first real run: JSON export includes the
+  quality gate with FULL answers/think (diffable records; display truncates
+  but the record never does); the gate keeps the complete think block (it
+  is the evidence — EXP-018's wrong Thai tones live there); the bench
+  unloads the model after the gate so it leaves the machine as it found it
+  (a leftover model previously tripped the single-port backend and the
+  live test_server.py suite); ASCII-safe console output (the ✅ emoji
+  crashed a cp1252 Windows console mid-script).
+- New `scripts/resume_download.py` — resume-capable single-file downloader
+  (HTTP Range append + byte-exact size verify). Recovered the stalled
+  IQ2_XXS download at 97.6%; applies the EXP-011b integrity lesson (never
+  claim done without a byte-count check) to plain downloads.
 - New `tests/test_bench.py` (13 tests, offline-only: think-splitting,
   cmdline verification, /v1/stats shape normalization, quality-gate flow
   with fake transport, report formatting).

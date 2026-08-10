@@ -312,9 +312,11 @@ def run_matrix(
                 "flag_in_cmdline": False, "error": str(e),
             })
             continue
+        first_flag = extra.split()[0] if extra.strip() else ""
         results.append({
             "config": name, "extra_args": extra,
-            "flag_in_cmdline": bool(measured["cmd"] and extra.split()[0] in measured["cmd"]),
+            "flag_in_cmdline": bool(measured["cmd"] and first_flag
+                                     and first_flag in measured["cmd"]),
             "cold": measured["cold"], "warm": measured["warm"],
         })
     return results

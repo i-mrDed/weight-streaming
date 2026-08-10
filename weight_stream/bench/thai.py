@@ -138,7 +138,10 @@ def run_quality_gate(
     for qid, q in QUESTIONS:
         raw = ask(base, model_id, q, max_tokens=max_tokens, http=http)
         think, final = split_think(raw)
-        answers[qid] = {"final": final, "think": think[:400]}
+        # FULL think is kept — it is the evidence (e.g. EXP-018: the model's
+        # own think shows the wrong Thai tones; truncating it would hide the
+        # finding). Display layers truncate; the JSON record must not.
+        answers[qid] = {"final": final, "think": think}
     wall_s = round(time.monotonic() - t0, 1)
 
     tok_s = None
