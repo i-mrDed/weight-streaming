@@ -18,7 +18,7 @@
 | 1 | Expert popularity census → auto `n-cpu-moe` tiering | hot experts อยู่ GPU อัตโนมัติ (แทน static) | 📋 วางแผน |
 | 2 | CPU lane ตาม host-cache residency | เลือก CPU/GPU ต่อ expert ตาม residency จริง | 📋 วางแผน |
 | 3 | วัด IQ2_XXS (`--variant iq2m`) บน DS V4 Flash | bytes/token ↓ → resident ↑ → tok/s ↑ | 🟢 script พร้อมแล้ว |
-| 4 | Speculative decoding บน GPU backend | EXP-010 dead end บน CPU → ลองบน LlamaServerBackend | 📋 วางแผน |
+| 4 | ~~Speculative decoding บน GPU backend~~ | ❌ ปิดแล้ว: EXP-015 MTP head ช้าลง 11–18% (ไฟล์ MTP ใหญ่เกิน VRAM 12 GB + draft step รัน expert เต็ม) | ❌ Dead end |
 | 5 | วินัย benchmark (census + warm-run + value-aware flags) | ตัวเลขเชื่อถือได้ทุกตัว | 🔄 ทำอยู่แล้ว |
 
 ---

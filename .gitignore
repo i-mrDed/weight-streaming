@@ -90,6 +90,9 @@ scripts/.mxfp4_load.log
 scripts/.mxfp4_load2.log
 scripts/.qwen_baseline_out.json
 scripts/.qwen_threads_out.json
+scripts/.mtp_out.json
+scripts/.iq2m_cal.json
+scripts/.ws-server-mtp.log
 
 # Runtime/server logs (broad — no tracked .log files exist)
 *.log
