@@ -1370,10 +1370,13 @@ class DownloadManager:
     def _update_progress(self, task: DownloadTask) -> None:
         if task._start_mono is not None:
             elapsed = time.monotonic() - task._start_mono
-            if elapsed > 0:
-                # Speed = bytes transferred by THIS run only (a resume must
-                # not count the partial that already existed on disk).
-                task.speed_bps = (task.bytes_downloaded - task._start_bytes) / elapsed
+            # Floor at a tiny epsilon: an in-memory / fully-cached download
+            # can finish inside one clock tick (elapsed == 0.0), which would
+            # otherwise leave speed_bps None on a completed task. Bytes and
+            # elapsed are still real — this only avoids the zero-divide gap.
+            task.speed_bps = (
+                (task.bytes_downloaded - task._start_bytes) / max(elapsed, 1e-9)
+            )
         if task.total_bytes and task.speed_bps and task.speed_bps > 0:
             remaining = max(0, task.total_bytes - task.bytes_downloaded)
             task.eta_s = remaining / task.speed_bps
