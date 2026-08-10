@@ -15,8 +15,12 @@ interesting part is *why*: 36k–77k page faults per token ≈ 150–300 MB of
 disk reads **per token**. The bottleneck is the disk→RAM→CPU pipeline, and
 you can see it in real OS telemetry, not vibes.
 
-Full write-up + open-source harness (MIT):
+Full write-up + open-source harness (MIT) — out-of-core inference,
+memory-mapped GGUF from NVMe, llama.cpp + MoE (DeepSeek / Qwen):
 https://github.com/i-mrDed/weight-streaming
+
+Screenshots of the console (live tok/s + page-fault telemetry) and a
+short demo GIF are in the README, plus the full benchmark write-up.
 
 **The numbers**
 
@@ -52,6 +56,26 @@ path, plus a clean-room gate that refuses to report numbers from
 contaminated runs. The repo also documents the hardware plan (2026
 prices) for the cheapest 100+ tok/s path.
 
+Search-friendly summary for anyone landing from a search: **out-of-core
+LLM inference** · **run models bigger than RAM** · **NVMe as extension
+of memory** · **MoE expert streaming** · **honest telemetry (tok/s, page
+faults/token, disk MB/token)** — if any of those is your question, the
+repo has measured answers, not marketing.
+
+---
+
+## Visuals to attach when posting (files already on disk)
+
+- `docs/screenshots/banner.png` — 1280×640 social banner (attach as the
+  post image).
+- `docs/screenshots/03-stats.png` — the live-telemetry page (tok/s gauge,
+  faults/token, VRAM). This is the money shot.
+- `docs/screenshots/demo-chat.gif` — 9 s console demo ending on the
+  stats page (Reddit allows GIF uploads; keep it as a second attachment).
+- All six screenshots + GIF are committed in the repo under
+  `docs/screenshots/`, so the README stays visual even if Reddit hotlinks
+  are stripped.
+
 Happy to answer questions / discuss methodology. Anyone else measuring
 faults-per-token on >RAM models? Curious if the 150–300 MB/token figure
 matches other people's experience.
@@ -67,3 +91,11 @@ matches other people's experience.
 - Be ready for "why would you run this" — the honest answer is the
   methodology + the hardware decision data.
 - Post timing: weekday morning US time for max visibility.
+- The repo is currently **private** — flip it public (see
+  `docs/GO_PUBLIC_CHECKLIST.md`) *before* posting, or the link 404s for
+  readers. The checklist is a ~30-min run: release tag, visibility,
+  social-preview image, Pages, then post.
+- The repo is currently **private** — flip it public (see
+  `docs/GO_PUBLIC_CHECKLIST.md`) *before* posting, or the link 404s for
+  readers. The checklist is a ~30-min run: release tag, visibility,
+  social-preview image, Pages, then post.

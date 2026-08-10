@@ -56,6 +56,11 @@ fabricated value.
 
 ## Screenshots
 
+<p align="center">
+  <img src="docs/screenshots/demo-chat.gif" alt="Console demo — streaming chat with live telemetry" width="70%">
+  <br><em>Real session: streaming chat (thinking + answer) on Qwen3.6-35B-A3B, ending on the live-stats page.</em>
+</p>
+
 <table>
 <tr>
   <td align="center" width="50%"><img src="docs/screenshots/01-overview.png" alt="Overview dashboard"><br><b>Overview</b> — live server + model status</td>
