@@ -258,7 +258,18 @@ def main():
             print("  (WS_NO_RESTART=1 — measuring against running server)")
         else:
             restart_server(extra)
-        cmd, cold, warm = measure_one(extra)
+        try:
+            cmd, cold, warm = measure_one(extra)
+        except Exception as e:
+            # One impossible config (e.g. --n-cpu-moe 0 on a >VRAM model
+            # like DS V4 Flash → OOM) must NOT wipe the whole matrix:
+            # record the failure honestly and keep going.
+            print(f"  FAILED: {e}", flush=True)
+            results.append({
+                "config": name, "extra_args": extra,
+                "flag_in_cmdline": False, "error": str(e),
+            })
+            continue
         has_flag = extra.split()[0] in cmd.split()
         print(f"  cmdline has '{extra.split()[0]}': {has_flag}")
         print(f"  cold: tok_s={cold['tok_s']}  "

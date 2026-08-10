@@ -61,15 +61,23 @@ def main():
     print(hdr)
     print("|---|---:|---:|---:|---:|---:|---:|---:|")
     for r in results:
+        if "error" in r:
+            print(f"| {r['config']} | **FAILED** — {r['error'][:60]} |")
+            continue
         c, w = r["cold"], r["warm"]
         print(f"| {r['config']} | {fmt(c.get('tok_s'))} | {fmt(w.get('tok_s'))} "
               f"| {fmt(c.get('faults_per_token'), 0)} | {fmt(w.get('faults_per_token'), 0)} "
               f"| {fmt(c.get('disk_mb_per_token'))} | {fmt(w.get('disk_mb_per_token'))} "
               f"| {fmt(w.get('used_vram_mb'), 0)} |")
 
+    ok = [r for r in results if "error" not in r]
+    if not ok:
+        print("\n### ALL CONFIGS FAILED — see errors above (likely OOM on >VRAM model).")
+        return 0
+
     # --- verdicts ---
     print("\n### Verdicts")
-    best = max(results, key=lambda r: (r["warm"].get("tok_s") or 0))
+    best = max(ok, key=lambda r: (r["warm"].get("tok_s") or 0))
     print(f"- **Best warm tok/s:** {best['config']} = "
           f"{fmt(best['warm'].get('tok_s'))} tok/s "
           f"(cold {fmt(best['cold'].get('tok_s'))})")
@@ -86,7 +94,7 @@ def main():
                       f"({fmt((rb['warm'].get('tok_s') or 0) / q['warm'] * 100, 0)}%)")
 
     # disk-bound heuristic: > 2 MB/tok sustained => paging dominates
-    worst_disk = max(results, key=lambda r: (r["cold"].get("disk_mb_per_token") or 0))
+    worst_disk = max(ok, key=lambda r: (r["cold"].get("disk_mb_per_token") or 0))
     dd = worst_disk["cold"].get("disk_mb_per_token") or 0
     if dd > 2:
         print(f"\n- **Disk-bound confirmed:** {worst_disk['config']} cold "
