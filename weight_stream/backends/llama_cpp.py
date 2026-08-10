@@ -328,7 +328,9 @@ class WeightStreamModel(WeightStreamBackend):
             )
         
         elapsed = time.time() - start_time
-        tokens_per_sec = token_count / elapsed if elapsed > 0 else 0
+        # Floor elapsed: an in-memory generation can finish inside one
+        # clock tick (elapsed == 0.0); report a real speed instead of 0.
+        tokens_per_sec = token_count / max(elapsed, 1e-9)
         
         stats = self.buffer.get_stats()
         cache_info = ""
@@ -499,7 +501,9 @@ class WeightStreamModel(WeightStreamBackend):
             )
         finally:
             elapsed = time.time() - start_time
-            tokens_per_sec = token_count / elapsed if elapsed > 0 else 0
+            # Floor elapsed: an in-memory generation can finish inside one
+            # clock tick (elapsed == 0.0); report a real speed instead of 0.
+            tokens_per_sec = token_count / max(elapsed, 1e-9)
             self._last_gen_stats = {
                 "token_count": token_count,
                 "elapsed": elapsed,
@@ -600,7 +604,9 @@ class WeightStreamModel(WeightStreamBackend):
             )
         finally:
             elapsed = time.time() - start_time
-            tokens_per_sec = token_count / elapsed if elapsed > 0 else 0
+            # Floor elapsed: an in-memory generation can finish inside one
+            # clock tick (elapsed == 0.0); report a real speed instead of 0.
+            tokens_per_sec = token_count / max(elapsed, 1e-9)
             self._last_gen_stats = {
                 "token_count": token_count,
                 "elapsed": elapsed,

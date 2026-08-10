@@ -780,7 +780,7 @@ class LlamaServerBackend(WeightStreamBackend):
             self._last_gen_stats = {
                 "token_count": token_count,
                 "elapsed": elapsed,
-                "tokens_per_sec": token_count / elapsed if elapsed > 0 else 0,
+                "tokens_per_sec": token_count / max(elapsed, 1e-9),
                 "prompt": self._summarize_messages(messages),
                 "backend": "llama-server",
                 "reasoning_chars": sum(len(c) for c in reasoning_chunks),
