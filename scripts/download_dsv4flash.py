@@ -33,6 +33,17 @@ SHARDS = [
 ]
 TOTAL_BYTES = sum(s for _, s in SHARDS)
 
+# Alternative (EXP-012 quant-options-comparison.md): TacoTakumi's
+# expert-only requant — better KLD (0.263) + imatrix, 1.52x decode on
+# spill rigs, but +11 GB. Select with --variant tacotakumi.
+TACO_SHARDS = [
+    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00001-of-00004.gguf", 28_790_000_000),
+    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00002-of-00004.gguf", 28_770_000_000),
+    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00003-of-00004.gguf", 28_770_000_000),
+    ("DeepSeek-V4-Flash-0731-IQ3_XXS-imat-00004-of-00004.gguf", 28_920_000_000),
+]
+TACO_REPO = "TacoTakumi/DeepSeek-V4-Flash-0731-GGUF"
+
 
 def req(method, path, body=None, timeout=30):
     data = json.dumps(body).encode() if body is not None else None
@@ -49,16 +60,26 @@ def main():
     ap.add_argument("--target", default=os.environ.get("WS_MODELS_DIR", ""))
     ap.add_argument("--port", default=os.environ.get("WS_PORT", "8765"))
     ap.add_argument("--dry-run", action="store_true")
+    ap.add_argument("--variant", choices=["unsloth", "tacotakumi"],
+                    default="unsloth",
+                    help="unsloth UD-IQ3_XXS 104 GB (default) or "
+                         "TacoTakumi IQ3_XXS 115 GB (better KLD, imatrix)")
     args = ap.parse_args()
     PORT = args.port
+    global REPO, QUANT_DIR, SHARDS, TOTAL_BYTES
+    if args.variant == "tacotakumi":
+        REPO = TACO_REPO
+        QUANT_DIR = ""
+        SHARDS = TACO_SHARDS
+        TOTAL_BYTES = sum(s for _, s in SHARDS)
 
-    print(f"=== DS V4 Flash UD-IQ3_XXS: {len(SHARDS)} shards, "
+    print(f"=== DS V4 Flash {args.variant} ({REPO}): {len(SHARDS)} shards, "
           f"{TOTAL_BYTES / 1e9:.2f} GB ===")
     if args.dry_run:
         for name, size in SHARDS:
             print(f"  {name}: {size / 1e9:.2f} GB")
         print(f"TOTAL: {TOTAL_BYTES / 1e9:.2f} GB — disk free must be "
-              ">= 110 GB")
+              f">= {TOTAL_BYTES / 1e9 + 6:.0f} GB")
         return 0
 
     # Resolve target dir against the server's configured model dirs.
