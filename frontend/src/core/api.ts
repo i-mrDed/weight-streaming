@@ -17,6 +17,34 @@ export class ApiError extends Error {
 
 const BASE = typeof window !== 'undefined' ? window.location.origin : ''
 
+/** Optional bearer token for the local API (server WS_API_TOKEN). The
+    console stores it in localStorage ('ws-api-token') so the UI keeps
+    working when the server enforces auth (B1). */
+export function authHeaders(): Record<string, string> {
+  let token: string | null = null
+  try {
+    token =
+      typeof localStorage !== 'undefined'
+        ? localStorage.getItem('ws-api-token')
+        : null
+  } catch {
+    /* storage unavailable */
+  }
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+export function setApiToken(token: string): void {
+  try {
+    if (token.trim() === '') {
+      localStorage.removeItem('ws-api-token')
+    } else {
+      localStorage.setItem('ws-api-token', token.trim())
+    }
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export async function apiJSON<T>(
   path: string,
   init?: RequestInit,
@@ -33,6 +61,7 @@ export async function apiJSON<T>(
       signal: controller.signal,
       headers: {
         ...(init?.body ? { 'Content-Type': 'application/json' } : {}),
+        ...authHeaders(),
         ...init?.headers,
       },
     })
@@ -59,7 +88,7 @@ export function sseRequest(path: string, body: unknown): { response: Promise<Res
   const controller = new AbortController()
   const response = fetch(`${BASE}${path}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
     signal: controller.signal,
   })

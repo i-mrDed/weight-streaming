@@ -19,9 +19,10 @@ import asyncio
 import json
 import logging
 import os
+import secrets
 import time
 from contextlib import asynccontextmanager
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncIterator, Dict, Optional
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
@@ -246,6 +247,33 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # API auth (B1): when WS_API_TOKEN is set, every /v1/* request must
+    # carry `Authorization: Bearer <token>` (constant-time compare). The
+    # console/static/health pages stay open — the console sends the token
+    # through its API client (localStorage 'ws-api-token') when configured.
+    # Honest default: no token = no auth (local-first — isolate the server;
+    # see the API docs note).
+    _api_token = os.environ.get("WS_API_TOKEN", "").strip()
+    if _api_token:
+
+        @app.middleware("http")
+        async def _require_api_token(request: Request, call_next):
+            if request.url.path.startswith("/v1/"):
+                auth = request.headers.get("authorization", "")
+                if not secrets.compare_digest(auth, f"Bearer {_api_token}"):
+                    return JSONResponse(
+                        status_code=401,
+                        content={
+                            "error": "unauthorized",
+                            "code": "UNAUTHORIZED",
+                            "detail": (
+                                "this server requires WS_API_TOKEN — send "
+                                "Authorization: Bearer <token>"
+                            ),
+                        },
+                    )
+            return await call_next(request)
     
     # Mount static files (SPA)
     static_dir = os.path.join(os.path.dirname(__file__), "static")

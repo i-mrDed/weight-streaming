@@ -268,11 +268,11 @@ def _find_port_pid(port: int) -> Optional[int]:
     try:
         flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
         if os.name == "nt":
-            out = subprocess.run(
+            netstat_out = subprocess.run(
                 ["netstat", "-ano", "-p", "tcp"],
                 capture_output=True, text=True, timeout=10, creationflags=flags,
             ).stdout or ""
-            return _parse_netstat_listener(out, port)
+            return _parse_netstat_listener(netstat_out, port)
         out = subprocess.run(
             ["lsof", "-ti", f":{port}"],
             capture_output=True, text=True, timeout=10,

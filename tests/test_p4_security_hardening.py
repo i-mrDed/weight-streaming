@@ -256,6 +256,36 @@ def test_gguf_parse_failure_closes_mmap_and_file(monkeypatch, tmp_path):
     assert mmap_instances[0].closed, "mmap leaked on GGUF parse failure (W4)"
 
 
+# ── B1: API auth token (WS_API_TOKEN) ────────────────────────────────
+
+
+def test_api_token_required_when_set(monkeypatch, tmp_path):
+    monkeypatch.setenv("WS_API_TOKEN", "s3cret-token")
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        # Without the token every /v1/* route is refused.
+        assert c.get("/v1/models").status_code == 401
+        assert c.get("/v1/stats").status_code == 401
+        # With the bearer token it works.
+        r = c.get("/v1/models", headers={"Authorization": "Bearer s3cret-token"})
+        assert r.status_code == 200
+        # Wrong token stays refused.
+        assert (
+            c.get("/v1/models", headers={"Authorization": "Bearer wrong"}).status_code
+            == 401
+        )
+        # Health/console stay open (no auth needed to check liveness).
+        assert c.get("/health").status_code == 200
+        assert c.get("/").status_code in (200, 302, 307)
+
+
+def test_api_token_off_by_default(monkeypatch, tmp_path):
+    monkeypatch.delenv("WS_API_TOKEN", raising=False)
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        assert c.get("/v1/models").status_code == 200
+
+
 # ── W5: path traversal via assistant_id / issue_id ───────────────────
 
 

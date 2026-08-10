@@ -1,8 +1,8 @@
 /* thinking-block extraction (port of legacy SPA behavior):
    - completed  thinking… response blocks → collapsed accordions
    - an open ` thinking` during streaming → live open accordion
-   - partial tag tails ("<thi", "</th") are HELD BACK so raw tag fragments
-     never flash on screen mid-stream.
+   - partial tag tails ("<thi", "</th", " thinki", " respons") are HELD
+     BACK so raw tag fragments never flash on screen mid-stream.
    - XML `<think>`…`</think>` tags (Qwen3 / DeepSeek / R1 chat templates)
      are normalised to the internal markers so reasoning models render as
      accordions too — legacy SPA already did this via applySegmentedContent.
@@ -59,7 +59,11 @@ function extractVerbalThink(src: string): [string, string] | null {
     The XML prefixes matter because the normaliser only fires on the
     COMPLETE tag — an in-flight `<think>` must not flash raw. */
 function splitTagTail(s: string): [string, string] {
-  const m = s.match(/<\/?[a-zA-Z]*$/)
+  // Trailing (whitespace, optional '<', optional '/', letters). The `<`
+  // must be OPTIONAL so both ' thinki' (internal marker) and '<thi'/
+  // '</th' (XML prefix) are caught; letters are required so a bare
+  // trailing space is never held back.
+  const m = s.match(/(\s*<?\/?[a-zA-Z]+)$/)
   if (!m) return [s, '']
   const tail = m[0].toLowerCase()
   if (
@@ -75,14 +79,29 @@ function splitTagTail(s: string): [string, string] {
 
 /**
  * Normalise XML thinking tags (`<think>`…`</think>`, case-insensitive) to
- * the internal markers. Only tags at line-start or after whitespace are
- * converted (`/(?:^|\s)<think>/i`), so a literal "<think>" inside prose
- * (e.g. a model explaining the tag) is NOT mis-read as a block opener.
+ * the internal markers. Only tags at a LINE boundary are converted
+ * (`(?:^|\n)`), so a literal "<think>" inside prose (e.g. a model
+ * explaining the tag) is NOT mis-read as a block opener — matching the
+ * same line-boundary rule the marker scanner uses.
  */
 function normalizeXmlTags(raw: string): string {
   return raw
-    .replace(/(^|\s)<think>/gi, (_m, pre) => pre + OPEN_TAG)
-    .replace(/(^|\s)<\/think>/gi, (_m, pre) => pre + CLOSE_TAG)
+    .replace(/(^|\n)<think>/gi, (_m, pre) => pre + OPEN_TAG)
+    .replace(/(^|\n)<\/think>/gi, (_m, pre) => pre + CLOSE_TAG)
+}
+
+/**
+ * Locate a marker (` thinking` / ` response`) ONLY at a line boundary —
+ * start of the text or right after a newline. A mid-sentence occurrence
+ * of the English word ("I was thinking…") is prose and skipped.
+ */
+function findMarker(src: string, marker: string, from: number): number {
+  for (;;) {
+    const idx = src.indexOf(marker, from)
+    if (idx === -1) return -1
+    if (idx === 0 || src[idx - 1] === '\n') return idx
+    from = idx + 1
+  }
 }
 
 /**
@@ -98,32 +117,31 @@ function scanTagBlocks(src: string, streaming: boolean): ThinkParse {
   let i = 0
 
   for (;;) {
-    // Match ` thinking` after a space, scanning forward from `i` so an
-    // earlier block is never re-found (a full-string search here would
-    // loop forever on the first block). Leading ` thinking` at position 0
-    // has NO preceding space (the server emits it at the start of the
-    // message) — match it explicitly.
-    const open =
-      i === 0 && src.startsWith(OPEN_TAG)
-        ? 0
-        : src.indexOf(OPEN_TAG, i)
+    const open = findMarker(src, OPEN_TAG, i)
     if (open === -1) {
       main += src.slice(i)
       break
     }
-    main += src.slice(i, open)
-    const close = src.indexOf(CLOSE_TAG, open + OPEN_LEN)
+    // Drop the marker's own line break from the main text so the answer
+    // does not carry an empty line before the accordion.
+    const mainEnd = open > 0 && src[open - 1] === '\n' ? open - 1 : open
+    main += src.slice(i, mainEnd)
+    const close = findMarker(src, CLOSE_TAG, open + OPEN_LEN)
     if (close === -1) {
+      const body = src.slice(open + OPEN_LEN).trim()
       if (streaming) {
-        partial = src.slice(open + OPEN_LEN)
+        partial = body
       } else {
         // finished with an unclosed block — treat the rest as thinking
-        thinks.push(src.slice(open + OPEN_LEN))
+        thinks.push(body)
       }
+      i = src.length
       break
     }
-    thinks.push(src.slice(open + OPEN_LEN, close))
-    i = close + CLOSE_LEN
+    thinks.push(src.slice(open + OPEN_LEN, close).trim())
+    let after = close + CLOSE_LEN
+    if (src[after] === '\n') after += 1
+    i = after
   }
 
   if (streaming) {

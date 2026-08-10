@@ -97,7 +97,11 @@
       "maxRequests": "Max concurrent requests",
       "queueDepth": "Request queue depth",
       "logLevel": "Log level"
-    }
+    },
+    "tokenTitle": "API access token (optional)",
+    "tokenHint": "If the server runs with WS_API_TOKEN set, every API request must carry it. Save it here so the console keeps working.",
+    "tokenPlaceholder": "paste token (leave empty to clear)",
+    "tokenSaved": "API token saved"
   },
   "mcp": {
     "title": "🔌 MCP Servers",

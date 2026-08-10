@@ -65,7 +65,7 @@ import threading
 import time
 import urllib.parse
 import urllib.request
-from typing import Any, Callable, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, NoReturn, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -476,7 +476,7 @@ _META_TYPE_STRING = 8
 _META_TYPE_ARRAY = 9
 
 
-def _gguf_parse_fail(msg: str) -> None:
+def _gguf_parse_fail(msg: str) -> NoReturn:
     raise HubValidationError(f"downloaded file is not a valid GGUF: {msg}", status=502)
 
 
@@ -734,7 +734,7 @@ class DownloadManager:
     def __init__(
         self,
         fetch_json: Optional[Callable[[str, float], Any]] = None,
-        open_stream: Optional[Callable[[str, float], Any]] = None,
+        open_stream: Optional[Callable[[str, float, int], Any]] = None,
         timeout: float = DEFAULT_TIMEOUT,
         cache_ttl: float = SEARCH_CACHE_TTL,
         model_cache_ttl: float = MODEL_CACHE_TTL,

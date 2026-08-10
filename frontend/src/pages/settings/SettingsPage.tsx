@@ -55,7 +55,7 @@ import {
   type PatchRejected,
   type ServerConfigResponse,
 } from '@/core/config'
-import { ApiError } from '@/core/api'
+import { ApiError, setApiToken } from '@/core/api'
 import { navigate } from '@/core/router'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/Button'
@@ -227,6 +227,20 @@ export function SettingsPage() {
   const restartVal = useSignal('')
   const restartResult = useSignal<PatchRejected | null>(null)
   const restartBusy = useSignal(false)
+
+  // API access token (B1): mirrors server WS_API_TOKEN so the console's
+  // requests carry Authorization when the server enforces auth.
+  let storedToken = ''
+  try {
+    storedToken = localStorage.getItem('ws-api-token') ?? ''
+  } catch {
+    /* storage unavailable */
+  }
+  const apiToken = useSignal(storedToken)
+  const saveApiToken = () => {
+    setApiToken(apiToken.value)
+    toast('success', t('settings.server.tokenSaved'))
+  }
 
   // log tail (P4 GET /v1/logs/tail — wired in P5)
   const logLinesCount = useSignal(100)
@@ -936,6 +950,27 @@ export function SettingsPage() {
           </div>
           <pre class="set-snippet">{snippet()}</pre>
           <p class="set-note set-note--warn">⚠️ {t('settings.server.restartNote')}</p>
+        </Card>
+
+        {/* Card D · API access token (B1) — WS_API_TOKEN */}
+        <Card class="set-card">
+          <h3 class="set-card__title">{t('settings.server.tokenTitle')}</h3>
+          <p class="dialog-text--dim">{t('settings.server.tokenHint')}</p>
+          <div class="set-restart">
+            <label class="set-field set-restart__val">
+              <input
+                class="md-input"
+                type="password"
+                autocomplete="off"
+                placeholder={t('settings.server.tokenPlaceholder')}
+                value={apiToken.value}
+                onInput={(e) => (apiToken.value = (e.target as HTMLInputElement).value)}
+              />
+            </label>
+            <Button variant="primary" size="sm" onClick={saveApiToken}>
+              {t('common.save')}
+            </Button>
+          </div>
         </Card>
       </section>
 

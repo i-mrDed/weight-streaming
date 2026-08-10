@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "gen:icons": "node scripts/gen-icons.mjs",
     "i18n:verify": "node scripts/verify-translation.mjs",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.2.0",
@@ -28,6 +29,7 @@
     "@types/node": "^26.1.2",
     "sharp": "^0.34.0",
     "typescript": "^5.8.0",
-    "vite": "^7.0.0"
+    "vite": "^7.0.0",
+    "vitest": "^4.1.10"
   }
 }

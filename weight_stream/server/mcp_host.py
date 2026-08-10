@@ -169,13 +169,17 @@ class MCPHost:
             url = server.get("url")
             if not url:
                 raise ValueError(f"server {server.get('id')} needs url for sse")
-            read, write = await sse_client(url)
+            # Deliberate "enter without async-with": the session must
+            # outlive this frame, so the transport context is entered but
+            # never exited here (closed in close()). mypy types these as
+            # context managers; the await-enter pattern is intentional.
+            read, write = await sse_client(url)  # type: ignore[misc]
         else:
             cmd = server.get("command")
             args = server.get("args", [])
             if not cmd:
                 raise ValueError(f"server {server.get('id')} needs command for stdio")
-            read, write = await stdio_client(command=cmd, args=args)
+            read, write = await stdio_client(command=cmd, args=args)  # type: ignore[misc, call-arg]
         session = await ClientSession(read, write).__aenter__()
         await session.initialize()
         return session
@@ -194,7 +198,7 @@ class MCPHost:
             try:
                 session = await self._connect(s)
                 tools = await session.list_tools()
-                sid = s.get("id")
+                sid = s.get("id") or ""
                 self._sessions[sid] = session
                 for t in tools.tools:
                     out.append({

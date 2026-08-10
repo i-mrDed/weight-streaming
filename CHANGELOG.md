@@ -7,6 +7,12 @@
 
 ## [0.14.1] - 2026-08-10
 
+### 🔐 API auth (B1) + frontend tests (B2) + thinking-marker fix (B3)
+- **B1 `WS_API_TOKEN`** — when set, every `/v1/*` request must carry `Authorization: Bearer <token>` (constant-time compare); `/health` + console/static stay open. Console: Settings → new "API access token" card stores it in `localStorage` and the API client (`api.ts`) attaches the header to JSON + SSE calls automatically. Tests cover required/optional/off-by-default.
+- **B2 vitest** — first frontend unit-test runner (`frontend/src/pages/chat/thinks.test.ts`, 7 tests) wired into CI (`npm test` between typecheck and build).
+- **B3 thinking-marker fix** — ` thinking`/` response` are now recognized ONLY at line boundaries, so mid-sentence "thinking"/"response" in prose is never swallowed into a thinking block; XML `<think>` tags normalize only at line starts (a literal `<think>` inside prose stays text); block content is trimmed; streaming partial-marker tails (` thinki`, ` respons`) are held back (the old regex never matched them despite the docstring).
+- **mypy debt cleared** — the 16 pre-existing non-strict errors (hub.py `NoReturn`/callable arity, llama_server.py variable shadowing, api_server.py missing `Dict` import, mcp_host.py 3rd-party typing) are gone: `python -m mypy` is clean (50 files, 0 errors) for the first time since the baseline note.
+
 ### 🔒 Security hardening (4-platform public review — OpenCode W1–W5, verified)
 - **W1 deadlock fix** — `ModelManager.load()` evicted the oldest model while holding `_dict_lock`, but `unload()` re-acquires the same `asyncio.Lock` (not reentrant) → server froze permanently at `max_loaded_models`. Eviction now runs outside the lock.
 - **W2 CORS hardening** — `allow_origins=["*"]` + `allow_credentials=True` let ANY website drive the local API (load/unload, delete model files, invoke MCP tools). Now loopback-only (`localhost`/`127.0.0.1`); extend with `WS_CORS_ORIGINS` (comma-separated).

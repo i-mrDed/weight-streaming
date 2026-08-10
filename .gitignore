@@ -59,6 +59,8 @@ secrets*
 .vscode/
 *.sublime-workspace
 data/usage_history.jsonl
+# MCP server config (user data, local-first) — recreated on demand
+data/mcp/
 
 # Local agent/tool state (never for the remote)
 .freebuff/
