@@ -73,6 +73,10 @@ node_modules/
 npm-debug.log*
 frontend/.vite/
 scripts/.quant_quality_out.json
+scripts/.expert_census_out.json
+scripts/.expert_census_single.json
+scripts/.census_single_configs.json
+scripts/.ws-server-census.log
 scripts/.quant_quality_out.iq2m.json
 scripts/.quant_quality_*_run.log
 scripts/.tonal_probe_out*.json
