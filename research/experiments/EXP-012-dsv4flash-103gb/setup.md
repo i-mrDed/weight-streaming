@@ -1,0 +1,110 @@
+# EXP-012: DeepSeek V4 Flash 0731 (IQ3_XXS 103 GB) — Prep Plan
+
+> สถานะ: **PREP — ยังไม่เริ่มวัด** (รอเคลียร์ดิสก์ + verify support)
+> วันที่: 2026-08-10 · ผู้ริเริ่ม: ต่อจาก HARDWARE_100TPS_PLAN §6 (โมเดลใหญ่ที่ "รันได้จริง" ที่สุด)
+
+## 1. เป้าหมาย
+
+พิสูจน์ว่าโมเดล **284B / 13B active** (ใหญ่กว่า Qwen 35B-A3B 8× ในแง่ total
+params) รันได้จริงบนเครื่องนี้ผ่านระบบ expert-streaming ของเรา (llama-server
+`--cpu-moe` / `--n-cpu-moe`) — วัด tok/s จริง + VRAM + page-fault เทียบกับ
+ประมาณการ และบันทึกเป็นหลักฐานว่า "รันโมเดลใหญ่ทำงานจริง" ไม่ใช่แค่โหลดได้
+
+## 2. ข้อมูลโมเดล (verified 2026-08-10 จาก unsloth docs + HF)
+
+| field | value |
+|-------|-------|
+| ชื่อ | `unsloth/DeepSeek-V4-Flash-0731-GGUF` |
+| total / active | 284B / **13B active** (MoE, QAT MXFP4 experts — bit-exact กับ official) |
+| context | 1M (จริง: ขึ้นกับ RAM/VRAM) |
+| ไฟล์เป้า | **UD-IQ3_XXS = 103 GB** (แนะนำโดย unsloth สำหรับ 128GB RAM) |
+| ทางเลือก | 1-bit 92 GB · 2-bit 102 GB · UD-Q4_K_XL ~155 GB · UD-Q8_K_XL 162 GB (lossless) |
+| DSpark | speculative decoding 1.5-1.9× (ต้องการ llama.cpp ≥ PR 25784) |
+
+## 3. ความจริงของเครื่องนี้ (ตรวจแล้ว 2026-08-10)
+
+| ทรัพยากร | ค่า | ผลกระทบ |
+|----------|-----|---------|
+| RAM | **64 GB** | < 103 GB ไฟล์ → **full-RAM เป็นไปไม่ได้** — ต้อง disk-streaming path (คือจุดของโปรเจคนี้) |
+| GPU | RTX 3060 12 GB | attention+shared (~4% ของโมเดล ≈ 4-5 GB) ลง VRAM ได้ |
+| ดิสก์ D: | เหลือ **24 GB** (95% full) | **ไม่พอ** — ต้องเคลียร์ ≥ 110 GB |
+| ดิสก์ C: | เหลือ **70 GB** | ไม่พอเหมือนกัน (103 + headroom) |
+| llama.cpp | 0.3.34 (llama-cpp-python) + Jan backends | **ต้อง verify** ว่ารองรับ DeepSeek-V4-Flash-0731 architecture (release 2026-07-31) |
+
+**ข้อสรุปก่อนลุย:** งานนี้มี 2 gate ก่อนดาวน์โหลด — (a) ดิสก์ว่าง ≥ 110 GB,
+(b) llama-server ที่ใช้รองรับโมเดล (ตรวจผ่าน `--version` / test load ไฟล์เล็ก
+หรือเช็ค changelog). ถ้า (b) ไม่ผ่าน ต้องอัปเดต Jan backend / llama.cpp ก่อน
+— **อย่าดาวน์โหลด 103 GB ก่อน verify นี้** (บทเรียนจาก EXP-011b: ดาวน์โหลด
+เสร็จแล้วเจอว่าใช้ไม่ได้ = เสียเวลา + พื้นที่)
+
+## 4. แผนดำเนินการ (ตามลำดับ)
+
+### Phase 0 — Pre-flight (ใช้เวลา ~15 นาที, ไม่ต้องดาวน์โหลด)
+- [ ] ตรวจ disk free: `df -h /d /c` → ต้องการ **≥ 110 GB** บนดิสก์เดียว
+- [ ] Verify llama-server รองรับ DS V4 Flash: รัน `llama-server --version`
+      + เช็คว่า build ≥ ช่วง 2026-08 (PR 25784 DSpark / DS V4 arch). ถ้าใช้
+      Jan backend: อัปเดต Jan ก่อน
+- [ ] ทดสอบ dry-run: โหลด GGUF เล็ก (Qwen3-0.6B) ผ่าน `/v1/models/load`
+      เพื่อยืนยัน server healthy หลัง restart (ถ้าต้องอัปเดต backend)
+- [ ] รัน `scripts/check_clean_environment.py` → ต้อง CLEAN
+
+### Phase 1 — ดาวน์โหลด (103 GB, หลายชั่วโมง ตามเน็ต)
+- [ ] ผ่าน hub ของระบบเรา (`POST /v1/hub/download` หรือ CLI) — ได้ประโยชน์
+      จาก integrity gate (EXP-011b: ตรวจ bytes ครบก่อน done + resume จาก .part)
+- [ ] ยืนยันผล: ขนาดไฟล์ตรงกับ HF (103 GB), GGUF magic ถูกต้อง
+- [ ] บันทึกเวลาดาวน์โหลด + speed → ลง results.md
+
+### Phase 2 — วัด config matrix (หลังดาวน์โหลด, รันผ่าน harness ตัวเดียวกับ EXP-008/011)
+- [ ] Harness: `scripts/measure_dsv4flash.py` (เขียนใหม่ ต่อยอดจาก
+      measure_ctx_scaling / compare_quant_quality) — มี clean-room gate
+      อัตโนมัติ + ใช้ `/v1/stats` + `nvidia-smi` + page_faults
+- [ ] Matrix: `--cpu-moe` vs `--n-cpu-moe 10/5/0` (ถ้า VRAM พอ) × ctx 2048
+- [ ] ต่อ config: threads 8 (ค่าเริ่มต้น) vs 16 (ถ้า CPU-bound)
+- [ ] โหลดเสร็จ วัด prompt processing + decode แยก (ถ้า stats ให้)
+
+### Phase 3 — วิเคราะห์ + บันทึก
+- [ ] เทียบกับประมาณการ (ตาราง §5) — อธิบาย gap (RAM 64 < 103 → ต้องพึ่ง
+      OS page cache; คาด disk-bound)
+- [ ] วัด quality spot-check: ถามคำถาม 3 ข้อ (ไทย + โค้ด) เทียบ Qwen IQ1_M
+- [ ] เขียน results.md + analysis.md + อัปเดต index + HARDWARE plan
+
+## 5. ประมาณการ tok/s (ทำนายก่อนวัด — เพื่อเทียบหลังวัด)
+
+โมเดล 13B active + MXFP4 experts (0.53 B/param) → ~7 GB weights/token
+(Reddit: ~8 GB/forward) — คอขวดอยู่ที่ RAM/disk ไม่ใช่ VRAM:
+
+| path | bandwidth | tok/s โดยประมาณ |
+|------|-----------|:---:|
+| ทั้งหมดใน RAM (ต้อง 128 GB+) | DDR4 ~45 GB/s | ~6 |
+| RAM 64 GB + OS page cache (เครื่องนี้) | ~45 GB/s + disk spill | **~2-5** |
+| ผ่าน disk โดยตรง (cold) | NVMe ~3 GB/s | <1 |
+| บน 3090 + 128 GB RAM (อ้างอิงแผน) | 936 GB/s VRAM + RAM | ~47-60 |
+
+**ที่ตั้งสมมติฐาน:** 13B active × ~0.55 B/param ≈ 7 GB/token จาก RAM
+→ 45/7 ≈ 6.4 tok/s ถ้า hot; เครื่องนี้ RAM 64 GB เก็บ page cache ได้ ~60 GB
+ของไฟล์ 103 GB → บางส่วน spill ไป disk → **คาดการณ์จริง ~2-5 tok/s**
+(ใช้ได้กับงาน agentic ที่ไม่เร่ง แต่ไม่ใช่แชทโต้ตอบ)
+
+## 6. ความเสี่ยง + การลด
+
+| ความเสี่ยง | ผล | การลด |
+|-----------|-----|-------|
+| llama.cpp ยังไม่รองรับ DS V4 arch | ดาวน์โหลด 103 GB เปล่า | **verify ก่อนดาวน์โหลด (Phase 0)** |
+| ดิสก์เต็มระหว่างดาวน์โหลด | .part ค้าง | เช็ค ≥ 110 GB + hub resume (EXP-011b gate) |
+| RAM 64 GB → thrash | tok/s ต่ำมาก | วัดแบบ honest + บันทึก page-fault เป็นหลักฐาน (ไม่ใช่ failure — คือผลที่คาดไว้) |
+| DSpark ต้อง build ใหม่ | ไม่ได้ speculative gain | ไม่ blocking — วัด baseline ก่อน |
+| ไฟล์ IQ3 คุณภาพต่ำกว่า Q8 | คำตอบเพี้ยน | spot-check quality; บันทึก quant ที่ใช้ชัดเจน |
+
+## 7. Deliverables
+
+- `results.md` — ตัวเลขจริง (tok/s, VRAM, page-fault, download time)
+- `analysis.md` — เทียบประมาณการ + verdict "คุ้ม/ไม่คุ้มบนเครื่องนี้" +
+  เส้นทางบน hardware ใหญ่ขึ้น (3090 + 128 GB RAM)
+- ข้อมูลป้อนกลับสู่ HARDWARE_100TPS_PLAN §6 (ยืนยัน/แก้ตัวเลข ~47-60)
+
+## 8. หมายเหตุ
+
+- ถ้าดาวน์โหลด 92 GB (1-bit) ไว้ก่อน: ใช้ได้เหมือนกัน แต่คุณภาพต่ำ — เลือก
+  IQ3_XXS เป็นเป้าแรก (unsloth แนะนำ), ถ้าดิสก์ไม่พอค่อยลดเป็น 1-bit
+- โมเดลนี้เป็น reasoning model (think default on) — วัด tok/s จะรวม think
+  tokens ด้วย (เหมือน EXP-011: ใช้ `reasoning_mode: off` ถ้าต้องการเปรียบตรง)
