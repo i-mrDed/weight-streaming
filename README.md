@@ -1,205 +1,105 @@
 # weight-streaming
 
-**Run LLMs larger than your RAM using NVMe as extension of memory.**
+**Run LLMs larger than your RAM — using NVMe as an extension of memory, measured honestly.**
 
-`weight-streaming` is a Python library that enables running large language models (100B–3T+ parameters) on consumer hardware with 32–64 GB RAM. It uses speculative weight streaming to predictively load expert weights from NVMe storage during inference, keeping only hot shards in memory.
+`weight-streaming` is a local inference platform for large language models
+(100B–3T+ parameters, especially MoE) on consumer hardware with 32–64 GB
+RAM. Instead of pretending a 104 GB model fits in 12 GB of VRAM, it runs
+the model anyway and **reports the real cost** — tok/s, page faults per
+token, and disk traffic — so you can see exactly what the machine is
+doing and where the bottleneck is.
+
+## What it is now
+
+A full local platform in one package (not just a library):
+
+- **API server** (`python -m weight_stream.server`) — OpenAI-compatible
+  `/v1/*` endpoints, model load/unload with per-model context, threads,
+  GPU layers and KV-cache type, request queueing, process-priority
+  etiquette (the inference child runs below-normal so your desktop stays
+  usable while a 100 GB model thrashes CPU/disk)
+- **Web console** (SPA at `http://localhost:8765/app`) — live stats
+  (tok/s, page-fault demand, VRAM), MoE expert heatmap, chat, model
+  library, hub downloads, issue reporting, settings
+- **Dual backend** — llama-server subprocess (GPU offload + native
+  reasoning control) with graceful fallback
+- **Hub** — download GGUF models directly from Hugging Face (sharded
+  repos, subdirectories, Xet storage, resumable `.part` downloads with a
+  GGUF structural gate before rename)
+- **MCP host** — connect stdio/SSE MCP servers for tool calling
+
+## Real measured results (EXP-012, 2026-08-10)
+
+Machine: i9-9900KF (8C/16T), RTX 3060 12 GB, 64 GB RAM.
+
+| model | size | config | cold | warm | verdict |
+|---|---|---|---:|---:|---|
+| Qwen3.6-35B-A3B IQ1_M | 10 GB (fits VRAM) | `n-cpu-moe 0 -t 8` | **75.9 tok/s** | 73.9 | GPU-bound, light CPU |
+| Qwen3.6-35B-A3B IQ1_M | 10 GB | `--cpu-moe` (all experts CPU) | 14.2 | 14.6 | CPU-bound |
+| DeepSeek-V4-Flash-0731 UD-IQ3_XXS | **104 GB** | `--cpu-moe -t 8` | 1.48 | 1.76 | **disk-bound** |
+| DeepSeek-V4-Flash-0731 UD-IQ3_XXS | 104 GB | `--n-cpu-moe 42 -t 8` | 1.46 | **1.89** | disk-bound |
+| DeepSeek-V4-Flash-0731 UD-IQ3_XXS | 104 GB | `--cpu-moe -t 16` | **1.71** | 1.75 | disk-bound |
+| DeepSeek-V4-Flash-0731 UD-IQ3_XXS | 104 GB | `n-cpu-moe 10` | — | — | **OOM** (77 GB → 12 GB VRAM) |
+
+The honest headline: a 104 GB model **does run** on this 64 GB machine at
+**~1.5–1.9 tok/s**, and the page-fault telemetry (36–77k faults per token,
+≈150–300 MB read from disk per token) proves the bottleneck is the
+disk→RAM→CPU pipeline — not the GPU, not the CPU. Config tweaks move the
+number only ~15%. The path to 15–30+ tok/s is more RAM (128 GB keeps the
+whole file in page cache) or more VRAM (see
+[`research/experiments/EXP-012`](research/experiments/EXP-012-dsv4flash-103gb/)).
+That is the whole point of the project: measure the real cost of running
+models bigger than your hardware, then close the gap.
 
 ## How it works
 
-Large models (especially MoE) only use a fraction of their parameters per token. `weight-streaming` exploits this by:
+Large models (especially MoE) only use a fraction of their parameters per
+token. The platform:
 
-1. **Memory-mapping** the model file (zero-copy access, no redundant loading)
-2. **Tracking** which weight shards are hot via an LRU buffer
-3. **Predicting** which experts will be needed next using heuristic patterns
-4. **Prefetching** predicted shards from NVMe during compute time (overlapping I/O with inference)
-5. **Monitoring** OS page cache residency via Windows API (QueryWorkingSetEx)
+1. **Memory-maps** the model file (zero-copy access, no redundant loading)
+2. **Tracks** hot weight regions via the OS page cache (Windows
+   `QueryWorkingSetEx` residency monitoring)
+3. **Measures** the real paging demand per token (faults/tok, disk MB/tok)
+4. **Streams** weights from NVMe as needed instead of loading everything
+   into RAM
+5. **Reports honestly** — every number on the stats page comes from real
+   telemetry, never fabricated zeros
 
-## Quick Start
-
-```bash
-# Install with llama-cpp-python support
-pip install weight-streaming[llama-cpp]
-
-# Or install minimal (GPU-less stats only)
-pip install weight-streaming
-```
-
-### Run Web SPA 2.0 Chat Interface
+## Quick start
 
 ```bash
-# Start API Server (includes Web SPA 2.0 at http://localhost:8765/app)
-python -m weight_stream server --port 8765
-```
+# install (server extras: fastapi/uvicorn; test: pytest/httpx)
+pip install -e ".[server,test]"
 
-For a local chat session, the server keeps a loaded model by default and
-uses half of the logical CPU cores. Override either policy when starting it:
+# start the API server + web console
+python -m weight_stream.server --port 8765
+
+# open http://localhost:8765/app
+```
 
 ```bash
-python -m weight_stream server --n-threads 8 --idle-unload-timeout 0
+# run the test suite (287 tests)
+python -m pytest
 ```
 
-Set `--idle-unload-timeout` to a positive number of seconds only when the
-server should reclaim model memory after inactivity.
+## Downloading big models (hub)
 
-The Web SPA 2.0 features:
-- **Collapsible Sidebar**: History grouping (Today, Yesterday, Older), model status
-- **Fluid Chat Canvas (840px)**: Deep Space Glassmorphism theme, 1-Click Code Copy
-- **Agent Controls Drawer**: Reasoning Effort (`low`/`medium`/`high`), System Presets, Tools toggles
-- **GGUF Native Chat Templates**: Auto-detected ChatML, Llama-3, and Instruct templates + CoT `<think>` reasoning thought accordion
-- **Live Stats Dashboard**: Real-time gauge metrics & MoE Active Expert Firing Heatmap
+Models are downloaded from Hugging Face through the hub — sharded repos,
+per-quant subdirectories, resumable partials, and a GGUF structural gate
+(byte-count parity + header/tensor-table parse) before a `.part` is ever
+renamed into place. See `scripts/download_dsv4flash.py` and
+`research/experiments/EXP-012-dsv4flash-103gb/` for the 104 GB
+DeepSeek-V4-Flash walkthrough.
 
-## Python API
+## Documentation & research
 
-```python
-from weight_stream import WeightStreamModel
-
-# Load model with 64 MB streaming buffer
-model = WeightStreamModel(
-    "model.gguf",
-    buffer_mb=64,     # LRU buffer size (default: 64 MB)
-    n_ctx=512,        # context window
-)
-
-# Generate with speculative weight prefetch
-output = model.generate(
-    "The capital of France is",
-    max_tokens=100,
-    temperature=0.7,
-)
-
-# Get performance statistics
-stats = model.get_stats()
-print(f"Hits: {stats['buffer']['hit_rate']:.1%}")
-print(f"Page cache: {stats['page_cache']['resident_ratio']:.1%}")
-
-# Clean up
-model.close()
-
-# Or use context manager
-with WeightStreamModel("model.gguf", buffer_mb=64) as model:
-    output = model.generate("Hello", max_tokens=50)
-```
-
-## CLI Reference
-
-```
-usage: weight-streaming [-h] [--version] {run,stats,benchmark} ...
-
-Run LLMs larger than your RAM — speculative weight streaming from NVMe
-
-Commands:
-  run          Generate text with weight streaming
-  stats        Show model metadata and buffer configuration
-  benchmark    Benchmark generation throughput
-```
-
-### `run`
-
-```
-python -m weight_stream run <model> [options]
-
-Options:
-  -p, --prompt TEXT       Input prompt (default: "Hello")
-  -n, --max-tokens INT    Maximum tokens to generate (default: 128)
-  -b, --buffer-mb INT     Buffer size in MB (default: 64)
-  -t, --temperature FLOAT Sampling temperature 0.0-2.0 (default: 0.7)
-  -v, --verbose           Enable debug logging
-  -j, --json              Output as JSON
-```
-
-### `stats`
-
-```
-python -m weight_stream stats <model> [options]
-
-Options:
-  -b, --buffer-mb INT     Buffer size for estimation (default: 64)
-```
-
-### `benchmark`
-
-```
-python -m weight_stream benchmark <model> [options]
-
-Options:
-  -b, --buffer-mb INT     Buffer size in MB (default: 64)
-  -n, --max-tokens INT    Tokens for measurement (default: 256)
-  --no-warmup              Skip warmup phase
-  -j, --json               Output as JSON
-```
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────┐
-│  User Code                                          │
-│  from weight_stream import WeightStreamModel         │
-└────────────────────────┬────────────────────────────┘
-                         │
-┌────────────────────────▼────────────────────────────┐
-│  WeightStreamModel (backends/llama_cpp.py)           │
-│  ┌────────────────────────────────────────────────┐ │
-│  │  StreamingBuffer  (core/buffer.py)             │ │
-│  │  • LRU eviction (64 MB default)                │ │
-│  │  • Shard-based tracking (4 MB shards)          │ │
-│  │  • Hit/miss stats + zero-copy mmap access      │ │
-│  └────────────────────────────────────────────────┘ │
-│  ┌────────────────────────────────────────────────┐ │
-│  │  Prefetcher      (core/prefetcher.py)          │ │
-│  │  • Background thread + queue                   │ │
-│  │  • Expert-aware prefetch (GGUF metadata)       │ │
-│  │  • Staggered confidence loading                │ │
-│  └────────────────────────────────────────────────┘ │
-│  ┌────────────────────────────────────────────────┐ │
-│  │  HeuristicPredictor (core/predictor.py)        │ │
-│  │  • Sequential pattern detection                │ │
-│  │  • Co-occurrence tracking                      │ │
-│  └────────────────────────────────────────────────┘ │
-│  ┌────────────────────────────────────────────────┐ │
-│  │  WindowsPageMonitor (io/win_perf.py)            │ │
-│  │  • QueryWorkingSetEx page sampling             │ │
-│  │  • Reports resident ratio in physical RAM      │ │
-│  └────────────────────────────────────────────────┘ │
-└─────────────────────────────────────────────────────┘
-```
-
-## Requirements
-
-- **Python** ≥ 3.11
-- **OS**: Windows (Linux/macOS planned)
-- **RAM**: 32–64 GB (for models >100 GB)
-- **Storage**: NVMe SSD recommended (any drive works)
-- **Optional**: `llama-cpp-python` ≥ 0.3.0 (for inference)
-
-## Supported Models
-
-| Model | Type | Params | Experts | Active |
-|-------|------|--------|---------|--------|
-| Kimi K3 | MoE | 2.8T | 896 | 16 |
-| Qwen1.5-MoE-A2.7B | MoE | 2.7B | 60 | 2 |
-| Mixtral 8x7B | MoE | 47B | 8 | 2 |
-| Dense models (any) | Dense | any | N/A | all |
-
-The abstraction layer supports both MoE and Dense architectures. For dense models, prefetch focuses on sequential layer access.
-
-## Model Selection & CPU Etiquette
-
-CPU generation speed is memory-bandwidth bound: `tok/s ≈ RAM bandwidth ÷ weight bytes per token`.
-Dense models read the whole file per token, so quantization decides speed more than parameter
-count — a 4.2B model in F16 (8.4 GB/token) measured **2.8 tok/s**, while a 9B Q6_K (7.35 GB/token)
-gives 3–4 tok/s and a MoE reading ~1 GB/token active weights reached 17.9 tok/s on the same box.
-Prefer **Q4_K_M / Q6_K** GGUFs over F16 for CPU use. Full tables and measurements:
-[docs/MODEL_GUIDE.md](docs/MODEL_GUIDE.md).
-
-While a model is loaded the server runs one priority class below normal
-(`WS_LOWER_PRIORITY=0` to disable) so the desktop/browser stay responsive, and the SPA's
-Models tab exposes per-model CPU thread count (default `WS_N_THREADS` = half of logical cores).
-Thinking models' ` think ` output is folded into a collapsible panel, separate from the answer.
+- [`docs/`](docs/) — architecture, issue system, IDE integration
+- [`research/experiments/`](research/experiments/) — EXP-001..EXP-012:
+  buffer/prefetch simulation, KV-cache scaling, MoE CPU/GPU tiering,
+  quant quality (Thai tonal probes), and the DS V4 Flash >RAM measurement
+- [`research/HARDWARE_100TPS_PLAN.md`](research/HARDWARE_100TPS_PLAN.md) —
+  hardware roadmap informed by measured results
 
 ## License
 
-MIT
-
-## Research
-
-This project is based on research into speculative decoding, MoE routing prediction, out-of-core execution, and near-storage computing. See the [research](/research) directory for details.
+MIT (see `pyproject.toml`).

@@ -53,10 +53,10 @@ test = ["httpx>=0.27", "pytest>=8.0"]
 all = ["weight-streaming[llama-cpp,server,gradio,tui]"]
 
 [project.urls]
-homepage = "https://github.com/weight-streaming/weight-streaming"
-source = "https://github.com/weight-streaming/weight-streaming"
-documentation = "https://github.com/weight-streaming/weight-streaming"
-issues = "https://github.com/weight-streaming/weight-streaming/issues"
+homepage = "https://github.com/i-mrDed/weight-streaming"
+source = "https://github.com/i-mrDed/weight-streaming"
+documentation = "https://github.com/i-mrDed/weight-streaming"
+issues = "https://github.com/i-mrDed/weight-streaming/issues"
 
 [project.scripts]
 weight-streaming = "weight_stream.cli.main:main"
