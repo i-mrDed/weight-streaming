@@ -95,3 +95,45 @@ active → 0.3–0.5 tok/s ที่ bandwidth เรา) เป้าหมา�
 **ไม่ยืมได้ (ข้อจำกัดเรา):** Gen5 NVMe, 32GB VRAM, DDR5, Linux/io_uring
 → ข้อ 1–4 คือสิ่งที่ทำให้ "สร้างสิ่งที่ไม่น่าจะเป็นไปได้" บน Windows + 12GB
 นี้จริง ๆ ต่อไป
+
+> **อัปเดต 2026-08-10 (หลัง EXP-015/016/017):** ข้อ 1 (census→tiering)
+> ปิด — EXP-016: ไม่มี hot layer ที่ layer granularity; ข้อ 2 (CPU lane)
+> ปิด — EXP-017: CPU bandwidth-bound อยู่แล้ว; ข้อ 4 (spec-decode)
+> ปิด — EXP-015: MTP ช้าลง 11–18% → **เหลือ lever เดียวจริง: ข้อ 3
+> IQ2_XXS** (ลด bytes/token โจมตี bandwidth wall ตรงๆ)
+
+## 5. Deep-dive: otheru/DeepSeek-V4-Flash-Strix-Halo-GGUF (ROCmFPx, 2.58 BPW)
+
+### Verdict: **ไม่ทดสอบบนเครื่องนี้** (runtime incompatible) — แต่บทเรียน 3 ข้อมีค่า
+
+| ข้อเท็จจริง | รายละเอียด |
+|---|---|
+| ไฟล์ | `DeepSeek-V4-Flash-0731-Abliterated-ROCMFPx-Strix-Lean-2.58bpw.gguf` 91.5 GB (85.26 GiB), 2.58 BPW, GGUF v3 deepseek4 1,328 tensors |
+| Runtime | **custom types 100/101/107** (`Q4_0_ROCMFP4`, `Q4_0_ROCMFP4_FAST`, affine `Q2_0_ROCMFP2`) — mainline llama.cpp/LM Studio/Ollama **ไม่ implement** → ต้อง Ember runtime บน **ROCm (gfx1151)** เท่านั้น |
+| Hardware ที่ benchmark | AMD Ryzen AI Max+ 395 + **128 GB unified memory** (Strix Halo) — decode 22.4 tok/s (DSpark, 100% acceptance), prefill 279–393 tok/s |
+| Quant recipe | 129 routed-expert gate/up/down: affine Q2_0_ROCMFP2 (2.5 BPW, packed blocks 2.5 BPW ใช้ scale เป็น affine offset) · 43 attn_kv: dual-scale Q4_0_ROCMFP4 · 574 dense/shared/indexer/output: Q4_0_ROCMFP4_FAST · attn_output_b: Q8_0 · embd: Q6_K |
+| Importance matrix | `DeepSeek-V4-Flash-0731-chat-v2-routed-moe-ds4-rocm.dat` (0.45 GB) — **747,650,202 expert observations** จาก 4,692 prompts / 2.9M tokens / 202,186 quantizer chunks — ใช้ calibrate quant (ไม่ใช่ placement) |
+| อื่นๆ | Abliterated (ถอด refusal), 46 attn_output_b tensors, SRA rank 8, scale 2.5 · draft model `-DSpark-draft-4.25bpw.gguf` 10.9 GB (ต้อง Ember/ROCm) |
+
+### บทเรียน 3 ข้อ (ยืมได้โดยไม่ต้องรัน)
+
+1. **Census ที่ถูกต้อง = calibrate quant, ไม่ใช่ placement** — เขาเก็บ
+   747M expert observations เพื่อลด bytes/token (imatrix) — ตรงกับข้อสรุป
+   EXP-016/017 ของเราที่ว่า "ไม่มีการจัด placement ที่เหนือกว่า auto-fit"
+   และเส้นทางจริงคือ **ลด bytes/token** — ยืนยันข้อ 3 (IQ2_XXS) เป็น
+   ทิศทางเดียวที่ถูก
+2. **2.58 BPW ทำได้จริงบน DS V4 Flash (91.5 GB vs IQ3_XXS 104 GB)** —
+   ประหยัด ~12 GB (12%) ด้วย affine quant + imatrix — ถ้า format ปกติ
+   (llama.cpp-compatible) มี quant ระดับนี้ ก็คือ lever ตรงๆ (bytes ↓ →
+   resident ↑ → tok/s ↑ ตาม curve super-linear ของ EXP-016)
+3. **DSpark spec decode ได้ 100% acceptance แต่เฉพาะเมื่อ bandwidth เหลือ**
+   — 22.4 tok/s บน 128 GB unified memory (RAM ไม่ใช่คอขวด) — ยืนยัน
+   EXP-015/017: spec-decode และเทคนิคเพิ่ม throughput ไร้ค่าเมื่อคอขวดคือ
+   bandwidth ของเครื่องเราเอง
+
+### สรุป
+
+ไม่เหมาะกับระบบเราโดยตรง (ROCm-only + custom types + 91.5 GB เกินดิสก์
+เหลืออยู่แล้ว) — แต่บันทึกเป็นหลักฐานสนับสนุนทิศทางเดียวที่เหลือ:
+**หาทางลด bytes/token ของ DS V4 Flash ใน format ที่ llama.cpp รองรับ
+(IQ2_XXS / quant เล็กลง)**
