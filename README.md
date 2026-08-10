@@ -1,18 +1,24 @@
 # weight-streaming
 
+![weight-streaming](docs/screenshots/banner.png)
+
 **Run LLMs larger than your RAM — using NVMe as an extension of memory, measured honestly.**
 
 [![CI](https://github.com/i-mrDed/weight-streaming/actions/workflows/ci.yml/badge.svg)](https://github.com/i-mrDed/weight-streaming/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/i-mrDed/weight-streaming)](https://github.com/i-mrDed/weight-streaming/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python >=3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue.svg)](pyproject.toml)
 
-`weight-streaming` is a local inference platform for large language models
-(100B–3T+ parameters, especially MoE) on consumer hardware with 32–64 GB
-RAM. Instead of pretending a 104 GB model fits in 12 GB of VRAM, it runs
-the model anyway and **reports the real cost** — tok/s, page faults per
-token, and disk traffic — so you can see exactly what the machine is
-doing and where the bottleneck is. The project's ground rule is honest
-telemetry: every number comes from real measurement, or it shows `n/a` —
-never a fabricated value.
+`weight-streaming` is a **local, out-of-core inference platform** for large
+language models (100B–3T+ parameters, especially MoE like DeepSeek,
+Qwen and Kimi) on consumer hardware with 32–64 GB RAM and a 12 GB GPU.
+Instead of pretending a 104 GB model fits in 12 GB of VRAM, it runs the
+model anyway — memory-mapping the GGUF from NVMe and streaming weights
+as needed — and **reports the real cost**: tok/s, page faults per token,
+and disk traffic. You can see exactly what the machine is doing and where
+the bottleneck is. The project's ground rule is **honest telemetry**:
+every number comes from real measurement, or it shows `n/a` — never a
+fabricated value.
 
 ## Features
 
@@ -47,6 +53,21 @@ never a fabricated value.
 - **CPU etiquette** — inference child processes run below-normal
   priority by default so the desktop, browser and IDE stay usable while
   a 100 GB model thrashes CPU and disk.
+
+## Screenshots
+
+<table>
+<tr>
+  <td align="center" width="50%"><img src="docs/screenshots/01-overview.png" alt="Overview dashboard"><br><b>Overview</b> — live server + model status</td>
+  <td align="center" width="50%"><img src="docs/screenshots/03-stats.png" alt="Live telemetry stats"><br><b>Live stats</b> — real tok/s, paging demand, VRAM</td>
+</tr>
+<tr>
+  <td align="center" width="50%"><img src="docs/screenshots/02-models.png" alt="Model library"><br><b>Model library</b> — load, quant advisor, KV/GPU controls</td>
+  <td align="center" width="50%"><img src="docs/screenshots/05-hub.png" alt="Hugging Face hub downloads"><br><b>Hub</b> — resumable GGUF downloads</td>
+</tr>
+</table>
+
+More: [chat](docs/screenshots/06-chat.png) · [settings](docs/screenshots/04-settings.png)
 
 ## Real measured results (EXP-012, 2026-08-10)
 
@@ -157,10 +178,10 @@ honest verdict).
 ## Tests & CI
 
 GitHub Actions runs on every push/PR (`windows-latest` for Python,
-`ubuntu-latest` for the frontend): the full Python suite (~290 tests:
+`ubuntu-latest` for the frontend): the full Python suite (~300 tests:
 hub download semantics, API contract, backends, telemetry, process
-priority, config) plus `tsc --noEmit` typecheck and a production `vite
-build` of the console. Locally:
+priority, config, security hardening) plus frontend `vitest`, `tsc
+--noEmit` typecheck and a production `vite build` of the console. Locally:
 
 ```bash
 python -m pytest           # full Python suite
@@ -171,10 +192,11 @@ cd frontend && npm ci && npm run typecheck && npm run build
 
 - [`docs/`](docs/) — architecture, ADRs/decisions, model guide, issue
   system, IDE integration, dashboard-theme spec
-- [`research/experiments/`](research/experiments/) — EXP-001…EXP-013:
+- [`research/experiments/`](research/experiments/) — EXP-001…EXP-017:
   buffer/prefetch simulation, KV-cache scaling, MoE CPU/GPU tiering,
   quant quality (Thai tonal probes), spec-decode dead-end, IQ1_M vs
-  IQ2_M, DS V4 Flash >RAM measurement, kimi-k3-in-c deep-research
+  IQ2_M, DS V4 Flash >RAM measurement, CPU-lane dead-end, kimi-k3-in-c
+  deep-research
 - [`research/HARDWARE_100TPS_PLAN.md`](research/HARDWARE_100TPS_PLAN.md) —
   hardware roadmap calibrated with measured results (2026-08-10 market
   prices)
