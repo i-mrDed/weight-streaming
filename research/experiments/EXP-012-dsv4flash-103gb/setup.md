@@ -115,6 +115,14 @@ params) รันได้จริงบนเครื่องนี้ผ่
       35B) · `n-cpu-moe 0 t8` = 48.5 tok/s — ตัวเลขสอดคล้องกับ EXP-008
       เดิม → harness พร้อมใช้กับ DS V4 Flash 100% (จุดนี้ไม่เคยทดสอบ
       ก่อนหน้า — ถ้าพังจะเจอตอนรัน 104 GB)
+- [x] **ยืนยัน --cpu-moe / --n-cpu-moe ใช้กับ arch deepseek4 ได้ (2026-08-10):**
+      ตรวจ source ของ backend b9967 (bb7049f7) — flags ทำงานผ่าน regex
+      override `\.ffn_(up|down|gate|gate_up)_(ch|)exps` (common.h
+      LLM_FFN_EXPS_REGEX) ที่เป็น **arch-agnostic** และ deepseek4.cpp
+      สร้าง tensor ชื่อ `blk.N.ffn_gate_exps.weight` / `ffn_down_exps` /
+      `ffn_up_exps` ตรงกับ regex เป๊ะ → flags ใช้ได้เหมือน qwen35moe
+      **โดยไม่ต้องแก้ harness** (หมายเหตุ: shared experts `ffn_*_shexp`
+      ไม่ match regex → อยู่ GPU ตามที่ต้องการ — ตัวเล็กอยู่แล้ว)
 - [x] **Validate harness กับโมเดลจริง (Qwen IQ1_M, 10 GB)** 2026-08-10:
       cold 68.9 / warm 64.8 tok/s, faults 212→823/tok, fault_mb 0.87→3.37
       — ค่า paging อ่านจาก `/v1/stats` ได้จริง; ปลดโหลดคืนสะอาด ✓
