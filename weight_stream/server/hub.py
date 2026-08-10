@@ -55,14 +55,19 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
+import mmap
 import os
 import re
 import shutil
+import struct
 import threading
 import time
 import urllib.parse
 import urllib.request
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Dict, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 from .config import get_model_search_dirs
 
@@ -365,6 +370,231 @@ def _open_part_append(part_path: str) -> Any:
     fh = os.fdopen(fd, "wb")
     fh.seek(0, os.SEEK_END)
     return fh
+
+
+# ── GGUF structural gate (EXP-011b follow-up) ────────────────────────
+# The byte-count gate proves the download delivered what the server
+# advertised; it does NOT prove the bytes are a usable GGUF. A CDN
+# answering an equal-length HTML error page, or a corrupt upstream file,
+# would pass the size gate and then fail (loudly or silently) at load time.
+# This gate parses the GGUF header + tensor table from the completed file
+# and refuses to rename it into place when the structure is not a valid GGUF.
+# It reads only the header (tens of MB at most — tokenizer arrays live
+# there), never the multi-GB tensor payload.
+
+# GGUF tensor types → (block_elems, block_bytes) for every type shipped
+# in real releases. Sizes are the ggml block structs from llama.cpp
+# ggml/src/ggml-common.h (static_asserts) — IQ quants are NOT simple
+# bit-width math (per-block scales/high bits), so the table is the only
+# reliable source. Unknown types degrade to an offset-only bound (still
+# catches offsets pointing past EOF).
+_GGML_BLOCK: Dict[int, Tuple[int, int]] = {
+    # plain / int / float
+    0: (1, 4),   # F32
+    1: (1, 2),   # F16
+    24: (1, 1),  # I8
+    25: (1, 2),  # I16
+    26: (1, 4),  # I32
+    27: (1, 8),  # I64
+    28: (1, 8),  # F64
+    30: (1, 2),  # BF16
+    # legacy 4/5/8-bit
+    2: (32, 18),  # Q4_0
+    3: (32, 20),  # Q4_1
+    6: (32, 22),  # Q5_0
+    7: (32, 24),  # Q5_1
+    8: (32, 34),  # Q8_0
+    9: (32, 36),  # Q8_1
+    # K-super-block quants
+    10: (256, 84),   # Q2_K
+    11: (256, 110),  # Q3_K
+    12: (256, 144),  # Q4_K
+    13: (256, 176),  # Q5_K
+    14: (256, 210),  # Q6_K
+    15: (256, 292),  # Q8_K
+    # IQ quants (block sizes from ggml-common.h)
+    16: (256, 66),   # IQ2_XXS
+    17: (256, 74),   # IQ2_XS
+    18: (256, 98),   # IQ3_XXS
+    19: (256, 50),   # IQ1_S
+    20: (32, 18),    # IQ4_NL
+    21: (256, 110),  # IQ3_S
+    22: (256, 82),   # IQ2_S
+    23: (256, 136),  # IQ4_XS
+    29: (256, 56),   # IQ1_M
+    # 4.85-bit legacy re-quants (same layout as Q4_0)
+    31: (32, 18),  # Q4_0_4_4
+    32: (32, 18),  # Q4_0_4_8
+    33: (32, 18),  # Q4_0_8_8
+    36: (32, 18),  # IQ4_NL_4_4
+    37: (32, 18),  # IQ4_NL_4_8
+    38: (32, 18),  # IQ4_NL_8_8
+    # ternary
+    34: (256, 54),  # TQ1_0
+    35: (256, 66),  # TQ2_0
+    # micro-scaling (DeepSeek V4 Flash MXFP4 experts)
+    39: (32, 17),  # MXFP4 (E8M0 scale byte + 16 nibbles)
+    40: (64, 36),  # NVFP4
+}
+
+# GGUF metadata value types (spec): fixed-width sizes for the skip walk.
+_META_FIXED_SIZE = {
+    0: 1,  # uint8
+    1: 1,  # int8
+    2: 2,  # uint16
+    3: 2,  # int16
+    4: 4,  # uint32
+    5: 4,  # int32
+    6: 4,  # float32
+    7: 1,  # bool
+    10: 8,  # uint64
+    11: 8,  # int64
+    12: 8,  # float64
+}
+_META_TYPE_STRING = 8
+_META_TYPE_ARRAY = 9
+
+
+def _gguf_parse_fail(msg: str) -> None:
+    raise HubValidationError(f"downloaded file is not a valid GGUF: {msg}", status=502)
+
+
+def _gguf_struct(buf: Any, pos: int, end: int, fmt: str) -> Tuple[Any, int]:
+    """Unpack a struct at ``pos``; out-of-bounds = corrupt header."""
+    size = struct.calcsize(fmt)
+    if pos + size > end:
+        _gguf_parse_fail(
+            f"header overruns file at byte {pos} (need {size}, have {end - pos})")
+    return struct.unpack_from(fmt, buf, pos), pos + size
+
+
+def _gguf_str(buf: Any, pos: int, end: int) -> Tuple[str, int]:
+    (nlen,), pos = _gguf_struct(buf, pos, end, "<Q")
+    if pos + nlen > end:
+        _gguf_parse_fail(f"string overruns file at byte {pos} (len {nlen})")
+    return bytes(buf[pos:pos + nlen]).decode("utf-8", "replace"), pos + nlen
+
+
+def _verify_gguf_buffer(buf: Any, file_size: int) -> Dict[str, Any]:
+    """Structural GGUF check over an in-memory/mmap view of the file."""
+    if file_size < 32:
+        _gguf_parse_fail("file too small")
+    if bytes(buf[0:4]) != b"GGUF":
+        _gguf_parse_fail("magic is not 'GGUF'")
+    (version,), pos = _gguf_struct(buf, 4, file_size, "<I")
+    (tensor_count,), pos = _gguf_struct(buf, pos, file_size, "<Q")
+    (meta_count,), pos = _gguf_struct(buf, pos, file_size, "<Q")
+    if version not in (2, 3):
+        _gguf_parse_fail(f"unsupported version {version}")
+    if tensor_count <= 0 or tensor_count > 1_000_000:
+        _gguf_parse_fail(f"implausible tensor count {tensor_count}")
+
+    architecture: Optional[str] = None
+    for _ in range(meta_count):
+        key, pos = _gguf_str(buf, pos, file_size)
+        (vtype,), pos = _gguf_struct(buf, pos, file_size, "<I")
+        if vtype == _META_TYPE_STRING:
+            val, pos = _gguf_str(buf, pos, file_size)
+            if key == "general.architecture":
+                architecture = val
+        elif vtype == _META_TYPE_ARRAY:
+            (etype,), pos = _gguf_struct(buf, pos, file_size, "<I")
+            (ecount,), pos = _gguf_struct(buf, pos, file_size, "<Q")
+            if ecount > 10_000_000:
+                _gguf_parse_fail(f"implausible array count {ecount}")
+            for _ in range(ecount):
+                if etype == _META_TYPE_STRING:
+                    _, pos = _gguf_str(buf, pos, file_size)
+                else:
+                    esize = _META_FIXED_SIZE.get(etype)
+                    if esize is None:
+                        _gguf_parse_fail(f"unknown array element type {etype}")
+                    if pos + esize > file_size:
+                        _gguf_parse_fail("array overruns file")
+                    pos += esize
+        else:
+            msize = _META_FIXED_SIZE.get(vtype)
+            if msize is None:
+                _gguf_parse_fail(f"unknown metadata value type {vtype}")
+            if pos + msize > file_size:
+                _gguf_parse_fail("metadata overruns file")
+            pos += msize
+
+    # Walk every tensor info first: the data section starts AFTER the last
+    # one, so its size is only known once the whole table is consumed.
+    tensors = []
+    for _ in range(tensor_count):
+        name, pos = _gguf_str(buf, pos, file_size)
+        (ndims,), pos = _gguf_struct(buf, pos, file_size, "<I")
+        if ndims > 8:
+            _gguf_parse_fail(f"tensor {name!r} has implausible {ndims} dims")
+        nelem = 1
+        for _ in range(ndims):
+            (d,), pos = _gguf_struct(buf, pos, file_size, "<Q")
+            nelem *= d
+        (ttype,), pos = _gguf_struct(buf, pos, file_size, "<I")
+        (toff,), pos = _gguf_struct(buf, pos, file_size, "<Q")
+        tensors.append((name, nelem, ttype, toff))
+    header_end = pos
+    data_size = file_size - header_end
+
+    max_end = 0
+    max_tensor = ""
+    for name, nelem, ttype, toff in tensors:
+        block = _GGML_BLOCK.get(ttype)
+        if block is not None:
+            be, bb = block
+            nbytes = ((nelem + be - 1) // be) * bb
+            tend = toff + nbytes
+            if toff > data_size or tend > data_size:
+                _gguf_parse_fail(
+                    f"tensor {name!r} (type {ttype}) ends at byte {tend} "
+                    f"but data section is {data_size} bytes — file truncated "
+                    "or corrupted")
+        else:
+            tend = toff + 1  # unknown layout: offset must still be in-file
+            if toff >= data_size:
+                _gguf_parse_fail(
+                    f"tensor {name!r} offset {toff} past data section "
+                    f"({data_size} bytes)")
+        if tend > max_end:
+            max_end = tend
+            max_tensor = name
+
+    return {
+        "ok": True,
+        "version": version,
+        "tensor_count": tensor_count,
+        "architecture": architecture,
+        "data_bytes": data_size,
+        "last_tensor_end": max_end,
+        "last_tensor": max_tensor,
+    }
+
+
+def _verify_gguf_structure(path: str) -> Dict[str, Any]:
+    """Structural GGUF gate for a downloaded file (raises on corruption).
+
+    mmap is preferred (lazy — no memory cost on multi-GB files); falls back
+    to a bounded prefix read when mapping is unavailable.
+    """
+    file_size = os.path.getsize(path)
+    buf = None
+    try:
+        with open(path, "rb") as fh:
+            try:
+                buf = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
+                return _verify_gguf_buffer(buf, file_size)
+            except (ValueError, OSError):
+                # mmap unavailable (e.g. 0-length edge) — bounded prefix read
+                prefix = fh.read(min(file_size, 256 * 1024 * 1024))
+                return _verify_gguf_buffer(prefix, file_size)
+    finally:
+        if buf is not None:
+            try:
+                buf.close()
+            except Exception:
+                pass
 
 
 # ── Download task + manager ───────────────────────────────────────────
@@ -874,6 +1104,27 @@ class DownloadManager:
                     "download truncated; resume will fetch the remainder",
                     status=502,
                 )
+            # Structural GGUF gate: byte-count parity only proves the stream
+            # delivered what the server advertised — not that the bytes ARE
+            # a GGUF. Parse the header + tensor table (header-sized read, never
+            # the payload) and refuse before the .part is renamed into place.
+            try:
+                summary = _verify_gguf_structure(part_path)
+            except HubValidationError:
+                # The .part is complete-but-corrupt — a resume would append
+                # to a full file and duplicate bytes. Drop it and fail
+                # honestly so a retry downloads fresh.
+                try:
+                    os.remove(part_path)
+                except OSError:
+                    pass
+                raise
+            logger.info(
+                "hub: %s verified GGUF v%d (%d tensors%s) — %d bytes of data",
+                task.filename, summary["version"], summary["tensor_count"],
+                f", arch={summary['architecture']}" if summary.get("architecture") else "",
+                summary["data_bytes"],
+            )
             os.replace(part_path, task.target_path)  # atomic
             task.status = "done"
             # bytes_downloaded equals total_bytes exactly (gate above) — do

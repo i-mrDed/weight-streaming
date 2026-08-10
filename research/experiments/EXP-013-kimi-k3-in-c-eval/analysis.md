@@ -55,11 +55,14 @@ O_DIRECT. เรา (llama.cpp) ใช้ mmap ของ GGUF อยู่แล
 
 ### C. "TRUE resident hit rate" telemetry (แยก prefetch หลอก)
 เขาชี้ว่า hits counter มักอ่าน 100% หลอก (prefetch ดึงมาเมื่อครู่) — ต้องแยก
-"resident จริง". **เรามีช่องทางเทียบเท่าอยู่แล้ว: page_faults.py** — cold
-175 MB/token → warm 0.55 MB/token (300×) — แต่ยังไม่ expose เป็น metric ราย
-config ใน stats. → เพิ่ม "paging MB/token" ลง `/v1/stats` ต่อ model = เทียบ
-ได้โดยตรงว่า expert stream มาจาก RAM หรือ disk (สำคัญมากสำหรับ EXP-012
-DS V4 Flash ที่ RAM ไม่พอ)
+"resident จริง". **เรามีเทียบเท่าอยู่แล้วและ verified 2026-08-10:**
+`page_faults.py` → `paging_demand()` ต่อ generation → `/v1/stats`
+(`faults_per_token`, `fault_mb_per_token`, `disk_mb_per_token` จาก hard
+faults/residency) + console โชว์ทั้ง Overview และ StatsPage — cold 175 →
+warm 0.55 MB/token (300×). **พิสูจน์สดบน server นี้:** Qwen3-0.6B generate
+30 tokens → `faults 4251, faults_per_token 141.7, fault_mb_per_token 0.58`.
+→ ใช้ตรงนี้เป็นตัวชี้วัด EXP-012 ได้เลยว่า expert มาจาก RAM หรือ disk
+(ไม่ต้องเขียนใหม่ — แค่ harness อ่าน field นี้)
 
 ### D. Config reader refuses-to-guess + byte-exact shard verify
 เราทำครึ่งหนึ่งแล้ว: `_wait_ready()` ตรวจ /props กัน stale server, hub ตรวจ

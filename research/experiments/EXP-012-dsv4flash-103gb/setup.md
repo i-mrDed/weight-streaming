@@ -39,14 +39,20 @@ params) รันได้จริงบนเครื่องนี้ผ่
 
 ## 4. แผนดำเนินการ (ตามลำดับ)
 
-### Phase 0 — Pre-flight (ใช้เวลา ~15 นาที, ไม่ต้องดาวน์โหลด)
-- [ ] ตรวจ disk free: `df -h /d /c` → ต้องการ **≥ 110 GB** บนดิสก์เดียว
-- [ ] Verify llama-server รองรับ DS V4 Flash: รัน `llama-server --version`
-      + เช็คว่า build ≥ ช่วง 2026-08 (PR 25784 DSpark / DS V4 arch). ถ้าใช้
-      Jan backend: อัปเดต Jan ก่อน
-- [ ] ทดสอบ dry-run: โหลด GGUF เล็ก (Qwen3-0.6B) ผ่าน `/v1/models/load`
-      เพื่อยืนยัน server healthy หลัง restart (ถ้าต้องอัปเดต backend)
-- [ ] รัน `scripts/check_clean_environment.py` → ต้อง CLEAN
+### Phase 0 — Pre-flight (ตรวจเสร็จแล้ว 2026-08-10 ✅ ยกเว้น disk)
+- [x] ตรวจ disk free: D: เหลือ 24 GB · C: 70 GB → **ยังต้องเคลียร์ ≥ 110 GB**
+      (⏳ รอ user — งานนี้เป็นตัว blocker เดียวที่เหลือ)
+- [x] Verify llama-server: server ใช้ **b9967** (llama.cpp `bb7049f7`, build
+      2026-07-12) — llama.cpp merge DS V4 support **July 7** (PR #24162) →
+      **b9967 รองรับ DS V4 Flash baseline ✓** (อยู่หลัง merge 5 วัน)
+- [x] **DSpark (1.5-1.9×) ยังไม่มีใน b9967** — PR 25784 เข้ามาหลัง Aug →
+      EXP-012 วัด baseline ก่อน (ไม่บล็อก); ถ้าต้องการ DSpark ต้องรอ Jan
+      อัปเดต backend หรือ build llama.cpp เอง
+- [x] หมายเหตุ 0731: เป็นรุ่นปรับปรุงของ arch เดียวกัน (tool-calling fix) —
+      ต้องยืนยันตอน test load หลังดาวน์โหลดจริง (ไม่บล็อก baseline)
+- [x] ทดสอบ dry-run: โหลด Qwen3-0.6B ผ่าน `/v1/models/load` → 200 ✓
+      + generate 30 tokens + `/v1/stats` มี paging (faults 4251, 0.58 MB/tok)
+- [x] รัน `scripts/check_clean_environment.py` → CLEAN ✓
 
 ### Phase 1 — ดาวน์โหลด (103 GB, หลายชั่วโมง ตามเน็ต)
 - [ ] ผ่าน hub ของระบบเรา (`POST /v1/hub/download` หรือ CLI) — ได้ประโยชน์

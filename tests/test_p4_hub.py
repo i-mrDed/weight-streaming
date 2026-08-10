@@ -9,6 +9,7 @@ or monkeypatched at module level (endpoint tests). No real network is touched.
 import io
 import json
 import os
+import struct
 import threading
 import time
 
@@ -134,6 +135,49 @@ class RangeStream:
         pass
 
 
+def _make_gguf_bytes(magic=b"GGUF", version=3, bad_offset=None):
+    """Minimal VALID GGUF: 2 metadata KVs (one string, one array) + 1 F32
+    tensor (8x16 = 4096 elems → 16 KiB data). Payloads in download tests
+    must be a real GGUF — the structural gate (EXP-011b) rejects anything
+    that is not, so `b"G" * N` fixtures no longer reach `done`.
+
+    ``bad_offset`` overrides the tensor data offset to exercise the
+    bounds gate (offset/end beyond the data section = corrupt).
+    """
+    name = b"general.architecture"
+    val = b"qwen3"
+    arr = b"arr.k"
+    parts = [
+        magic,
+        struct.pack("<I", version),
+        struct.pack("<Q", 1),          # tensor_count
+        struct.pack("<Q", 2),          # metadata_kv_count
+        # kv 1: string
+        struct.pack("<Q", len(name)), name,
+        struct.pack("<I", 8),          # string type
+        struct.pack("<Q", len(val)), val,
+        # kv 2: array of 3 × uint32 (exercises the array walk)
+        struct.pack("<Q", len(arr)), arr,
+        struct.pack("<I", 9),          # array type
+        struct.pack("<I", 4),          # element type: uint32
+        struct.pack("<Q", 3),          # element count
+        struct.pack("<I", 1), struct.pack("<I", 2), struct.pack("<I", 3),
+    ]
+    tname = b"blk.0.attn_q.weight"
+    nelem = 4096
+    parts += [
+        struct.pack("<Q", len(tname)), tname,
+        struct.pack("<I", 2),          # ndims
+        struct.pack("<Q", 32), struct.pack("<Q", 128),  # dims (32×128 = 4096)
+        struct.pack("<I", 0),          # F32
+        struct.pack("<Q", bad_offset if bad_offset is not None else 0),
+    ]
+    return b"".join(parts) + b"\x00" * (nelem * 4)
+
+
+_GGUF = _make_gguf_bytes()  # shared valid payload for download-completion tests
+
+
 @pytest.fixture
 def models_dir(tmp_path, monkeypatch):
     d = tmp_path / "models"
@@ -145,7 +189,7 @@ def models_dir(tmp_path, monkeypatch):
 def _mgr(fetch=None, stream=None):
     return DownloadManager(
         fetch_json=fetch or (lambda url, t, start=0: FAKE_SEARCH),
-        open_stream=stream or (lambda url, t, start=0: FakeStream(b"G" * 3000)),
+        open_stream=stream or (lambda url, t, start=0: FakeStream(_GGUF, content_length=len(_GGUF))),
     )
 
 
@@ -153,7 +197,7 @@ def _app(monkeypatch, tmp_path, fetch=None, stream=None):
     monkeypatch.setenv("WS_USAGE_HISTORY_FILE", str(tmp_path / "u.jsonl"))
     monkeypatch.setenv("WS_LOG_FILE", str(tmp_path / "s.log"))
     monkeypatch.setattr(hubmod, "_default_fetch_json", fetch or (lambda u, t, start=0: FAKE_SEARCH))
-    monkeypatch.setattr(hubmod, "_default_open_stream", stream or (lambda u, t, start=0: FakeStream(b"Z" * 500)))
+    monkeypatch.setattr(hubmod, "_default_open_stream", stream or (lambda u, t, start=0: FakeStream(_GGUF)))
     return create_app(ServerConfig())
 
 
@@ -316,7 +360,7 @@ def test_stream_uses_larger_timeout_than_json(monkeypatch, models_dir):
 
     def capturing_stream(url, t, start=0):
         seen["timeout"] = t
-        return FakeStream(b"G" * 1000)
+        return FakeStream(_GGUF, content_length=len(_GGUF))
 
     def capturing_fetch(url, t, start=0):
         seen["json_timeout"] = t
@@ -342,17 +386,17 @@ def test_stream_uses_larger_timeout_than_json(monkeypatch, models_dir):
 
 
 def test_download_is_atomic_with_real_progress(models_dir):
-    mgr = _mgr(stream=lambda u, t, start=0: FakeStream(b"G" * 3000, content_length=3000))
+    mgr = _mgr(stream=lambda u, t, start=0: FakeStream(_GGUF, content_length=len(_GGUF)))
     task = mgr.create_download("org/qwen-gguf", "qwen-7b-q4_k_m.gguf", str(models_dir))
     mgr.run_download(task)
     final = models_dir / "qwen-7b-q4_k_m.gguf"
     assert task.status == "done"
-    assert final.read_bytes() == b"G" * 3000
+    assert final.read_bytes() == _GGUF
     assert not (models_dir / "qwen-7b-q4_k_m.gguf.part").exists()  # atomic: no leftover
     d = task.to_dict()
     assert d["percent"] == 100.0
-    assert d["bytes_downloaded"] == 3000
-    assert d["total_bytes"] == 3000
+    assert d["bytes_downloaded"] == len(_GGUF)
+    assert d["total_bytes"] == len(_GGUF)
     assert d["speed_bps"] and d["speed_bps"] > 0  # real, not fabricated
 
 
@@ -464,18 +508,18 @@ def test_truncated_eof_then_resume_yields_identical_file(models_dir):
     ends early via quiet EOF (no exception) → the gate fails the task and
     keeps the ``.part``; a resume via Range (206) fetches only the remainder
     and the final file is byte-identical to a fresh download."""
-    data = b"Y" * 3000
-    # Phase 1: quiet truncation — EOF after 1000 of the advertised 3000.
-    mgr = _mgr(stream=lambda u, t, start=0: FakeStream(b"Y" * 1000, content_length=3000))
+    data = _GGUF
+    # Phase 1: quiet truncation — EOF after 1000 of the advertised total.
+    mgr = _mgr(stream=lambda u, t, start=0: FakeStream(data[:1000], content_length=len(data)))
     mgr.chunk_size = 500
     task = mgr.create_download("org/m", "eof.gguf", str(models_dir))
     mgr.run_download(task)
     assert task.status == "failed"
     assert "truncated" in (task.error or "")
     part = models_dir / "eof.gguf.part"
-    assert part.exists() and part.read_bytes() == b"Y" * 1000
+    assert part.exists() and part.read_bytes() == data[:1000]
 
-    # Phase 2: resume honors Range → only the 2000 remaining bytes fetched.
+    # Phase 2: resume honors Range → only the remaining bytes fetched.
     seen = {"starts": []}
 
     def range_opener(url, t, start=0):
@@ -488,21 +532,21 @@ def test_truncated_eof_then_resume_yields_identical_file(models_dir):
     assert task2.status == "done"
     assert seen["starts"] == [1000]  # resumed exactly from the kept part
     assert (models_dir / "eof.gguf").read_bytes() == data  # byte-identical
-    assert task2.bytes_downloaded == 3000
+    assert task2.bytes_downloaded == len(data)
 
 
 def test_resume_appends_remaining_bytes_from_part(models_dir):
     """v1.1 happy path: a failed download's kept ``.part`` is resumed via
     ``Range`` (206) — only the remaining bytes are fetched and the final file
     is byte-identical to a fresh download."""
-    data = b"X" * 3000
+    data = _GGUF
     mgr = _mgr(stream=lambda u, t, start=0: FailAfterStream(data, fail_at=1000))
     mgr.chunk_size = 500
     task = mgr.create_download("org/m", "r.gguf", str(models_dir))
     mgr.run_download(task)
     assert task.status == "failed"
     part = models_dir / "r.gguf.part"
-    assert part.exists() and part.read_bytes() == b"X" * 1000
+    assert part.exists() and part.read_bytes() == data[:1000]
 
     # resume: upstream honors Range → only 2000 remaining bytes transferred
     seen = {"starts": []}
@@ -520,8 +564,8 @@ def test_resume_appends_remaining_bytes_from_part(models_dir):
     assert final.read_bytes() == data                     # byte-identical
     assert not (models_dir / "r.gguf.part").exists()      # atomic rename
     d = task2.to_dict()
-    assert d["total_bytes"] == 3000
-    assert d["bytes_downloaded"] == 3000
+    assert d["total_bytes"] == len(data)
+    assert d["bytes_downloaded"] == len(data)
     assert d["percent"] == 100.0
     assert seen["starts"] == [1000]                      # Range asked from byte 1000
 
@@ -530,13 +574,13 @@ def test_new_task_resumes_stale_part(models_dir):
     """A brand-NEW download of the same filename picks up a stale ``.part``
     (auto-resume) instead of re-fetching from byte 0 — the documented
     v1.1 behavior for any task whose target file already has a partial."""
-    data = b"Z" * 3000
+    data = _GGUF
     mgr = _mgr(stream=lambda u, t, start=0: FailAfterStream(data, fail_at=1000))
     mgr.chunk_size = 500
     t1 = mgr.create_download("org/m", "auto.gguf", str(models_dir))
     mgr.run_download(t1)
     assert t1.status == "failed"
-    assert (models_dir / "auto.gguf.part").read_bytes() == b"Z" * 1000
+    assert (models_dir / "auto.gguf.part").read_bytes() == data[:1000]
 
     seen = []
     mgr._open_stream = lambda u, t, start=0: (seen.append(start) or RangeStream(data, start=start, status=206))
@@ -606,13 +650,13 @@ def test_delete_during_active_download_stops_and_cleans(models_dir):
 def test_resume_ignored_range_restarts_fresh(models_dir):
     """Upstream that ignores ``Range`` (200, whole body) must NOT duplicate
     the kept partial — the transfer restarts fresh and stays correct."""
-    data = b"Y" * 3000
+    data = _GGUF
     mgr = _mgr(stream=lambda u, t, start=0: FailAfterStream(data, fail_at=1500))
     mgr.chunk_size = 500
     task = mgr.create_download("org/m", "ign.gguf", str(models_dir))
     mgr.run_download(task)
     assert task.status == "failed"
-    assert (models_dir / "ign.gguf.part").read_bytes() == b"Y" * 1500
+    assert (models_dir / "ign.gguf.part").read_bytes() == data[:1500]
 
     def full_opener(url, t, start=0):
         return RangeStream(data, start=start, status=200)  # ignores Range
@@ -622,7 +666,7 @@ def test_resume_ignored_range_restarts_fresh(models_dir):
     mgr.run_download(task2)
     assert task2.status == "done"
     assert (models_dir / "ign.gguf").read_bytes() == data
-    assert task2.bytes_downloaded == 3000  # no double-counted prefix
+    assert task2.bytes_downloaded == len(data)  # no double-counted prefix
 
 
 def test_resume_refuses_active_and_done(models_dir):
@@ -802,7 +846,7 @@ def test_hub_resume_endpoint_requeues_and_completes(models_dir, monkeypatch, tmp
             import time as _t
             _t.sleep(0.05)
         assert hub_mgr.get_task(task.id).status == "done"
-        assert (models_dir / "m-q4_0.gguf").read_bytes() == b"Z" * 500
+        assert (models_dir / "m-q4_0.gguf").read_bytes() == _GGUF
 
 
 def test_hub_resume_404_and_409(models_dir, monkeypatch, tmp_path):
@@ -1119,7 +1163,7 @@ def test_to_dict_reports_real_file_size_for_done(models_dir):
     mgr.run_download(done)
     d = done.to_dict()
     assert d["status"] == "done"
-    assert d["file_size"] == 3000  # FakeStream wrote exactly 3000 bytes
+    assert d["file_size"] == len(_GGUF)  # FakeStream wrote exactly the GGUF bytes
     # a queued/never-downloaded task has no file on disk
     fresh = mgr.create_download("org/m", "n.gguf", str(models_dir))
     assert fresh.to_dict()["file_size"] is None
@@ -1132,7 +1176,7 @@ def test_file_size_none_when_file_vanish_race(models_dir, monkeypatch):
     mgr = _mgr()
     task = mgr.create_download("org/m", "race.gguf", str(models_dir))
     mgr.run_download(task)
-    assert task.to_dict()["file_size"] == 3000
+    assert task.to_dict()["file_size"] == len(_GGUF)
     final = models_dir / "race.gguf"
     assert final.exists()
 
@@ -1220,8 +1264,8 @@ def test_hub_progress_sse_streams_real_progress(models_dir, monkeypatch, tmp_pat
         assert frames, "SSE stream produced no frames"
         assert frames[-1]["status"] == "done"
         assert frames[-1]["percent"] == 100.0
-        assert frames[-1]["bytes_downloaded"] == 500
-        assert (models_dir / "m-q4_0.gguf").read_bytes() == b"Z" * 500
+        assert frames[-1]["bytes_downloaded"] == len(_GGUF)
+        assert (models_dir / "m-q4_0.gguf").read_bytes() == _GGUF
 
 
 # ── P5.1 on-demand model detail ─────────────────────────────────────
@@ -1381,3 +1425,52 @@ def test_search_without_tags_defaults_honest_empty():
     ).search("q")
     assert res[0]["tags"] == []
     assert res[0]["pipeline_tag"] is None
+
+
+# ── GGUF structural gate (EXP-011b follow-up) ─────────────────────────
+
+
+def test_gguf_structural_gate_accepts_valid(tmp_path):
+    from weight_stream.server.hub import _verify_gguf_structure
+    p = tmp_path / "ok.gguf"
+    p.write_bytes(_GGUF)
+    s = _verify_gguf_structure(str(p))
+    assert s["ok"] is True
+    assert s["version"] == 3
+    assert s["tensor_count"] == 1
+    assert s["architecture"] == "qwen3"
+    assert s["data_bytes"] == 4096 * 4  # exactly the F32 payload
+
+
+def test_gguf_structural_gate_rejects_bad_magic(tmp_path):
+    from weight_stream.server.hub import HubValidationError, _verify_gguf_structure
+    p = tmp_path / "bad.gguf"
+    p.write_bytes(_make_gguf_bytes(magic=b"NOPE"))
+    with pytest.raises(HubValidationError) as ei:
+        _verify_gguf_structure(str(p))
+    assert "magic" in str(ei.value)
+
+
+def test_gguf_structural_gate_rejects_offset_past_eof(tmp_path):
+    from weight_stream.server.hub import HubValidationError, _verify_gguf_structure
+    p = tmp_path / "over.gguf"
+    p.write_bytes(_make_gguf_bytes(bad_offset=999_999))
+    with pytest.raises(HubValidationError) as ei:
+        _verify_gguf_structure(str(p))
+    assert "ends at byte" in str(ei.value) or "past" in str(ei.value)
+
+
+def test_download_of_garbage_is_rejected_and_part_removed(models_dir):
+    """The structural gate's production scenario: a stream that delivers its
+    FULL advertised byte count but whose content is not a GGUF (e.g. an
+    equal-length HTML error page) must fail the task, drop the corrupt
+    ``.part`` (a resume would append to a full file), and leave NO final
+    file — never rename garbage into ``.gguf``."""
+    garbage = b"<html>upstream error page</html>" * 500  # not a GGUF
+    mgr = _mgr(stream=lambda u, t, start=0: FakeStream(garbage, content_length=len(garbage)))
+    task = mgr.create_download("org/m", "garbage.gguf", str(models_dir))
+    mgr.run_download(task)
+    assert task.status == "failed"
+    assert "not a valid GGUF" in (task.error or "")
+    assert not (models_dir / "garbage.gguf").exists()       # never renamed in
+    assert not (models_dir / "garbage.gguf.part").exists()  # corrupt part dropped
