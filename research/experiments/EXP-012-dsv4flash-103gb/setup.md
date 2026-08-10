@@ -86,6 +86,19 @@ params) รันได้จริงบนเครื่องนี้ผ่
       ที่เราพบ) + มี community requant "expert-only IQ3" ที่ KLD ดีกว่า
       UD-IQ3_S และ **decode เร็วขึ้น 1.4× บน CPU-spill rig** (ตรงกับ
       เส้นทาง --cpu-moe ของเรา) — บันทึกไว้พิจารณาหลังวัด baseline
+- [x] **พิสูจน์ b9967 โหลด + รัน MXFP4 จริง (2026-08-10):** สร้าง minimal
+      qwen3 GGUF (มือ, GGUF v3) ที่มี ffn_gate/down/up เป็น **MXFP4
+      (type 39)** — b9967 `llama-server` (--n-gpu-layers 0, CPU เท่านั้น)
+      **โหลดผ่าน (`model loaded`) + generate 8 tokens ครบ**
+      (system_fingerprint b1-bb7049f7, eval 1.59ms/8 tok) — ไม่มี error/
+      assert เกี่ยวกับ MXFP4 → **MXFP4 support ยืนยัน 100% บน backend นี้**
+      (คำตอบเดิมจาก warning "unknown type mxfp4" คือ guess-type path
+      เฉยๆ — ไฟล์จริงที่มี general.file_type ไม่มีผล)
+      ชี้แจง: builder อยู่ scripts/_make_mxfp4_test.py (สำหรับ reproduce);
+      ระหว่างทางเจอ + แก้ serialization: kv_count ต้องตรง (เคย hardcode 1),
+      tensor offset ต้อง relative ต่อ data section (ไม่ใช่ absolute file),
+      rope.dimension_count == n_embd_head (8 สำหรับ qwen3), SPM vocab
+      ต้องมี byte-fallback tokens (<0x00>..<0xFF>) ถึงจะ tokenize ได้
 - [ ] ผ่าน hub ของระบบเรา (`POST /v1/hub/download` หรือ CLI) — ได้ประโยชน์
       จาก integrity gate (EXP-011b: ตรวจ bytes ครบก่อน done + resume จาก .part)
 - [ ] ยืนยันผล: ขนาดไฟล์ตรงกับ HF (103 GB), GGUF magic ถูกต้อง
