@@ -75,6 +75,11 @@ These two cannot be set via `gh`; do them in the browser:
       Pages → build from `main` `/docs`. Consider adding a `docs/index.md`
       landing that links to README, screenshots, EXP write-ups, and the
       HARDWARE plan. (Repo must be public for Pages to be public.)
+      > **Verified 2026-08-10:** the Pages API returns 422 "Your current plan
+      > does not support GitHub Pages for this repository" while the repo is
+      > PRIVATE (GitHub Free only serves Pages for public repos). The landing
+      > page (`docs/index.md`) is committed and ready; enable Pages in this
+      > step, right after the visibility flip — 2 clicks.
 - [ ] Repo metadata: consider enabling Discussions (community questions land
       somewhere visible) and pinning the EXP-012 write-up link in the About box.
 
