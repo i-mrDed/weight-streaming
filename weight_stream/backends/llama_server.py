@@ -38,6 +38,7 @@ from typing import Any, Dict, Iterator, List, Optional
 from ._base import WeightStreamBackend
 from ..core.exceptions import ModelError, GenerationError
 from ..io.page_faults import page_fault_count, paging_demand
+from ..io.process_priority import lower_pid as _lower_child_priority
 
 logger = logging.getLogger(__name__)
 
@@ -452,6 +453,19 @@ class LlamaServerBackend(WeightStreamBackend):
         self._job_handle = _create_win32_kill_on_close_job()
         if self._job_handle is not None:
             _assign_process_to_job(self._job_handle, self._proc)
+        # CPU etiquette (same gate as ServerConfig.lower_process_priority):
+        # the inference itself runs in THIS child, so lowering only the API
+        # server would leave the actual CPU hog at normal priority and the
+        # desktop still starves during generation (the user-reported
+        # sluggishness with --cpu-moe). Drop the child below-normal too —
+        # the desktop/browser/IDE stay responsive while a >RAM model
+        # thrashes CPU+disk, with near-zero throughput cost on an idle
+        # machine. Best-effort; Windows-only (POSIX cannot retarget another
+        # process from an unprivileged token).
+        if os.environ.get("WS_LOWER_PRIORITY", "1").strip().lower() not in (
+            "0", "false", "no", "off",
+        ):
+            _lower_child_priority(getattr(self._proc, "pid", None))
         try:
             self._wait_ready(timeout=60)
         except Exception:

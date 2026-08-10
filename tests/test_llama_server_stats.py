@@ -120,7 +120,7 @@ class TestGpuLoadFlags:
     """P7.5: gpu_layers → -ngl and kv_cache_type → -ctk/-ctv in the
     llama-server command line; invalid kv types are refused up front."""
 
-    def _cmd_with(self, monkeypatch, **ctor):
+    def _cmd_with(self, monkeypatch, lower_calls=None, **ctor):
         import subprocess
         import weight_stream.backends.llama_server as ls_mod
 
@@ -153,6 +153,13 @@ class TestGpuLoadFlags:
         )
         try:
             monkeypatch.setattr(ls_mod.subprocess, "Popen", fake_popen)
+            # Child priority lowering must never touch a real process in
+            # tests — record the pid when the test asks for it.
+            monkeypatch.setattr(
+                ls_mod, "_lower_child_priority",
+                lambda pid: (lower_calls.append(pid) if lower_calls is not None
+                             else None) or True,
+            )
             # EXP-009: start() sweeps stale port owners via /props first —
             # keep it fully offline (never probe/kill a real 8805 owner).
             monkeypatch.setattr(b, "_read_props", lambda: None)
@@ -188,6 +195,20 @@ class TestGpuLoadFlags:
     def test_kv_cache_type_case_normalized(self, monkeypatch):
         cmd = self._cmd_with(monkeypatch, kv_cache_type="Q8_0")
         assert cmd[cmd.index("-ctk") + 1] == "q8_0"
+
+    def test_spawn_lowers_child_priority_by_default(self, monkeypatch):
+        calls = []
+        self._cmd_with(monkeypatch, lower_calls=calls)
+        # WS_LOWER_PRIORITY defaults to enabled → the spawned child (pid 777)
+        # is dropped below-normal so the desktop stays responsive during
+        # inference, not just the API server process.
+        assert calls == [777]
+
+    def test_spawn_skips_child_lowering_when_disabled(self, monkeypatch):
+        monkeypatch.setenv("WS_LOWER_PRIORITY", "0")
+        calls = []
+        self._cmd_with(monkeypatch, lower_calls=calls)
+        assert calls == []
 
     def test_invalid_kv_cache_type_refused(self):
         from weight_stream.core.exceptions import ModelError

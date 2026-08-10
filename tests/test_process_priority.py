@@ -145,6 +145,80 @@ def test_live_round_trip_on_host_platform():
         assert isinstance(restored, bool)
 
 
+class _FakeK32:
+    """In-memory stand-in for kernel32 with OpenProcess/SetPriorityClass."""
+
+    def __init__(self):
+        self._next = 1
+        self.handles = {}  # handle -> pid
+        self.classes = {}  # handle -> priority class
+        self.fail_open = False
+        self.fail_set = False
+
+    def GetCurrentProcess(self):
+        return 0xDEAD
+
+    def GetPriorityClass(self, handle):
+        return self.classes.get(handle, pp._NORMAL_PRIORITY_CLASS)
+
+    def SetPriorityClass(self, handle, value):
+        if self.fail_set:
+            return False
+        self.classes[handle] = value
+        return True
+
+    def OpenProcess(self, access, inherit, pid):
+        if self.fail_open:
+            return None
+        h = self._next
+        self._next += 1
+        self.handles[h] = pid
+        self.classes[h] = pp._NORMAL_PRIORITY_CLASS
+        return h
+
+    def CloseHandle(self, handle):
+        self.handles.pop(handle, None)
+        return True
+
+
+def test_lower_pid_lowers_child(monkeypatch):
+    fake = _FakeK32()
+    monkeypatch.setattr(pp, "_win_k32", lambda: fake)
+
+    assert pp.lower_pid(1234) is True
+    # The child was set below normal...
+    assert list(fake.classes.values()) == [pp._BELOW_NORMAL_PRIORITY_CLASS]
+    # ...and every opened handle was closed (no handle leak).
+    assert fake.handles == {}
+
+
+def test_lower_pid_open_failure_is_honest(monkeypatch):
+    fake = _FakeK32()
+    fake.fail_open = True
+    monkeypatch.setattr(pp, "_win_k32", lambda: fake)
+
+    assert pp.lower_pid(1234) is False
+
+
+def test_lower_pid_set_failure_is_honest(monkeypatch):
+    fake = _FakeK32()
+    fake.fail_set = True
+    monkeypatch.setattr(pp, "_win_k32", lambda: fake)
+
+    assert pp.lower_pid(1234) is False
+
+
+def test_lower_pid_noop_for_invalid_or_off_windows(monkeypatch):
+    monkeypatch.setattr(pp, "_win_k32", lambda: None)
+    assert pp.lower_pid(1234) is False  # off Windows → no-op
+
+    fake = _FakeK32()
+    monkeypatch.setattr(pp, "_win_k32", lambda: fake)
+    assert pp.lower_pid(0) is False  # invalid pid short-circuits
+    assert pp.lower_pid(None) is False
+    assert fake.handles == {}
+
+
 def test_module_level_singleton_api():
     # Module functions delegate to a shared instance and never raise.
     assert isinstance(pp.describe_process_priority(), dict)

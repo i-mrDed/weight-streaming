@@ -76,6 +76,10 @@ def _win_k32() -> Optional[Any]:
     k32.GetPriorityClass.restype = wintypes.DWORD
     k32.SetPriorityClass.argtypes = [wintypes.HANDLE, wintypes.DWORD]
     k32.SetPriorityClass.restype = wintypes.BOOL
+    k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    k32.OpenProcess.restype = wintypes.HANDLE
+    k32.CloseHandle.argtypes = [wintypes.HANDLE]
+    k32.CloseHandle.restype = wintypes.BOOL
     _k32 = k32
     return k32
 
@@ -97,6 +101,46 @@ def _win_set_class(priority_class: int) -> bool:
     if k32 is None:
         return False
     return bool(k32.SetPriorityClass(k32.GetCurrentProcess(), priority_class))
+
+
+# PROCESS_SET_INFORMATION (processthreadsapi.h) — required to change another
+# process's priority class from an ordinary user token.
+_PROCESS_SET_INFORMATION = 0x0200
+
+
+def lower_pid(pid: Optional[int]) -> bool:
+    """Lower a CHILD process (the real CPU hog) below normal priority.
+
+    The inference itself runs in the llama-server subprocess — lowering only
+    the API server (ProcessPriority.lower) leaves the actual compute at
+    normal priority and the desktop still starves during generation. This
+    targets the child by PID.
+
+    Windows-only: ``os.nice`` cannot change another process from an
+    unprivileged token on POSIX, so this returns False there (the server
+    process lowering still applies via ProcessPriority). Best-effort and
+    idempotent — failures are logged, never raised.
+    """
+    k32 = _win_k32()
+    if k32 is None or not pid or pid <= 0:
+        return False
+    import ctypes
+
+    handle = k32.OpenProcess(_PROCESS_SET_INFORMATION, False, pid)
+    if not handle:
+        logger.warning(
+            "OpenProcess(%s) failed — child priority not lowered", pid
+        )
+        return False
+    try:
+        ok = bool(k32.SetPriorityClass(handle, _BELOW_NORMAL_PRIORITY_CLASS))
+        if not ok:
+            logger.warning(
+                "SetPriorityClass(child %s) failed — not lowered", pid
+            )
+        return ok
+    finally:
+        k32.CloseHandle(handle)
 
 
 def _posix_nice(delta: int) -> Optional[int]:
