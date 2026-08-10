@@ -68,7 +68,7 @@ import { toast } from '@/components/Toast'
 // Repo/license are static, verified at authoring time (git remote + the
 // frontend package.json, which declares NO license) — not fabricated at
 // runtime and not a server value. License honestly shows n/a until added.
-const REPO_URL = 'https://github.com/mrDedchai/OpenCode-workspace'
+const REPO_URL = 'https://github.com/i-mrDed/weight-streaming'
 const LICENSE = 'n/a'
 
 interface Prefs {
@@ -98,14 +98,16 @@ function readPrefs(): Prefs {
 
 // env vars the server actually reads (weight_stream/server/config.py)
 const ENV_FIELDS: { key: keyof EnvDraft; env: string; label: string }[] = [
-  { key: 'host', env: 'WS_HOST', label: 'server.field.host' },
-  { key: 'port', env: 'WS_PORT', label: 'server.field.port' },
-  { key: 'bufferMb', env: 'WS_BUFFER_MB', label: 'server.field.bufferMb' },
-  { key: 'nCtx', env: 'WS_N_CTX', label: 'server.field.nCtx' },
-  { key: 'nThreads', env: 'WS_N_THREADS', label: 'server.field.nThreads' },
-  { key: 'idleTimeout', env: 'WS_IDLE_TIMEOUT', label: 'server.field.idleTimeout' },
-  { key: 'maxModels', env: 'WS_MAX_MODELS', label: 'server.field.maxModels' },
-  { key: 'logLevel', env: 'WS_LOG_LEVEL', label: 'server.field.logLevel' },
+  { key: 'host', env: 'WS_HOST', label: 'settings.server.field.host' },
+  { key: 'port', env: 'WS_PORT', label: 'settings.server.field.port' },
+  { key: 'bufferMb', env: 'WS_BUFFER_MB', label: 'settings.server.field.bufferMb' },
+  { key: 'nCtx', env: 'WS_N_CTX', label: 'settings.server.field.nCtx' },
+  { key: 'nThreads', env: 'WS_N_THREADS', label: 'settings.server.field.nThreads' },
+  { key: 'gpuLayers', env: 'WS_GPU_LAYERS', label: 'settings.server.field.gpuLayers' },
+  { key: 'kvCacheType', env: 'WS_KV_CACHE_TYPE', label: 'settings.server.field.kvCacheType' },
+  { key: 'idleTimeout', env: 'WS_IDLE_TIMEOUT', label: 'settings.server.field.idleTimeout' },
+  { key: 'maxModels', env: 'WS_MAX_MODELS', label: 'settings.server.field.maxModels' },
+  { key: 'logLevel', env: 'WS_LOG_LEVEL', label: 'settings.server.field.logLevel' },
 ]
 
 interface EnvDraft {
@@ -114,6 +116,8 @@ interface EnvDraft {
   bufferMb: string
   nCtx: string
   nThreads: string
+  gpuLayers: string
+  kvCacheType: string
   idleTimeout: string
   maxModels: string
   logLevel: string
@@ -126,6 +130,8 @@ const CONFIG_LABELS: Record<string, string> = {
   default_buffer_mb: 'settings.server.field.bufferMb',
   default_n_ctx: 'settings.server.field.nCtx',
   default_n_threads: 'settings.server.field.nThreads',
+  default_gpu_layers: 'settings.server.field.gpuLayers',
+  default_kv_cache_type: 'settings.server.field.kvCacheType',
   idle_unload_timeout: 'settings.server.field.idleTimeout',
   max_loaded_models: 'settings.server.field.maxModels',
   lower_process_priority: 'settings.server.field.lowerPriority',
@@ -190,6 +196,8 @@ export function SettingsPage() {
     bufferMb: '64',
     nCtx: '2048',
     nThreads: '',
+    gpuLayers: '-1',
+    kvCacheType: '',
     idleTimeout: '0',
     maxModels: '4',
     logLevel: 'info',
@@ -212,6 +220,8 @@ export function SettingsPage() {
   const rtBuf = useSignal('64') // default_buffer_mb draft (gated)
   const rtCtx = useSignal('2048') // default_n_ctx draft (gated)
   const rtThreads = useSignal('') // default_n_threads draft (gated; '' = keep)
+  const rtGpuLayers = useSignal('-1') // default_gpu_layers draft (gated; -1 = auto)
+  const rtKvCache = useSignal('') // default_kv_cache_type draft (gated; '' = server default)
   const applying = useSignal(false)
   const restartKey = useSignal<string>('host')
   const restartVal = useSignal('')
@@ -234,6 +244,8 @@ export function SettingsPage() {
       rtBuf.value = fmtCfgValue(c.config.default_buffer_mb?.value)
       rtCtx.value = fmtCfgValue(c.config.default_n_ctx?.value)
       rtThreads.value = fmtCfgValue(c.config.default_n_threads?.value)
+      rtGpuLayers.value = fmtCfgValue(c.config.default_gpu_layers?.value)
+      rtKvCache.value = fmtCfgValue(c.config.default_kv_cache_type?.value)
     } catch {
       serverCfg.value = null // health dot tells the real story
     } finally {
@@ -249,8 +261,12 @@ export function SettingsPage() {
       max_loaded_models: Number(rtMax.value),
       default_buffer_mb: Number(rtBuf.value),
       default_n_ctx: Number(rtCtx.value),
+      // Empty field = server default (-1 auto) — never Number('') which is 0
+      // (CPU-only) and would silently lock every later load to the CPU.
+      default_gpu_layers: rtGpuLayers.value.trim() === '' ? -1 : Number(rtGpuLayers.value),
     }
     if (rtThreads.value.trim() !== '') body.default_n_threads = Number(rtThreads.value)
+    if (rtKvCache.value.trim() !== '') body.default_kv_cache_type = rtKvCache.value.trim()
     try {
       const res = await patchConfig(body)
       if (res.status === 'applied') {
@@ -793,6 +809,30 @@ export function SettingsPage() {
                 min={1}
                 value={rtThreads.value}
                 onInput={(e) => (rtThreads.value = (e.target as HTMLInputElement).value)}
+              />
+            </label>
+            <label class="set-field">
+              <span>
+                {t('settings.server.field.gpuLayers')} <Badge tone="warn" class="set-src">{t('settings.server.runtimeGated')}</Badge>
+              </span>
+              <input
+                class="md-input tnum"
+                type="number"
+                min={-1}
+                value={rtGpuLayers.value}
+                onInput={(e) => (rtGpuLayers.value = (e.target as HTMLInputElement).value)}
+              />
+            </label>
+            <label class="set-field">
+              <span>
+                {t('settings.server.field.kvCacheType')} <Badge tone="warn" class="set-src">{t('settings.server.runtimeGated')}</Badge>
+              </span>
+              <input
+                class="md-input"
+                type="text"
+                placeholder="f16 · q8_0 · q4_0"
+                value={rtKvCache.value}
+                onInput={(e) => (rtKvCache.value = (e.target as HTMLInputElement).value)}
               />
             </label>
           </div>
