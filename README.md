@@ -7,7 +7,7 @@
 [![CI](https://github.com/i-mrDed/weight-streaming/actions/workflows/ci.yml/badge.svg)](https://github.com/i-mrDed/weight-streaming/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/i-mrDed/weight-streaming)](https://github.com/i-mrDed/weight-streaming/releases)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-[![Python >=3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue.svg)](pyproject.toml)
+[![Python 3.11–3.13 tested](https://img.shields.io/badge/python-3.11%20%E2%94%82%203.12%20%E2%94%82%203.13-blue.svg)](.github/workflows/ci.yml)
 
 `weight-streaming` is a **local, out-of-core inference platform** for large
 language models (100B–3T+ parameters, especially MoE like DeepSeek,
