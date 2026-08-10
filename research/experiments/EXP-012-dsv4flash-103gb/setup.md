@@ -226,3 +226,47 @@ IQ1_M (10 GB, โหลดบน GPU 12 GB, `n-cpu-moe 0` = experts ทั้ง
 
 ผลเต็มอยู่ใน `scripts/.qwen_threads_out.json` (8 configs) — harness แก้
 เพิ่ม value-aware verification (จะ fail ทันทีถ้า flag ถูก override เงียบ)
+
+## P9 (2026-08-10): GGUF structure analysis — tensor table จริง
+
+อ่าน tensor table จาก 4 shards (gguf lib) หลังดาวน์โหลดเสร็จ:
+
+| ส่วน | ขนาด | % ของไฟล์ |
+|---|---:|---:|
+| experts (43 layers × down/gate/up) | **96.82 GB** | 92.9% |
+| attention (attn_*) | 5.38 GB | 5.2% |
+| shared experts (shexp) | 0.89 GB | 0.9% |
+| อื่น ๆ (token_embd, norms, output) | 1.11 GB | — |
+
+- arch `deepseek4`, 43 layers, 256 experts (ใช้ 6/token), 64 heads / 1 KV
+  head, key/value length 512
+- expert bytes/layer ไม่เท่ากัน: 2.06 / 2.47 / 2.79 / 2.99 GB (4 กลุ่ม)
+
+**ผลต่อ matrix (ฟิสิกส์ 12 GB VRAM):** attention+shared+อื่น ๆ ≈ 7.4 GB
+→ เหลือ VRAM ให้ experts ~2.8 GB ≈ 1 layer → config ที่รันได้จริง:
+
+| config | experts บน CPU | experts บน GPU | คาดการณ์ |
+|---|---:|---:|---|
+| `cpu-moe` | 96.82 GB | 0 | ✅ รันได้ (CPU-bound) |
+| `n-cpu-moe 42` | 94.8 GB | 2.06 GB (1 layer) | ✅ รันได้ (max offload) |
+| `n-cpu-moe 10` | 22.65 GB | 74.2 GB | ❌ OOM (เกิน 12 GB) |
+| `n-cpu-moe 5` | 11.12 GB | 85.7 GB | ❌ OOM |
+| `n-cpu-moe 0` | 0 | 96.82 GB | ❌ OOM |
+
+→ matrix วัดจริงใช้: cpu-moe t8, n-cpu-moe 42 t8, cpu-moe t16 (ทำงาน)
++ n-cpu-moe 10/0 (บันทึก OOM เป็นหลักฐานซื่อตรง)
+
+## P10 (2026-08-10): ดาวน์โหลด 104.21 GB — ผ่าน hub (4 tasks, parallel)
+
+- **ครบ 4 shards byte-exact กับ HF** (5,257,696 / 49,910,532,416 /
+  49,257,859,456 / 5,034,198,464) — gate ตรวจ GGUF structure ก่อน rename
+- **Network ไป HF ไม่เสถียร:** connection ตายทุก ~10–13 GB (dl-2, dl-3
+  ตายหลายรอบ) — resume + self-healing monitor (ตรวจทุก 50s: stall →
+  cancel+resume อัตโนมัติ) พาวน์โหลดจนจบ
+- **เจอ + แก้บั๊กจริง (commit 5234dfa):** disk gate ของ hub ตรวจพื้นที่ว่าง
+  = ขนาดไฟล์เต็ม ทั้งที่ .part มี 24 GB บนดิสก์แล้ว → resume ตายซ้ำ
+  (24 GB .part + 45 GB free แต่ gate ต้องการ 49 GB) — แก้เป็นหัก bytes
+  ของ .part (need = total - start) + regression test
+- **Lesson:** `stream_timeout` 300s/read = socket ตายต้องรอ 5 นาทีกว่าจะ
+  รู้; cancel ไม่ขัด read ที่ block — stall ต้องรอ timeout จริง
+- เหลือพื้นที่ C: 22.4 GB หลังดาวน์โหลด

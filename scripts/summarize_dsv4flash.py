@@ -93,16 +93,24 @@ def main():
                       f"Qwen warm {fmt(q['warm'])} tok/s "
                       f"({fmt((rb['warm'].get('tok_s') or 0) / q['warm'] * 100, 0)}%)")
 
-    # disk-bound heuristic: > 2 MB/tok sustained => paging dominates
+    # disk-bound heuristic: > 2 MB/tok sustained => paging dominates.
+    # Fall back to page-FAULTS when the disk-MB estimate is unavailable
+    # (GPU backend on Windows reports None — the DS V4 runs faulted 36-77k
+    # pages/token with disk_mb None, which must still count as paging).
     worst_disk = max(ok, key=lambda r: (r["cold"].get("disk_mb_per_token") or 0))
     dd = worst_disk["cold"].get("disk_mb_per_token") or 0
+    worst_fault = max(ok, key=lambda r: (r["cold"].get("faults_per_token") or 0))
+    ff = worst_fault["cold"].get("faults_per_token") or 0
     if dd > 2:
         print(f"\n- **Disk-bound confirmed:** {worst_disk['config']} cold "
               f"{fmt(dd)} MB/tok — paging dominates; expect sharp dropoff "
               f"as page cache thrashes. (กุญแจ: ลด expert bytes หรือเพิ่ม RAM)")
-    elif dd > 0:
-        print(f"\n- **Mixed:** {worst_disk['config']} cold {fmt(dd)} MB/tok — "
-              f"some disk traffic, but not the sole bottleneck.")
+    elif dd > 0 or ff > 0:
+        print(f"\n- **Paging observed:** {worst_fault['config']} cold "
+              f"{fmt(ff, 0)} faults/tok"
+              + (f", {fmt(dd)} MB/tok" if dd else " (disk-MB estimate n/a)")
+              + " — model does NOT fit RAM; each token faults the "
+                "working set in from disk.")
     else:
         print("\n- **No paging observed** (model fits in RAM/page cache).")
 
@@ -112,6 +120,9 @@ def main():
             f.write(f"\n## Matrix run {datetime.date.today().isoformat()}\n\n")
             f.write(hdr + "\n" + "|---|---:|---:|---:|---:|---:|---:|---:|\n")
             for r in results:
+                if "error" in r:
+                    f.write(f"| {r['config']} | **FAILED** — {r['error'][:60]} |\n")
+                    continue
                 c, w = r["cold"], r["warm"]
                 f.write(f"| {r['config']} | {fmt(c.get('tok_s'))} | {fmt(w.get('tok_s'))} "
                         f"| {fmt(c.get('faults_per_token'), 0)} | {fmt(w.get('faults_per_token'), 0)} "
