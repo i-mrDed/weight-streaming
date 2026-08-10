@@ -28,6 +28,36 @@ scripts/.ws-matrix.log
 
 # Private usage telemetry (model id + tok/s per generation — runtime data,
 # not source; must never be committed with a push)
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Node modules
+node_modules/
+
+# Large model files (research/models/, downloads, hub .part temp) — never commit
+*.gguf
+*.gguf.part
+*.bin
+*.safetensors
+
+# Local env / credentials / secrets
+.env
+.env.local
+*.env
+credentials*
+secrets*
+*.pem
+*.key
+
+# IDE/editor config
+.idea/
+.vscode/
+*.sublime-workspace
 data/usage_history.jsonl
 
 # Local agent/tool state (never for the remote)
