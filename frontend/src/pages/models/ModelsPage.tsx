@@ -39,6 +39,7 @@ import {
   guessQuant,
   loadModel,
   MEASURED_TOK_S,
+  QUANT_QUALITY_NOTES,
   quantAdvisory,
   quantSiblings,
   scanModels,
@@ -499,6 +500,7 @@ export function ModelsPage() {
                     <span class="md-quant-advisor__quant">{q ?? '?'}</span>
                     <span class="tnum">{fmtNumber(s.size_gb, { maximumFractionDigits: 2 })} GB</span>
                     {tokS != null ? <Badge tone="brand">~{fmtNumber(tokS)} tok/s</Badge> : null}
+                    {q && QUANT_QUALITY_NOTES[q] ? <Badge tone="neutral">{QUANT_QUALITY_NOTES[q]}</Badge> : null}
                     {fits === false ? <Badge tone="warn">{t('models.load.quantNoFit')}</Badge> : null}
                     {fits === true ? <Badge tone="ok">{t('models.load.quantFits')}</Badge> : null}
                     {isBest ? <Badge tone="info">{t('models.load.quantBest')}</Badge> : null}

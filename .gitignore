@@ -35,3 +35,7 @@ scripts/.quant_quality_out.iq2m.json
 scripts/.quant_quality_*_run.log
 scripts/.tonal_probe_out*.json
 scripts/.tonal_probe_*.log
+scripts/.chat_quality_out.json
+scripts/.chat_quality_out.iq*.json
+scripts/_compare_chat.py
+scripts/_compare_side_by_side.py

@@ -114,6 +114,41 @@ concrete trade-off the hardware plan predicted — quant bytes per expert
 is the only lever that moved tok/s on this 12 GB machine, and it has a
 real, measurable quality floor in tonal languages.
 
+### Multi-turn real-chat test (2026-08-10, chat_test_multiturn.py)
+
+Beyond single-shot Q&A, one realistic 6-turn work session was run per
+quant (write email → shorten → summarize → formalize → debug code →
+write pytest). Same config (n-cpu-moe 0, temp 0), max_tokens 2048.
+
+| metric | IQ1_M | IQ2_M |
+|--------|:---:|:---:|
+| tok/s (stats) | **77.7** | 54.7 |
+| wall time, 6 turns | 111.8 s | 195.4 s |
+| single-shot tasks (email, summary) | ✅ complete | ✅ complete |
+| follow-up context drift (asked user to resend the text it had in context) | **2/4 turns** (revise + formalize) | **1/4** (revise only) |
+| code tasks (pytest) | ✅ complete, correct 3 cases | ✅ but final truncated by think-budget |
+
+**Findings:**
+
+1. **Speed gap holds in real chat**: 77.7 vs 54.7 tok/s (+42%), and the
+   wall-clock gap is even bigger (111.8 vs 195.4 s) because IQ2_M writes
+   longer think blocks.
+2. **Context drift is real and quant-dependent**: on the *revise*
+   follow-up BOTH quants lost the thread (asked the user to resend the
+   email they had just written); on the *formalize* follow-up IQ1_M
+   drifted again while IQ2_M completed the rewrite correctly. n=1
+   conversation per quant — treat as observed signal, not a hard floor.
+3. **Think-block starvation is a harness artifact affecting both**: the
+   model writes EN think blocks even with reasoning off, eating the token
+   budget and truncating finals (IQ2_M's pytest was cut mid-assert). Both
+   quants hit it; real users would see it as occasional cut-off answers.
+
+**Verdict (chat):** for single-turn/summarization work the quants are
+indistinguishable; for long multi-turn conversations IQ1_M showed
+weaker grounding (2 vs 1 drift). Combined with the tonal finding, the
+honest guidance is: IQ1_M for fast single-shot work, IQ2_M when the
+conversation is long or tone-sensitive.
+
 ## Backlog items surfaced this session (not acted on)
 
 1. **Hub download integrity:** mid-stream EOF was treated as success —

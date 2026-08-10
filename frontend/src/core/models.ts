@@ -141,6 +141,15 @@ export const MEASURED_TOK_S: Record<string, number> = {
   IQ2_M: 56.4,
 }
 
+/** Quality caveat per measured quant (EXP-011 + tonal probe, 2026-08-10):
+    the ONLY dimension that regressed was Thai tonal classification —
+    IQ1_M deterministic 0/6 on minimal pairs, IQ2_M 1/6 (fails hard pairs
+    but passes common words). Shown as a hint badge, never a verdict. */
+export const QUANT_QUALITY_NOTES: Record<string, string> = {
+  IQ1_M: 'fast · Thai tones 0/6 (deterministic)',
+  IQ2_M: 'slower · Thai tones OK on common words',
+}
+
 /** Rough VRAM needed for a model file, MiB: weights ≈ file size + KV cache
     + compute buffers. Calibrated from EXP-011 on this machine (IQ1_M 10.05
     GB file → 10,803 MiB; IQ2_M 11.5 GB → ~12,067 MiB). */
