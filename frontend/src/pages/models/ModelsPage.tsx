@@ -50,8 +50,6 @@ import {
 } from '@/core/models'
 import { setTier } from '@/core/tiering'
 import { fmtDateTime, fmtNumber, locale, relativeDay, t } from '@/i18n'
-import { Menu } from '@/components/Menu'
-import { Zap } from 'lucide-preact'
 
 const LS_UNLOAD_REMEMBER = 'ws-unload-remember-session'
 
@@ -478,29 +476,22 @@ export function ModelsPage() {
                       <Button variant="soft" size="sm" onClick={() => pickScanResult(m)}>
                         <HardDriveDownload size={13} aria-hidden="true" /> {t('models.scan.use')}
                       </Button>
-                      <Menu
-                        ariaLabel={t('models.scan.tierMenu')}
-                        trigger={
-                          <Button variant="ghost" size="sm">
-                            <Zap size={13} aria-hidden="true" /> {t('models.scan.tier')}
-                          </Button>
-                        }
-                        header={t('models.scan.tierMenu')}
-                        items={[
-                          {
-                            key: '__fast',
-                            label: `⚡ ${t('models.scan.tierFast')}`,
-                            hint: t('settings.tiering.fastTier'),
-                            onSelect: () => setAsTier(m, 'fast'),
-                          },
-                          {
-                            key: '__quality',
-                            label: `🎯 ${t('models.scan.tierQuality')}`,
-                            hint: t('settings.tiering.qualityTier'),
-                            onSelect: () => setAsTier(m, 'quality'),
-                          },
-                        ]}
-                      />
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title={t('settings.tiering.fastTier')}
+                        onClick={() => setAsTier(m, 'fast')}
+                      >
+                        ⚡ {t('models.scan.tierFast')}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        title={t('settings.tiering.qualityTier')}
+                        onClick={() => setAsTier(m, 'quality')}
+                      >
+                        🎯 {t('models.scan.tierQuality')}
+                      </Button>
                     </div>
                   </div>
                 ))}

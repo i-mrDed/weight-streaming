@@ -188,6 +188,79 @@ def resolve_state(cfg: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+# ── pin from model files (Hub recommended list) ────────────────────────
+
+
+def find_model_file(filename: str, search_dirs: list[str]) -> Optional[str]:
+    """Locate a GGUF file (by exact name, case-insensitive) under the given
+    model directories. Returns the absolute path or None. Walks each dir
+    lazily and stops at the first match — the Hub recommended list pins
+    real downloaded files without forcing a full model scan."""
+    # The Hub list carries paths like "MTP/mtp-gemma-...gguf" — match on
+    # the bare basename (search walks every directory anyway).
+    wanted = Path(filename).name.lower()
+    for d in search_dirs:
+        root = Path(d)
+        if not root.is_dir():
+            continue
+        # Walk with a cap so a huge store (DS V4 shards) can't hang the
+        # request — honest limitation, not a silent timeout.
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [x for x in dirnames if x.lower() != "node_modules"]
+            for name in filenames:
+                if name.lower() == wanted:
+                    return str(Path(dirpath) / name)
+    return None
+
+
+def pin_tier(
+    tier: str,
+    files: list[str],
+    search_dirs: list[str],
+) -> dict[str, Any]:
+    """Pin a tier from file names (the Hub recommended list provides the
+    exact quant filenames it measured). Resolves each file on disk, wires
+    MTP draft flags when a sibling draft is present, and saves.
+
+    Raises ValueError (user-readable) when the tier or a required file is
+    not found on disk.
+    """
+    if tier not in ("fast", "quality"):
+        raise ValueError(f"tier must be 'fast' or 'quality', got {tier!r}")
+    if not files:
+        raise ValueError("files must be a non-empty list of filenames")
+
+    main: Optional[str] = None
+    draft: Optional[str] = None
+    for f in files:
+        found = find_model_file(f, search_dirs)
+        if not found:
+            raise ValueError(f"file not found on disk: {f}")
+        low = f.lower()
+        if any(x in low for x in ("mtp", "draft")) and "mtp" in Path(found).parent.name.lower():
+            draft = found
+        elif main is None:
+            main = found
+    if main is None:
+        raise ValueError(
+            "none of the files look like a main model (only MTP drafts given)")
+
+    model_id = Path(main).name.replace(".gguf", "", 1)
+    extra = ""
+    if draft:
+        extra = (f"--spec-type draft-mtp --spec-draft-model "
+                 f"{draft.replace(os.sep, '/')} --spec-draft-n-max 2")
+
+    cfg = load_config()
+    cfg[tier] = {
+        **cfg.get(tier, {}),
+        "model_id": model_id,
+        "model_path": main,
+        "extra_args": extra,
+    }
+    return save_config(cfg)
+
+
 # ── pure decision rule ──────────────────────────────────────────────────
 
 

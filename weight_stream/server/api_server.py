@@ -1415,6 +1415,26 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             "reason": reason,
         }
 
+    @app.post("/v1/tiering/pin")
+    async def pin_tiering(body: Dict[str, Any]):
+        """Pin a tier from exact file names (Hub recommended list → disk).
+
+        Body: ``{"tier": "fast"|"quality", "files": ["main.gguf", ...]}``.
+        Resolves the files under the model search dirs (no full scan), wires
+        MTP draft flags when a sibling draft file is present, saves, and
+        returns the updated config. 400 with a readable message when a file
+        is not on disk or the tier is invalid.
+        """
+        try:
+            saved = tiering.pin_tier(
+                str(body.get("tier", "")),
+                [str(f) for f in (body.get("files") or [])],
+                get_model_search_dirs(),
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"status": "saved", "config": tiering.resolve_state(saved)}
+
     return app, manager
 
 

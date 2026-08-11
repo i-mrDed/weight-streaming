@@ -13,6 +13,17 @@
   (fetch-merge-save, other tier untouched). Pinning a Gemma QAT model
   auto-wires its MTP draft flags from the sibling `MTP/` file (EXP-022
   measured +20% with draft-mtp); pinning a DIFFERENT model clears the
+  stale draft args so they never leak into another model's cmdline.
+- **Pin from the Hub**: every "Proven on this rig" card now has
+  ⚡ fast / 🎯 quality buttons that call the new `POST /v1/tiering/pin`
+  endpoint — resolves the exact measured quant files on disk, wires the
+  MTP draft sibling, and saves the tier without needing a full scan
+  (adds `recPin*` strings to en/th hub locales).
+- **Overlap fix**: the Models scan result "Tier" popup (Menu-wrapped
+  button-in-button) overlapped the "Use in load form" button — replaced
+  with two inline compact buttons (⚡ fast / 🎯 quality), no popup.
+- `data/tiering.json` (machine-local absolute paths) is now gitignored
+  — the server regenerates the default pair when the file is missing.
   previous model's extra args so a stale draft path can never leak into
   the new model's llama-server cmdline.
 - **Any two models, not hardcoded**: Settings → Auto-tiering lets the user

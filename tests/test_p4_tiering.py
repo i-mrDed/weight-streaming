@@ -298,6 +298,59 @@ def test_route_long_prompt_uses_quality_tier(tmp_path, monkeypatch, real_gguf):
     assert stub.loaded and stub.loaded[0]["id"] == "qual-m"
 
 
+# ── pin endpoint (Hub recommended → disk) ─────────────────────────────
+
+
+def test_pin_finds_files_and_wires_draft(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    # Model dir with main + MTP draft (the Gemma layout).
+    model_dir = tmp_path / "models"
+    (model_dir / "Gemma4-12B-QAT" / "MTP").mkdir(parents=True)
+    main = model_dir / "Gemma4-12B-QAT" / "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf"
+    main.write_bytes(b"GGUF")
+    draft = (model_dir / "Gemma4-12B-QAT" / "MTP" /
+             "mtp-gemma-4-12B-it-Q8_0.gguf")
+    draft.write_bytes(b"GGUF")
+    monkeypatch.setenv("WS_MODELS_DIR", str(model_dir))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    r = client.post("/v1/tiering/pin", json={
+        "tier": "fast",
+        "files": ["gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
+                  "mtp-gemma-4-12B-it-Q8_0.gguf"],
+    })
+    assert r.status_code == 200, r.text
+    cfg = r.json()["config"]
+    assert cfg["fast"]["model_path"].endswith(
+        "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf")
+    assert "draft-mtp" in cfg["fast"]["extra_args"]
+    assert str(draft).replace("\\", "/") in cfg["fast"]["extra_args"]
+    # Other tier untouched.
+    assert cfg["quality"]["model_id"] == "gemma-4-26b-qat-mtp"
+
+
+def test_pin_missing_file_returns_400(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    monkeypatch.setenv("WS_MODELS_DIR", str(tmp_path / "empty"))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    r = client.post("/v1/tiering/pin", json={
+        "tier": "fast",
+        "files": ["ghost.gguf"],
+    })
+    assert r.status_code == 400
+    assert "not found on disk" in r.json()["detail"]
+
+
+def test_pin_invalid_tier_returns_400(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    r = client.post("/v1/tiering/pin", json={"tier": "turbo", "files": []})
+    assert r.status_code == 400
+    assert "'fast' or 'quality'" in r.json()["detail"]
+
+
 def test_route_disabled_returns_409(tmp_path, monkeypatch, real_gguf):
     payload = {
         "enabled": False,

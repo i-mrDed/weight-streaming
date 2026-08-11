@@ -54,6 +54,19 @@ export function routeTiering(req: TieringRouteRequest): Promise<TieringRouteResp
   }, { timeoutMs: 5 * 60_000 })
 }
 
+/** Pin a tier from exact file names (Hub recommended list → disk). The
+    server resolves the files under the model search dirs (no full scan)
+    and wires MTP draft flags when a sibling draft is present. */
+export function pinTier(
+  tier: 'fast' | 'quality',
+  files: string[],
+): Promise<{ status: string; config: TieringConfig }> {
+  return apiJSON<{ status: string; config: TieringConfig }>('/v1/tiering/pin', {
+    method: 'POST',
+    body: JSON.stringify({ tier, files }),
+  }, { timeoutMs: 60_000 })
+}
+
 /** Swap one tier of the config (fetch current → merge → save). Used by the
     Models page to pin a scanned model as fast/quality without touching the
     other tier. Returns the saved config. */

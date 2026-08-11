@@ -80,6 +80,7 @@ import {
   type ResearchExperiment,
 } from '@/core/hub'
 import { browseDir, suggestModelId } from '@/core/models'
+import { pinTier } from '@/core/tiering'
 import { assistants, refreshAssistants } from '@/core/assistants'
 // conversations are client-side (localStorage ws-chat-index-v1) — the delete
 // dialogs count their references to a model file straight from the signal
@@ -310,6 +311,20 @@ export function HubPage() {
     }
   }
 
+  // Pin a curated quant as an auto-tiering tier. The server resolves the
+  // exact measured filenames on disk (no full scan) and wires MTP draft
+  // flags when the sibling draft file is present.
+  const pinAsTier = async (tier: 'fast' | 'quality', files: { filename: string }[]) => {
+    try {
+      await pinTier(tier, files.map((f) => f.filename))
+      toast('success', t(tier === 'fast' ? 'hub.recPinnedFast' : 'hub.recPinnedQuality'))
+    } catch (e) {
+      toast('error', t('hub.recPinFailed'), {
+        body: e instanceof ApiError && e.detail ? e.detail : String(e),
+      })
+    }
+  }
+
   const ensureDetail = async (repoId: string) => {
     if (detailCache.value[repoId]) return
     if (detailLoading.value === repoId) return
@@ -517,6 +532,7 @@ export function HubPage() {
                     entry={entry}
                     onDownload={(files) => void downloadGroup(entry.repo_id, files)}
                     onEvidence={(exp) => void openEvidence(exp)}
+                    onPin={(tier, files) => void pinAsTier(tier, files)}
                   />
                 ))}
               </div>
@@ -984,10 +1000,12 @@ function RecommendedCard({
   entry,
   onDownload,
   onEvidence,
+  onPin,
 }: {
   entry: HubRecommendedEntry
   onDownload: (files: HubRecommendedQuant['files']) => void
   onEvidence: (expPath: string) => void
+  onPin: (tier: 'fast' | 'quality', files: HubRecommendedQuant['files']) => void
 }) {
   const role = roleMeta(entry.role)
   const author = repoAuthor(entry.repo_id)
@@ -1044,6 +1062,22 @@ function RecommendedCard({
               <div class="hr-quant__actions">
                 <Button variant="ghost" size="sm" onClick={() => onEvidence(quant.experiment)} title={t('hub.recExpTitle')}>
                   <FileBox size={13} aria-hidden="true" /> {t('hub.recExp')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  title={t('hub.recPinTitle')}
+                  onClick={() => onPin('fast', quant.files)}
+                >
+                  ⚡ {t('hub.recPinFast')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  title={t('hub.recPinTitle')}
+                  onClick={() => onPin('quality', quant.files)}
+                >
+                  🎯 {t('hub.recPinQuality')}
                 </Button>
                 <Button variant="soft" size="sm" onClick={() => onDownload(quant.files)}>
                   <DownloadCloud size={13} aria-hidden="true" /> {t('hub.recDownload')}
