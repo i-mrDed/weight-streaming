@@ -7,6 +7,31 @@
 
 ## [Unreleased]
 
+### ⚡ Auto-tiering — route requests to the right model (user-configurable)
+- **Any two models, not hardcoded**: Settings → Auto-tiering lets the user
+  pick a fast/quality pair from a model scan (or type paths); the router
+  itself is model-agnostic. Shipped default = the Gemma 4 12B/26B QAT+MTP
+  pair proven on this rig (EXP-022/019) with their measured flags
+  (`-t 8`/`-t 12` + MTP draft) baked in.
+- **Pure decision rule** (`server/tiering.py`, unit-tested): short prompt
+  ≤ threshold → fast tier; long prompt or reasoning at/above the
+  configured level → quality tier. Config persisted to
+  `data/tiering.json` (local-first, same convention as MCP/assistants).
+- **Endpoints**: `GET/PUT /v1/tiering/config` (with honest per-file
+  on-disk resolution — a broken pair is visible, not silent) and
+  `POST /v1/tiering/route` which auto-loads the chosen tier's model
+  (409 when disabled so callers fall back explicitly).
+- **Chat**: new ⚡ Auto entry at the top of the model menu routes each
+  request through the server and shows which tier answered.
+- `LlamaServerBackend` now takes per-model `extra_args` (precedence over
+  the process-wide `WS_LLAMA_EXTRA_ARGS`) — tiering needs per-model MTP
+  flags without a server restart; the env var stays as the global
+  fallback (harness clean-room).
+- Verified end-to-end on the real server: short prompt → 12B fast tier,
+  long prompt / high reasoning → 26B quality tier, real Thai generation
+  through the routed model. **pytest 348 passed** (+22 tiering), mypy
+  clean, vitest 20/20, build green.
+
 ### ⚡ Daily driver upgraded — Gemma 4 12B QAT+MTP (EXP-022)
 - **New fastest Thai-safe model on this rig: 75.7 tok/s sustained, Thai
   gate 9/9 + tonal 6/6** — the 6.72 GB model + 0.47 GB MTP draft fit

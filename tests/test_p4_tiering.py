@@ -1,0 +1,310 @@
+"""Offline tests for auto-tiering (server/tiering.py + /v1/tiering/*).
+
+Covers the pure decision rule (prompt length + reasoning demand), config
+validation + normalization (default Gemma pair, ~ expansion, on-disk
+resolution), persistence fallback, and the three endpoints via TestClient
+with a stub manager so no real model is loaded and no network is touched.
+"""
+
+import json
+
+import pytest
+from fastapi.testclient import TestClient
+
+from weight_stream.server import tiering
+from weight_stream.server.api_server import create_app
+from weight_stream.server.config import ServerConfig
+
+
+# ── pure decision rule ─────────────────────────────────────────────────
+
+
+def _cfg(**over):
+    c = tiering.default_config()
+    c.update(over)
+    return c
+
+
+def test_decide_fast_for_short_prompt():
+    tier, reason = tiering.decide_tier(
+        _cfg(), [{"role": "user", "content": "hi"}])
+    assert tier == "fast"
+    assert "≤" in reason
+
+
+def test_decide_quality_for_long_prompt():
+    long = "x" * (tiering.DEFAULT_MAX_PROMPT_CHARS + 1)
+    tier, reason = tiering.decide_tier(
+        _cfg(), [{"role": "user", "content": long}])
+    assert tier == "quality"
+    assert ">" in reason
+
+
+def test_decide_quality_for_high_reasoning_short_prompt():
+    tier, reason = tiering.decide_tier(
+        _cfg(), [{"role": "user", "content": "short"}],
+        options={"reasoning_mode": "high"})
+    assert tier == "quality"
+    assert "reasoning" in reason
+
+
+def test_decide_fast_for_low_reasoning():
+    tier, _ = tiering.decide_tier(
+        _cfg(), [{"role": "user", "content": "short"}],
+        options={"reasoning_mode": "low"})
+    assert tier == "fast"
+
+
+def test_decide_disabled_returns_fast_with_honest_reason():
+    tier, reason = tiering.decide_tier(_cfg(enabled=False), [])
+    assert tier == "fast"
+    assert "disabled" in reason
+
+
+def test_decide_length_counts_all_messages():
+    messages = [
+        {"role": "system", "content": "s" * 100},
+        {"role": "user", "content": "u" * 100},
+    ]
+    # Total 200 chars; raise threshold above it → fast, below → quality.
+    tier_fast, _ = tiering.decide_tier(_cfg(max_prompt_chars=500), messages)
+    tier_qual, _ = tiering.decide_tier(_cfg(max_prompt_chars=50), messages)
+    assert tier_fast == "fast"
+    assert tier_qual == "quality"
+
+
+def test_prompt_text_concatenates_string_contents_only():
+    assert tiering.prompt_text([
+        {"role": "user", "content": "a"},
+        {"role": "assistant", "content": "b"},
+        {"role": "user", "content": ["array", "ignored"]},
+        {"role": "user"},  # no content
+    ]) == "a\nb"
+
+
+# ── config validation + normalization ──────────────────────────────────
+
+
+def test_default_config_has_two_tiers_and_gemma_ids():
+    c = tiering.default_config()
+    assert c["enabled"] is True
+    assert c["fast"]["model_id"] == "gemma-4-12b-qat-mtp"
+    assert c["quality"]["model_id"] == "gemma-4-26b-qat-mtp"
+    assert c["max_prompt_chars"] > 0
+
+
+def test_validate_config_accepts_defaults_if_files_exist():
+    # Defaults point at the reference rig's Gemma pair. When the files are
+    # actually there the config is valid; otherwise it reports them as
+    # missing (honest, still deterministic).
+    problems = tiering.validate_config(tiering.default_config())
+    if tiering.default_config()["fast"]["model_path"] is None:
+        pytest.skip("no default paths")
+    missing = [p for p in problems if "file not found" in p]
+    # Either everything valid, or only the on-disk reality is reported —
+    # never a structural error (model_id/max_prompt_chars are fine).
+    assert not [p for p in problems if "model_id" in p or "max_prompt_chars" in p]
+
+
+def test_validate_config_rejects_missing_required_fields():
+    with pytest.raises(ValueError):
+        tiering.validate_config("nope")
+    problems = tiering.validate_config({"fast": {}, "quality": {}})
+    assert any("model_id is required" in p for p in problems)
+    assert any("model_path is required" in p for p in problems)
+
+
+def test_validate_config_rejects_bad_types():
+    problems = tiering.validate_config({
+        "enabled": "yes",
+        "max_prompt_chars": -5,
+        "reasoning_quality": "ultra",
+        "fast": {"model_id": "a", "model_path": "x"},
+        "quality": {"model_id": "b", "model_path": "y"},
+    })
+    assert any("enabled must be a boolean" in p for p in problems)
+    assert any("max_prompt_chars must be a positive integer" in p for p in problems)
+    assert any("reasoning_quality must be one of" in p for p in problems)
+
+
+def test_normalize_config_fills_defaults_and_expands_tilde(monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", "data/tiering.json")
+    c = tiering.normalize_config({})
+    assert c["enabled"] is True
+    assert c["fast"]["model_path"]
+    assert c["quality"]["extra_args"]
+    # Custom entry survives; defaults fill the rest.
+    c2 = tiering.normalize_config({
+        "fast": {"model_id": "mine", "model_path": "C:/models/x.gguf"},
+    })
+    assert c2["fast"]["model_id"] == "mine"
+    assert c2["quality"]["model_id"] == "gemma-4-26b-qat-mtp"
+
+
+def test_resolve_state_reports_file_resolution(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    real = tmp_path / "real.gguf"
+    real.write_bytes(b"GGUF")
+    c = tiering.normalize_config({
+        "fast": {"model_id": "f", "model_path": str(real)},
+        "quality": {"model_id": "q", "model_path": str(tmp_path / "ghost.gguf")},
+    })
+    st = tiering.resolve_state(c)
+    assert st["fast"]["file_resolved"] is True
+    assert st["quality"]["file_resolved"] is False
+
+
+def test_load_config_falls_back_to_defaults_on_missing(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "none.json"))
+    assert tiering.load_config()["enabled"] is True
+
+
+def test_save_config_persists_and_round_trips(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    real = tmp_path / "real.gguf"
+    real.write_bytes(b"GGUF")
+    cfg = tiering.default_config()
+    cfg["fast"]["model_path"] = str(real)
+    cfg["quality"]["model_path"] = str(real)
+    saved = tiering.save_config(cfg)
+    assert saved["enabled"] is True
+    again = tiering.load_config()
+    assert again["fast"]["model_path"] == str(real)
+
+
+def test_save_config_raises_on_missing_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    cfg = tiering.default_config()
+    cfg["fast"]["model_path"] = str(tmp_path / "nope.gguf")
+    with pytest.raises(ValueError, match="file not found"):
+        tiering.save_config(cfg)
+
+
+# ── endpoints (stub manager — no real load) ────────────────────────────class _StubManager:
+    """Loads are recorded, never performed — the route endpoint must not
+    spawn a real llama-server in tests."""
+
+    def __init__(self):
+        self.loaded = []
+
+    async def load_or_get(self, model_id, model_path, **kwargs):
+        self.loaded.append({"id": model_id, "path": model_path, **kwargs})
+
+
+class _StubManager:
+    """Loads are recorded, never performed — the route endpoint must not
+    spawn a real llama-server in tests."""
+
+    def __init__(self):
+        self.loaded = []
+
+    async def load_or_get(self, model_id, model_path, **kwargs):
+        self.loaded.append({"id": model_id, "path": model_path, **kwargs})
+
+
+@pytest.fixture
+def real_gguf(tmp_path):
+    f = tmp_path / "m.gguf"
+    f.write_bytes(b"GGUF")
+    return str(f)
+
+
+def test_get_tiering_config_returns_defaults(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    r = client.get("/v1/tiering/config")
+    assert r.status_code == 200
+    body = r.json()
+    assert body["config"]["fast"]["model_id"] == "gemma-4-12b-qat-mtp"
+    assert "problems" in body
+
+
+def test_put_tiering_config_validates_and_saves(tmp_path, monkeypatch, real_gguf):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    payload = {
+        "enabled": True,
+        "max_prompt_chars": 3000,
+        "fast": {"model_id": "f", "model_path": real_gguf},
+        "quality": {"model_id": "q", "model_path": real_gguf},
+    }
+    r = client.put("/v1/tiering/config", json=payload)
+    assert r.status_code == 200, r.text
+    saved = r.json()["config"]
+    assert saved["max_prompt_chars"] == 3000
+    assert saved["fast"]["file_resolved"] is True
+    # Persisted on disk.
+    on_disk = json.loads((tmp_path / "t.json").read_text(encoding="utf-8"))
+    assert on_disk["fast"]["model_id"] == "f"
+
+
+def test_put_tiering_config_rejects_missing_file(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    payload = {
+        "fast": {"model_id": "f", "model_path": "C:/nope/ghost.gguf"},
+        "quality": {"model_id": "q", "model_path": "C:/nope/ghost2.gguf"},
+    }
+    r = client.put("/v1/tiering/config", json=payload)
+    assert r.status_code == 400
+    assert "file not found" in r.json()["detail"]
+
+
+def _stub_app(tmp_path, monkeypatch, real_gguf, payload=None):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    app, _ = create_app(ServerConfig())
+    stub = _StubManager()
+    app.state.tiering_manager = stub
+    client = TestClient(app)
+    if payload is not None:
+        assert client.put("/v1/tiering/config", json=payload).status_code == 200
+    return client, stub
+
+
+def test_route_short_prompt_uses_fast_tier(tmp_path, monkeypatch, real_gguf):
+    payload = {
+        "fast": {"model_id": "fast-m", "model_path": real_gguf},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, stub = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    r = client.post("/v1/tiering/route",
+                    json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tier"] == "fast"
+    assert body["model_id"] == "fast-m"
+    assert body["model_path"] == real_gguf
+    assert "reason" in body
+    # The stub recorded the auto-load (no real llama-server spawned).
+    assert stub.loaded and stub.loaded[0]["id"] == "fast-m"
+
+
+def test_route_long_prompt_uses_quality_tier(tmp_path, monkeypatch, real_gguf):
+    payload = {
+        "max_prompt_chars": 100,
+        "fast": {"model_id": "fast-m", "model_path": real_gguf},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, stub = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    r = client.post("/v1/tiering/route", json={
+        "messages": [{"role": "user", "content": "x" * 200}],
+    })
+    assert r.status_code == 200
+    assert r.json()["tier"] == "quality"
+    assert r.json()["model_id"] == "qual-m"
+    assert stub.loaded and stub.loaded[0]["id"] == "qual-m"
+
+
+def test_route_disabled_returns_409(tmp_path, monkeypatch, real_gguf):
+    payload = {
+        "enabled": False,
+        "fast": {"model_id": "f", "model_path": real_gguf},
+        "quality": {"model_id": "q", "model_path": real_gguf},
+    }
+    client, _ = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    r = client.post("/v1/tiering/route", json={"messages": []})
+    assert r.status_code == 409
+    assert "disabled" in r.json()["detail"]

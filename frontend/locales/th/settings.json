@@ -153,6 +153,26 @@
     "license": "สัญญาอนุญาต",
     "tagline": "รันโมเดลที่ใหญ่กว่า RAM ของคุณ — streaming น้ำหนักจาก NVMe ตามต้องการ"
   },
+  "tiering": {
+    "title": "⚡ Auto-tiering",
+    "subtitle": "จัดเส้นทางคำขอไปยังโมเดลที่เหมาะสม",
+    "note": "แชทสั้นใช้ tier เร็ว ส่วนคำขอยาวหรือเน้นการคิดลึกใช้ tier คุณภาพ คู่โมเดลตั้งค่าได้เต็มที่ — ค่าเริ่มต้นคือคู่ Gemma 12B/26B ที่พิสูจน์แล้วบนเครื่องนี้ (EXP-022/019)",
+    "rule": "กติกา: prompt ยาวเกินเกณฑ์ตัวอักษร หรือขอ reasoning ระดับ high → tier คุณภาพ มิฉะนั้น → tier เร็ว",
+    "fastTier": "Tier เร็ว (แชทสั้น)",
+    "qualityTier": "Tier คุณภาพ (ยาว / ใช้เหตุผล)",
+    "maxChars": "เกณฑ์ความยาว prompt (ตัวอักษร)",
+    "maxCharsHint": "คำขอที่ยาวรวมเกินค่านี้จะถูกส่งไป tier คุณภาพ",
+    "scan": "สแกนโมเดล",
+    "noModels": "ไม่พบไฟล์ GGUF สแกนโฟลเดอร์ หรือพิมพ์ path ด้านล่าง",
+    "pickPlaceholder": "เลือก GGUF…",
+    "modelId": "รหัสโมเดล",
+    "pathPlaceholder": "Path ไปยังไฟล์ .gguf",
+    "extraArgsPlaceholder": "อาร์กิวเมนต์เพิ่มของ llama-server (เช่น flags MTP draft)",
+    "resolved": "พบไฟล์",
+    "missing": "ไม่พบไฟล์",
+    "needPair": "ทั้งสอง tier ต้องมีรหัสโมเดลและ path ไฟล์",
+    "saved": "บันทึกค่า auto-tiering แล้ว"
+  },
   "toast": {
     "densityChanged": "ความหนาแน่น: {{name}}",
     "cleared": "ล้างประวัติแชทแล้ว",

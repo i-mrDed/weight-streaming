@@ -315,12 +315,14 @@ class LlamaServerBackend(WeightStreamBackend):
         host: str = DEFAULT_HOST,
         port: int = DEFAULT_SERVER_PORT,
         kv_cache_type: Optional[str] = None,
+        extra_args: Optional[str] = None,
         **kwargs,
     ):
         self._model_path = model_path
         self._n_ctx = n_ctx
         self._n_threads = n_threads
         self._gpu_layers = gpu_layers
+        self._extra_args = (extra_args or "").strip()
         self._kv_cache_type = (kv_cache_type or "").strip().lower()
         if self._kv_cache_type and self._kv_cache_type not in KV_CACHE_TYPES:
             raise ModelError(
@@ -414,7 +416,11 @@ class LlamaServerBackend(WeightStreamBackend):
         # NOTE (Windows): posix=True strips quotes correctly but treats `\`
         # as an escape — pass any paths in extra args with FORWARD slashes
         # (e.g. `-md C:/models/draft.gguf`), which Windows APIs accept.
-        extra = os.environ.get("WS_LLAMA_EXTRA_ARGS", "").strip()
+        # Per-model extra_args (auto-tiering) take precedence over the
+        # process-wide WS_LLAMA_EXTRA_ARGS — the env var stays as the
+        # global fallback (the harness clean-room path).
+        extra = self._extra_args or os.environ.get(
+            "WS_LLAMA_EXTRA_ARGS", "").strip()
         if extra:
             try:
                 cmd += shlex.split(extra)

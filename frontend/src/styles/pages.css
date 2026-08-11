@@ -1370,6 +1370,50 @@ select.md-input { cursor: pointer; }
   .ov-activity__model { max-width: 14ch; }
 }
 
+/* Auto-tiering (P8) */
+.tier-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  margin: 4px 0 14px;
+}
+
+.tier-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.06);
+}
+
+.tier-picker__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.tier-select,
+.tier-input {
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--border, rgba(148, 163, 184, 0.25));
+  background: var(--input-bg, rgba(15, 23, 42, 0.6));
+  color: inherit;
+  font-size: 0.86rem;
+}
+
+.tier-input--num {
+  max-width: 120px;
+}
+
+@media (max-width: 860px) {
+  .tier-grid { grid-template-columns: 1fr; }
+}
+
 /* Density: compact tightens card + section rhythm */
 [data-density='compact'] .card { padding: 10px; }
 [data-density='compact'] .md-section { margin-bottom: 14px; }

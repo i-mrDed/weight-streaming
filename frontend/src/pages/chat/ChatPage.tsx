@@ -38,6 +38,7 @@ import { chatFocusModel } from '@/core/nav-hints'
 import { fetchStats } from '@/core/stats'
 import { guessQuant } from '@/core/models'
 import { renderMarkdown } from '@/core/markdown'
+import { routeTiering } from '@/core/tiering'
 import { fmtNumber, t } from '@/i18n'
 import {
   activeConv,
@@ -175,6 +176,7 @@ export function ChatPage() {
   const taRef = useRef<HTMLTextAreaElement>(null)
 
   const loaded = models.value
+  const AUTO_MODEL = '__auto__'
 
   // Consume "use in chat" hint from Models (once).
   if (chatFocusModel.value) {
@@ -296,8 +298,25 @@ export function ChatPage() {
       .map((m) => ({ role: m.role, content: m.content }))
     const messages = [...(sys ? [{ role: 'system', content: sys }] : []), ...history]
 
+    // Auto-tiering: when the conversation is on ⚡ Auto, ask the server to
+    // route this request to fast or quality and use the resolved model.
+    let modelId = c.model
+    if (c.model === AUTO_MODEL) {
+      try {
+        const routed = await routeTiering({ messages, options: {
+          reasoning_mode: reasoningCapable ? reasoningMode.value : undefined,
+        } })
+        modelId = routed.model_id
+        toast('info', `${t('chat.model.auto')} → ${routed.tier === 'fast' ? '⚡' : '🎯'} ${routed.model_id}`)
+      } catch (e) {
+        toast('error', String(e))
+        generating.value = false
+        return
+      }
+    }
+
     const { response, abort } = sseRequest('/v1/chat/completions', {
-      model: c.model,
+      model: modelId,
       messages,
       stream: true,
       temperature: c.params.temperature,
@@ -462,13 +481,26 @@ export function ChatPage() {
               align="start"
               trigger={
                 <span class="chat__model-trigger">
-                  🧠 <b>{conv?.model || loaded[0].id}</b>
-                  {guessQuant(conv?.model) ? <Badge tone="brand">{guessQuant(conv!.model)}</Badge> : null}
+                  {conv?.model === AUTO_MODEL ? (
+                    <>⚡ <b>{t('chat.model.auto')}</b></>
+                  ) : (
+                    <>🧠 <b>{conv?.model || loaded[0].id}</b></>
+                  )}
+                  {conv?.model !== AUTO_MODEL && guessQuant(conv?.model)
+                    ? <Badge tone="brand">{guessQuant(conv!.model)}</Badge>
+                    : null}
                   <ChevronDown size={13} aria-hidden="true" />
                 </span>
               }
               header={t('chat.model.label')}
               items={[
+                {
+                  key: AUTO_MODEL,
+                  label: t('chat.model.auto'),
+                  active: conv?.model === AUTO_MODEL,
+                  hint: t('chat.model.autoHint'),
+                  onSelect: () => mutateConv((c) => (c.model = AUTO_MODEL)),
+                },
                 ...loaded.map((m) => ({
                   key: m.id,
                   label: (

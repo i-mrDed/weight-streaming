@@ -124,6 +124,9 @@ class ModelManager:
         # unknown args). Only meaningful on LlamaServerBackend.
         gpu_layers = kwargs.pop("gpu_layers", None)
         kv_cache_type = kwargs.pop("kv_cache_type", None)
+        # Per-model llama-server extra args (auto-tiering, e.g. MTP draft
+        # flags). Same rule: llama-server only, never the CPU binding.
+        extra_args = kwargs.pop("extra_args", None)
         if use_server and LlamaServerBackend.is_available():
             try:
                 logger.info("Using LlamaServerBackend (GPU) for %s", model_path)
@@ -133,6 +136,7 @@ class ModelManager:
                     n_threads=n_threads,
                     gpu_layers=gpu_layers if gpu_layers is not None else -1,
                     kv_cache_type=kv_cache_type,
+                    extra_args=extra_args,
                     **kwargs,
                 )
             except Exception as e:
@@ -285,6 +289,9 @@ class ModelManager:
                 "n_threads": n_threads,
                 "gpu_layers": gpu_layers,
                 "kv_cache_type": kv_cache_type,
+                # Per-model llama-server extra args (auto-tiering MTP draft
+                # flags) — reload() must re-apply them, not lose them.
+                "extra_args": kwargs.get("extra_args"),
             }
             self._locks[model_id] = asyncio.Lock()
             self._last_used[model_id] = time.time()

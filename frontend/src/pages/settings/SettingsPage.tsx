@@ -29,6 +29,7 @@ import {
 } from '@/theme/manager'
 import { THEMES } from '@/theme/registry'
 import { MCPSection } from './MCPSection'
+import { TieringSection } from './TieringSection'
 import {
   availableLocales,
   fmtNumber,
@@ -972,6 +973,12 @@ export function SettingsPage() {
             </Button>
           </div>
         </Card>
+      </section>
+
+      {/* Auto-tiering (P8) */}
+      <section id="settings-tiering" class="md-section">
+        <h2 class="md-section__title">{t('settings.tiering.title')}</h2>
+        <TieringSection />
       </section>
 
       {/* MCP (P7.4) */}

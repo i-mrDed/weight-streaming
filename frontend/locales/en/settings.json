@@ -153,6 +153,26 @@
     "license": "License",
     "tagline": "Run models bigger than your RAM — weights streamed from NVMe on demand."
   },
+  "tiering": {
+    "title": "⚡ Auto-tiering",
+    "subtitle": "Route requests to the right model",
+    "note": "Short chats use the fast tier; long or reasoning-heavy requests use the quality tier. The pair is fully configurable — the default is the Gemma 12B/26B pair proven on this rig (EXP-022/019).",
+    "rule": "Rule: prompt longer than the character threshold, or reasoning requested at high effort → quality tier. Otherwise → fast tier.",
+    "fastTier": "Fast tier (short chat)",
+    "qualityTier": "Quality tier (long / reasoning)",
+    "maxChars": "Prompt threshold (chars)",
+    "maxCharsHint": "Requests above this total prompt length are routed to the quality tier.",
+    "scan": "Scan models",
+    "noModels": "No GGUF files found. Scan a folder, or type a path below.",
+    "pickPlaceholder": "Pick a GGUF…",
+    "modelId": "Model ID",
+    "pathPlaceholder": "Path to .gguf file",
+    "extraArgsPlaceholder": "Extra llama-server args (e.g. MTP draft flags)",
+    "resolved": "file found",
+    "missing": "file missing",
+    "needPair": "Both tiers need a model ID and a file path.",
+    "saved": "Auto-tiering config saved"
+  },
   "toast": {
     "densityChanged": "Density: {{name}}",
     "cleared": "Chat history cleared",

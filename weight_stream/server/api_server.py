@@ -1349,6 +1349,72 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    # ── Auto-tiering (P8): fast/quality pair + pure router ─────────────
+    # User-configurable model pair (default = the Gemma pair proven on this
+    # rig, EXP-022/019). The router itself is model-agnostic — any two GGUFs
+    # work; see server/tiering.py for the decision rule.
+    from . import tiering
+
+    app.state.tiering_manager = manager
+
+    @app.get("/v1/tiering/config")
+    async def get_tiering_config():
+        """Current auto-tiering config + on-disk resolution per tier (so a
+        broken pair is visible, not silent)."""
+        cfg = tiering.resolve_state(tiering.load_config())
+        problems = tiering.validate_config(cfg)
+        return {"config": cfg, "problems": problems}
+
+    @app.put("/v1/tiering/config")
+    async def put_tiering_config(body: Dict[str, Any]):
+        """Validate + persist a new tiering config (data/tiering.json).
+        Returns the normalized config; 400 with readable problems when
+        invalid (e.g. missing model file)."""
+        try:
+            saved = tiering.save_config(body)
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"status": "saved", "config": tiering.resolve_state(saved)}
+
+    @app.post("/v1/tiering/route")
+    async def route_tiering(body: Dict[str, Any]):
+        """Route a request to fast or quality tier and load that model.
+
+        Body: ``{"messages": [...], "options": {reasoning_mode/effort}}``.
+        Returns ``{tier, model_id, model_path, reason}``. When the config is
+        disabled the call is refused (409) — the caller should fall back to
+        its own model choice instead of silently routing.
+        """
+        cfg = tiering.load_config()
+        if not cfg.get("enabled", False):
+            raise HTTPException(
+                status_code=409,
+                detail="auto-tiering is disabled — fall back to an explicit model",
+            )
+        messages = body.get("messages") or []
+        options = body.get("options") or {}
+        tier, reason = tiering.decide_tier(cfg, messages, options)
+        entry = cfg[tier]
+        tmanager = getattr(app.state, "tiering_manager", manager)
+        try:
+            await tmanager.load_or_get(
+                model_id=entry["model_id"],
+                model_path=entry["model_path"],
+                extra_args=entry.get("extra_args"),
+                n_threads=entry.get("n_threads"),
+            )
+        except Exception as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"tier '{tier}' model failed to load: {e}",
+            )
+        return {
+            "tier": tier,
+            "model_id": entry["model_id"],
+            "model_path": entry["model_path"],
+            "reason": reason,
+        }
+
     return app, manager
 
 
