@@ -39,6 +39,7 @@ import {
   guessQuant,
   loadModel,
   MEASURED_TOK_S,
+  mtpDraftArgs,
   QUANT_QUALITY_NOTES,
   quantAdvisory,
   quantSiblings,
@@ -91,6 +92,9 @@ export function ModelsPage() {
   // GPU-only (P7.5): -1 = auto, 0 = CPU, N = layers; '' = server default
   const loadGpuLayers = useSignal<number>(-1)
   const loadKvCache = useSignal('')
+  // Extra llama-server cmdline flags (EXP-023: /v1/models/load forwards
+  // these verbatim — e.g. MTP draft args). '' = no extra args.
+  const loadExtraArgs = useSignal('')
   const loadingModel = useSignal(false)
 
   // quant advisor (EXP-011): sibling quants + VRAM headroom
@@ -177,20 +181,10 @@ export function ModelsPage() {
   const pickScanResult = (m: ScanModel) => {
     loadPath.value = m.path
     loadId.value = suggestModelId(m.path)
-  }
-
-  /** Auto-wire MTP draft flags when the scanned model has a sibling draft
-      (Gemma QAT family — EXP-019/022 measured +20% with draft-mtp). Honest
-      best effort: no draft found → plain config, no fabricated flags. */
-  const draftArgsFor = (m: ScanModel): string => {
-    const dir = m.path.replace(/[\\/]+[^\\/]+\.gguf$/i, '')
-    const draft = (scanResults.value ?? []).find((x) =>
-      x.directory.replace(/\\/g, '/').startsWith(
-        dir.replace(/\\/g, '/') + '/MTP') &&
-      /^(mtp|draft)-/i.test(x.name) &&
-      /Q(4|8)_0/i.test(x.name || ''))
-    if (!draft) return ''
-    return `--spec-type draft-mtp --spec-draft-model ${draft.path.replace(/\\/g, '/')} --spec-draft-n-max 2`
+    // Re-detect draft flags for the picked model ('' when none) — the same
+    // rule the tier pin uses; a stale draft from a previous pick would
+    // crash the spawn (Gemma MTP args on a non-MTP model).
+    loadExtraArgs.value = mtpDraftArgs(m.path, scanResults.value)
   }
 
   /** Pin a scanned model as the fast/quality tier (fetch → merge → save). */
@@ -199,7 +193,7 @@ export function ModelsPage() {
       await setTier(tier, {
         model_id: suggestModelId(m.path),
         model_path: m.path,
-        extra_args: draftArgsFor(m),
+        extra_args: mtpDraftArgs(m.path, scanResults.value),
       })
       toast('success', t(
         tier === 'fast' ? 'models.scan.tierFastSet' : 'models.scan.tierQualitySet',
@@ -260,6 +254,7 @@ export function ModelsPage() {
         n_threads: loadThreads.value,
         gpu_layers: loadGpuLayers.value,
         kv_cache_type: loadKvCache.value.trim() === '' ? null : loadKvCache.value.trim(),
+        extra_args: loadExtraArgs.value.trim() === '' ? undefined : loadExtraArgs.value.trim(),
       })
       await refreshModels()
       toast('success', t('models.load.done', { id: loadId.value.trim() }), {
@@ -317,6 +312,8 @@ export function ModelsPage() {
     // swapping quant must not leave a stale id from the other file — a
     // load with mismatched id/path would register under the wrong name.
     loadId.value = suggestModelId(path)
+    // Draft args are per-model-dir — re-detect on the quant swap too.
+    loadExtraArgs.value = mtpDraftArgs(path, scanResults.value)
   }
 
   return (
@@ -630,6 +627,16 @@ export function ModelsPage() {
                 placeholder={t('models.load.kvCachePlaceholder')}
                 value={loadKvCache.value}
                 onInput={(e) => (loadKvCache.value = (e.target as HTMLInputElement).value)}
+              />
+            </label>
+            <label class="md-load__wide">
+              {t('models.load.extraArgs')}
+              <input
+                class="md-input"
+                type="text"
+                placeholder={t('models.load.extraArgsPlaceholder')}
+                value={loadExtraArgs.value}
+                onInput={(e) => (loadExtraArgs.value = (e.target as HTMLInputElement).value)}
               />
             </label>
           </div>

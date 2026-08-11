@@ -11,9 +11,11 @@ import pytest
 
 from weight_stream.gguf.parser import GGUFSplitParser
 
-# Default: real model dir on this machine.
-DEFAULT_DIR = Path(r"C:\Users\dedch\models\UD-IQ3_XXS")
-MODELS_DIR = Path(os.environ.get("WS_TEST_MODELS_DIR", DEFAULT_DIR))
+# No machine-specific default (hermetic): `~` expands to THIS machine's
+# home at load time; on a fresh box the shards are absent → tests skip
+# honestly instead of depending on a dev-machine path.
+MODELS_DIR = Path(os.path.expanduser(os.environ.get(
+    "WS_TEST_MODELS_DIR", "~/models/UD-IQ3_XXS")))
 
 SHARD_NAMES = [
     "DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00001-of-00004.gguf",

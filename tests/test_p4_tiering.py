@@ -128,6 +128,24 @@ def test_validate_config_rejects_bad_types():
     assert any("reasoning_quality must be one of" in p for p in problems)
 
 
+def test_validate_config_rejects_bad_per_tier_n_ctx_max_tokens():
+    """Per-tier n_ctx/max_tokens (EXP-023) accept positive ints or null,
+    and reject anything the route's int() coercion would choke on."""
+    ok = tiering.validate_config({
+        "fast": {"model_id": "a", "model_path": "x", "n_ctx": 8192,
+                 "max_tokens": 2048},
+        "quality": {"model_id": "b", "model_path": "y", "n_ctx": None,
+                    "max_tokens": None},
+    })
+    assert not [p for p in ok if "n_ctx" in p or "max_tokens" in p]
+    problems = tiering.validate_config({
+        "fast": {"model_id": "a", "model_path": "x", "n_ctx": "eight"},
+        "quality": {"model_id": "b", "model_path": "y", "max_tokens": 0},
+    })
+    assert any("fast: n_ctx must be a positive integer" in p for p in problems)
+    assert any("quality: max_tokens must be a positive integer" in p for p in problems)
+
+
 def test_normalize_config_fills_defaults_and_expands_tilde(monkeypatch):
     monkeypatch.setenv("WS_TIERING_FILE", "data/tiering.json")
     c = tiering.normalize_config({})
@@ -286,6 +304,34 @@ def test_put_tiering_config_validates_and_saves(tmp_path, monkeypatch, real_gguf
     # Persisted on disk.
     on_disk = json.loads((tmp_path / "t.json").read_text(encoding="utf-8"))
     assert on_disk["fast"]["model_id"] == "f"
+
+
+def test_put_tiering_config_persists_n_ctx_and_max_tokens(tmp_path, monkeypatch, real_gguf):
+    """Per-tier n_ctx/max_tokens (EXP-023) round-trip through the PUT →
+    disk → GET path — the fields the Settings UI now edits."""
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    payload = {
+        "enabled": True,
+        "fast": {"model_id": "f", "model_path": real_gguf,
+                 "n_ctx": 8192, "max_tokens": 2048},
+        "quality": {"model_id": "q", "model_path": real_gguf,
+                    "n_ctx": None, "max_tokens": None},
+    }
+    r = client.put("/v1/tiering/config", json=payload)
+    assert r.status_code == 200, r.text
+    saved = r.json()["config"]
+    assert saved["fast"]["n_ctx"] == 8192
+    assert saved["fast"]["max_tokens"] == 2048
+    assert saved["quality"]["n_ctx"] is None
+    assert saved["quality"]["max_tokens"] is None
+    # Persisted on disk + visible on GET.
+    on_disk = json.loads((tmp_path / "t.json").read_text(encoding="utf-8"))
+    assert on_disk["fast"]["n_ctx"] == 8192
+    got = client.get("/v1/tiering/config").json()["config"]
+    assert got["fast"]["max_tokens"] == 2048
+    assert got["quality"]["n_ctx"] is None
 
 
 def test_put_tiering_config_rejects_missing_file(tmp_path, monkeypatch):

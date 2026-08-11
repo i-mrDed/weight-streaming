@@ -6,6 +6,31 @@
 
 ---
 
+## ✅ Console: per-tier n_ctx/max_tokens + Models load extra_args (2026-08-11)
+
+| สถานะ | Task | Priority | Notes |
+|-------|------|----------|-------|
+| ✅ | Settings → Auto-tiering: แก้ n_ctx/max_tokens ต่อ tier | 🟡 | UI (TieringSection) + validation ใน `tiering.py` + tests round-trip; route อ่านค่าเดิมอยู่แล้ว (EXP-023) |
+| ✅ | Models load form: ช่อง extra llama-server args | 🟡 | `/v1/models/load` รับอยู่แล้ว; auto-detect MTP draft ตอน pick scan result / swap quant |
+| ✅ | `setTier` เก็บ n_ctx/max_tokens ต่อ tier ตอน pin | 🟡 | `core/tiering.ts` — re-pin ไม่ reset ค่า tier; ต่างโมเดลยัง clear extra_args กัน draft ค้าง |
+| ✅ | vitest: tiering pin (n_ctx/max_tokens) + models (extra_args payload, MTP draft auto-detect) | 🟡 | `core/tiering.test.ts` (4) + `core/models.test.ts` (6) — mock แค่ apiJSON, ไม่ต้อง DOM; suite 30/30 |
+
+---
+
+## ⬜ Hermeticity Fixes (2026-08-11) — รายงาน: docs/HERMETIC_AUDIT.md
+
+| สถานะ | Task | Priority | Notes |
+|-------|------|----------|-------|
+| ✅ | `tests/test_server.py` — opt-in (`WS_E2E=1`) ไม่ auto-run ต่อ live server | 🔴 | 2026-08-11: gate เป็น WS_E2E; เพิ่ม WS_TEST_SERVER_URL/WS_TEST_MODEL; แก้พอร์ต 8383 vs 8765 ใน standalone runner |
+| ✅ | `tests/test_split_parser.py` — default path แข็ง → `~/models/...` (expand ตอนเรียก) | 🔴 | 2026-08-11: ไม่รั่ว username แล้ว; empty-HOME → skip 9 ตัว |
+| ⬜ | Fixture GGUF สังเคราะห์สำหรับ `test_gguf.py` + `test_split_parser.py` | 🔴 | ตอนนี้เทสต์ parser รันกับโมเดลจริงบนเครื่อง dev / skip บน CI → coverage ไม่มีใน CI, assertions อาจเน่าเงียบ |
+| ✅ | Smoke scripts (`test_llama_server.py`, `test_tools.py`, `test_mcp.py`, `test_assistants.py`) — path เป็น env-driven | 🟡 | 2026-08-11: `WS_TEST_MODEL` + `WS_DATA_DIR` fallback เป็น temp dir |
+| ✅ | `scripts/measure_*.py` — default `WS_TEST_MODEL` จาก `D:/models/...` → `~/models/...` | 🟡 | 2026-08-11: 6 scripts; `os.path.expanduser` ตอนอ่านค่า (convention เดียวกับ tiering.py) |
+| ⬜ | Experiment artifacts (`research/experiments/EXP-0*/`) + `docs/MODEL_INVENTORY.md` — ～-ize paths | 🟢 | historical records; รั่ว username; มี checklist ใน docs/GO_PUBLIC_CHECKLIST.md:32 |
+| ⬜ | ลบ `Qwen3.6-35B-A3B-UD-IQ2_M.gguf.part` (7.9 GB) ออกจาก working tree | 🟢 | gitignored ไม่ถูก push แต่กินพื้นที่ repo root |
+
+---
+
 ## ✅ P7 + EXP-009…013 + Repo Release Prep (2026-08-04 → 2026-08-10)
 
 | สถานะ | Task | Priority | Notes |

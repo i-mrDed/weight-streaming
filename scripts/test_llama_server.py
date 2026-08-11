@@ -1,9 +1,19 @@
-"""Test LlamaServerBackend with reasoning_format=none (content includes thinking)."""
+"""Test LlamaServerBackend with reasoning_format=none (content includes thinking).
+
+Model path: WS_TEST_MODEL env (default `~/models/...` — expands to THIS
+machine's home, no dev-machine path baked in).
+"""
+import os
 import time
 from weight_stream.backends.llama_server import LlamaServerBackend
 
+MODEL_PATH = os.path.expanduser(os.environ.get(
+    "WS_TEST_MODEL",
+    "~/models/Qwythos-9B-Claude-Mythos-5-1M-Q4_K_M/model.gguf",
+))
+
 backend = LlamaServerBackend(
-    model_path=r"C:\Users\dedch\AppData\Roaming\Jan\data\llamacpp\models\Qwythos-9B-Claude-Mythos-5-1M-Q4_K_M\model.gguf",
+    model_path=MODEL_PATH,
     n_ctx=1024,
     port=8805,
 )

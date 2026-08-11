@@ -138,7 +138,13 @@ export function fetchTieringStats(limit?: number): Promise<TieringStats> {
     other tier. Returns the saved config. */
 export async function setTier(
   tier: 'fast' | 'quality',
-  entry: { model_id: string; model_path: string; extra_args?: string },
+  entry: {
+    model_id: string
+    model_path: string
+    extra_args?: string
+    n_ctx?: number | null
+    max_tokens?: number | null
+  },
 ): Promise<TieringConfig> {
   const cur = await fetchTieringConfig()
   const sameModel =
@@ -151,12 +157,25 @@ export async function setTier(
   const extra_args = sameModel
     ? (entry.extra_args ?? cur.config[tier].extra_args ?? '')
     : (entry.extra_args ?? '')
+  // Per-tier n_ctx/max_tokens (EXP-023) survive a re-pin unless the caller
+  // explicitly overrides them — the tier's context window and output
+  // budget are model-pin-independent (the Models page pin has no fields
+  // for them, so dropping them on every pin would silently reset the
+  // tier's load profile).
+  const n_ctx = entry.n_ctx !== undefined
+    ? entry.n_ctx
+    : (cur.config[tier].n_ctx ?? null)
+  const max_tokens = entry.max_tokens !== undefined
+    ? entry.max_tokens
+    : (cur.config[tier].max_tokens ?? null)
   const next: TieringConfig = {
     ...cur.config,
     [tier]: {
       model_id: entry.model_id,
       model_path: entry.model_path,
       extra_args,
+      n_ctx,
+      max_tokens,
     },
   }
   const saved = await saveTieringConfig(next)

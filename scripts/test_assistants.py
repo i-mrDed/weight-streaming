@@ -1,6 +1,11 @@
-"""Test assistant CRUD via TestClient."""
+"""Test assistant CRUD via TestClient.
+
+WS_DATA_DIR falls back to a temp dir — no dev-machine path baked in.
+"""
 import os
-os.environ["WS_DATA_DIR"] = r"C:\Users\dedch\AppData\Local\Temp\wsdata-p72"
+import tempfile
+os.environ.setdefault(
+    "WS_DATA_DIR", os.path.join(tempfile.gettempdir(), "wsdata-p72"))
 from fastapi.testclient import TestClient
 from weight_stream.server.api_server import app
 

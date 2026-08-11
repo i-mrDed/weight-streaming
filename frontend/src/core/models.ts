@@ -38,6 +38,8 @@ export interface LoadModelParams {
   gpu_layers?: number | null
   /** KV cache data type (f16, q8_0, …). GPU backend only; null = server default. */
   kv_cache_type?: string | null
+  /** Extra llama-server cmdline flags (e.g. MTP draft) — forwarded verbatim. */
+  extra_args?: string
   force?: boolean
 }
 
@@ -70,6 +72,23 @@ export function unloadModel(model_id: string): Promise<ModelActionResponse> {
 /** Native file picker on the server box (dialog timeout is 120s there). */
 export function browseFile(): Promise<BrowseResult> {
   return apiJSON<BrowseResult>('/v1/browse', undefined, { timeoutMs: 130_000 })
+}
+
+/** Auto-wire MTP draft flags when the picked model has a sibling draft
+    (Gemma QAT family — EXP-019/022 measured +20% with draft-mtp). Honest
+    best effort: no draft found → plain config, no fabricated flags. Pure
+    (path + scan results → args string) so the load form and the tier pin
+    share one rule and the logic is unit-testable offline. */
+export function mtpDraftArgs(path: string, scanResults: ScanModel[] | null): string {
+  if (!path) return ''
+  const dir = path.replace(/[\\/]+[^\\/]+\.gguf$/i, '')
+  const draft = (scanResults ?? []).find((x) =>
+    x.directory.replace(/\\/g, '/').startsWith(
+      dir.replace(/\\/g, '/') + '/MTP') &&
+    /^(mtp|draft)-/i.test(x.name) &&
+    /Q(4|8)_0/i.test(x.name || ''))
+  if (!draft) return ''
+  return `--spec-type draft-mtp --spec-draft-model ${draft.path.replace(/\\/g, '/')} --spec-draft-n-max 2`
 }
 
 export function browseDir(): Promise<BrowseResult> {

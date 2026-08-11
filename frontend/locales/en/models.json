@@ -55,6 +55,8 @@
   "gpuLayers": "GPU layers (auto = -1)",
   "kvCache": "KV cache type",
   "kvCachePlaceholder": "f16 · q8_0 · empty = default",
+  "extraArgs": "Extra llama-server args",
+  "extraArgsPlaceholder": "e.g. --spec-type draft-mtp --spec-draft-model /path/to/draft.gguf --spec-draft-n-max 2 (empty = none)",
   "submit": "Load model",
   "advFull": "⚠️ {{quant}} is unquantized — roughly 2 bytes per parameter per token. On CPU this is usually much slower than a Q4–Q6 quant; consider a quantized GGUF.",
   "advLow": "⚠️ {{quant}} is very aggressive — it may echo or garble output. Q4_K_M or higher is recommended.",

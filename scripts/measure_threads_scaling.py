@@ -20,10 +20,12 @@ import time
 import urllib.request
 
 BASE = os.environ.get("WS_API", "http://127.0.0.1:8765")
-MODEL = os.environ.get(
+# ~ expands to THIS machine's home (hermetic default — no dev-machine
+# path baked in); override with WS_TEST_MODEL for any other model.
+MODEL = os.path.expanduser(os.environ.get(
     "WS_TEST_MODEL",
-    "D:/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-IQ2_M.gguf",
-)
+    "~/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-IQ2_M.gguf",
+))
 MODEL_ID = os.environ.get("WS_TEST_MODEL_ID", "qwen36a3b")
 PROMPT = os.environ.get(
     "WS_TEST_PROMPT",

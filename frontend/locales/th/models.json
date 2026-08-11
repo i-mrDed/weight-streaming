@@ -55,6 +55,8 @@
   "gpuLayers": "GPU layers (อัตโนมัติ = -1)",
   "kvCache": "ชนิด KV cache",
   "kvCachePlaceholder": "f16 · q8_0 · ว่าง = ค่าเริ่มต้น",
+  "extraArgs": "อาร์กิวเมนต์เพิ่มของ llama-server",
+  "extraArgsPlaceholder": "เช่น --spec-type draft-mtp --spec-draft-model /path/to/draft.gguf --spec-draft-n-max 2 (ว่าง = ไม่มี)",
   "submit": "โหลดโมเดล",
   "advFull": "⚠️ {{quant}} ไม่ได้ quantized — ประมาณ 2 ไบต์ต่อพารามิเตอร์ต่อโทเคน บน CPU มักช้ากว่า quant Q4–Q6 มาก; ลองพิจารณา GGUF แบบ quantized",
   "advLow": "⚠️ {{quant}} aggressive มาก — อาจเกิด echo หรือผลลัพธ์ที่อ่านไม่ออก แนะนำ Q4_K_M หรือสูงกว่า",

@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite'
+import { defineConfig } from 'vitest/config'
 import preact from '@preact/preset-vite'
 import { fileURLToPath } from 'node:url'
 
@@ -35,5 +35,11 @@ export default defineConfig({
       '/v1': 'http://127.0.0.1:8765',
       '/health': 'http://127.0.0.1:8765',
     },
+  },
+  test: {
+    // Component tests (TieringSection / ModelsPage) render with a real
+    // DOM — jsdom. Pure-logic tests (api/tiering/models/thinks) also run
+    // fine here; they never touch the browser surface.
+    environment: 'jsdom',
   },
 })

@@ -1,7 +1,9 @@
+// @vitest-environment node
 /* Unit tests for core/api.ts — the API client used by every page.
    Covers the B1 auth wiring (WS_API_TOKEN → Bearer header on JSON + SSE),
    the token store, and the network/http error taxonomy. fetch and
-   localStorage are stubbed; no server needed.
+   localStorage are stubbed; no server needed. Runs in the node env (no
+   window) so BASE stays '' and the URLs assert verbatim.
    Run:  cd frontend && npx vitest run src/core/api.test.ts
 */
 import { afterEach, describe, expect, it, vi } from 'vitest'

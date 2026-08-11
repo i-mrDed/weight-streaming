@@ -1,10 +1,21 @@
-"""Test tool-calling via LlamaServerBackend (P7.3)."""
+"""Test tool-calling via LlamaServerBackend (P7.3).
+
+Model path: WS_TEST_MODEL env (default `~/models/...`); WS_DATA_DIR falls
+back to a temp dir — no dev-machine paths baked in.
+"""
 import os
-os.environ["WS_DATA_DIR"] = r"C:\Users\dedch\AppData\Local\Temp\wsdata-p72"
+import tempfile
+os.environ.setdefault(
+    "WS_DATA_DIR", os.path.join(tempfile.gettempdir(), "wsdata-p72"))
 from weight_stream.backends.llama_server import LlamaServerBackend
 
+MODEL_PATH = os.path.expanduser(os.environ.get(
+    "WS_TEST_MODEL",
+    "~/models/Qwythos-9B-Claude-Mythos-5-1M-Q4_K_M/model.gguf",
+))
+
 backend = LlamaServerBackend(
-    model_path=r"C:\Users\dedch\AppData\Roaming\Jan\data\llamacpp\models\Qwythos-9B-Claude-Mythos-5-1M-Q4_K_M\model.gguf",
+    model_path=MODEL_PATH,
     n_ctx=1024,
     port=8805,
 )

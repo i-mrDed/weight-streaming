@@ -30,11 +30,13 @@ import urllib.request
 
 PORT = os.environ.get("WS_PORT", "8765")
 BASE = f"http://127.0.0.1:{PORT}"
-MODEL = os.environ.get(
+# ~ expands to THIS machine's home (hermetic default — no dev-machine
+# path baked in); override with WS_TEST_MODEL for any other model.
+MODEL = os.path.expanduser(os.environ.get(
     "WS_TEST_MODEL",
-    "D:/models/DeepSeek-V4-Flash-0731-GGUF/"
+    "~/models/DeepSeek-V4-Flash-0731-GGUF/"
     "DeepSeek-V4-Flash-0731-UD-IQ3_XXS.gguf",
-)
+))
 MODEL_ID = os.environ.get("WS_TEST_MODEL_ID", "dsv4flash")
 N_CTX = int(os.environ.get("WS_CTX", "2048"))
 GEN_TOKENS = int(os.environ.get("WS_GEN_TOKENS", "120"))

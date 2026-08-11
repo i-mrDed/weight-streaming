@@ -534,6 +534,9 @@ select.md-input { cursor: pointer; }
 }
 .md-load__fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .md-load__fields label { display: flex; flex-direction: column; gap: 6px; font-size: var(--ws-text-xs); font-weight: 600; color: var(--ws-text-secondary); }
+
+/* Full-width row inside the load-form grid (e.g. the long extra_args text). */
+.md-load__wide { grid-column: 1 / -1; }
 .md-load__submit { display: flex; justify-content: flex-end; }
 .md-remember { display: flex; align-items: center; gap: 9px; margin-top: 10px; font-size: var(--ws-text-xs); color: var(--ws-text-secondary); cursor: pointer; }
 .md-progress { display: flex; gap: 14px; align-items: flex-start; padding: 6px 0; }
@@ -1410,6 +1413,21 @@ select.md-input { cursor: pointer; }
 
 .tier-input--num {
   max-width: 120px;
+}
+
+.tier-picker__nums {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.tier-picker__nums label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: var(--ws-text-xs);
+  font-weight: 600;
+  color: var(--ws-text-secondary);
 }
 
 .tier-col {

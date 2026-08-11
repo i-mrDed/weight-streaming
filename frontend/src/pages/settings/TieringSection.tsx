@@ -24,6 +24,16 @@ interface Props {
   scan: () => Promise<ScanModel[]>
 }
 
+/** Editable tier entry — the shipped default pair carries per-tier
+    n_ctx/max_tokens (EXP-023); null = server default on the next route. */
+interface TierFormValue {
+  model_id: string
+  model_path: string
+  extra_args: string
+  n_ctx?: number | null
+  max_tokens?: number | null
+}
+
 function ModelPicker({
   label,
   value,
@@ -32,19 +42,33 @@ function ModelPicker({
   onChange,
 }: {
   label: string
-  value: { model_id: string; model_path: string; extra_args: string }
+  value: TierFormValue
   models: ScanModel[]
   resolved?: boolean
-  onChange: (v: { model_id: string; model_path: string; extra_args: string }) => void
+  onChange: (v: TierFormValue) => void
 }) {
   const modelId = useSignal(value.model_id)
   const path = useSignal(value.model_path)
   const args = useSignal(value.extra_args)
+  const nctx = useSignal<number | null>(value.n_ctx ?? null)
+  const maxtoks = useSignal<number | null>(value.max_tokens ?? null)
+
+  function emit() {
+    onChange({
+      model_id: modelId.value, model_path: path.value, extra_args: args.value,
+      n_ctx: nctx.value, max_tokens: maxtoks.value,
+    })
+  }
 
   function pick(m: ScanModel) {
     modelId.value = m.name.replace(/\.gguf$/i, '').replace(/[^A-Za-z0-9._-]/g, '-').toLowerCase()
     path.value = m.path
-    onChange({ model_id: modelId.value, model_path: m.path, extra_args: args.value })
+    emit()
+  }
+
+  function parseNum(raw: string): number | null {
+    const n = parseInt(raw, 10)
+    return Number.isNaN(n) || n < 1 ? null : n
   }
 
   return (
@@ -85,7 +109,7 @@ function ModelPicker({
         placeholder={t('settings.tiering.modelId')}
         onInput={(e) => {
           modelId.value = (e.target as HTMLInputElement).value
-          onChange({ model_id: modelId.value, model_path: path.value, extra_args: args.value })
+          emit()
         }}
       />
       <input
@@ -95,7 +119,7 @@ function ModelPicker({
         placeholder={t('settings.tiering.pathPlaceholder')}
         onInput={(e) => {
           path.value = (e.target as HTMLInputElement).value
-          onChange({ model_id: modelId.value, model_path: path.value, extra_args: args.value })
+          emit()
         }}
       />
       <input
@@ -105,9 +129,42 @@ function ModelPicker({
         placeholder={t('settings.tiering.extraArgsPlaceholder')}
         onInput={(e) => {
           args.value = (e.target as HTMLInputElement).value
-          onChange({ model_id: modelId.value, model_path: path.value, extra_args: args.value })
+          emit()
         }}
       />
+      <div class="tier-picker__nums">
+        <label>
+          {t('settings.tiering.nCtx')}
+          <input
+            class="tier-input tier-input--num"
+            type="number"
+            min={1}
+            step={512}
+            value={nctx.value ?? ''}
+            placeholder={t('settings.tiering.nCtxPlaceholder')}
+            onInput={(e) => {
+              nctx.value = parseNum((e.target as HTMLInputElement).value)
+              emit()
+            }}
+          />
+        </label>
+        <label>
+          {t('settings.tiering.maxTokens')}
+          <input
+            class="tier-input tier-input--num"
+            type="number"
+            min={1}
+            step={256}
+            value={maxtoks.value ?? ''}
+            placeholder={t('settings.tiering.maxTokensPlaceholder')}
+            onInput={(e) => {
+              maxtoks.value = parseNum((e.target as HTMLInputElement).value)
+              emit()
+            }}
+          />
+        </label>
+      </div>
+      <p class="set-note">{t('settings.tiering.tierNumHint')}</p>
     </div>
   )
 }
@@ -119,11 +176,11 @@ export function TieringSection() {
   const scanning = useSignal(false)
   const enabled = useSignal(true)
   const maxChars = useSignal(2000)
-  const fast = useSignal<{ model_id: string; model_path: string; extra_args: string }>({
-    model_id: '', model_path: '', extra_args: '',
+  const fast = useSignal<TierFormValue>({
+    model_id: '', model_path: '', extra_args: '', n_ctx: null, max_tokens: null,
   })
-  const quality = useSignal<{ model_id: string; model_path: string; extra_args: string }>({
-    model_id: '', model_path: '', extra_args: '',
+  const quality = useSignal<TierFormValue>({
+    model_id: '', model_path: '', extra_args: '', n_ctx: null, max_tokens: null,
   })
   // "Test the router" box — decides WITHOUT loading any model (server-side
   // live config, so the answer is always real).
@@ -144,10 +201,12 @@ export function TieringSection() {
       fast.value = {
         model_id: c.fast.model_id, model_path: c.fast.model_path,
         extra_args: c.fast.extra_args || '',
+        n_ctx: c.fast.n_ctx ?? null, max_tokens: c.fast.max_tokens ?? null,
       }
       quality.value = {
         model_id: c.quality.model_id, model_path: c.quality.model_path,
         extra_args: c.quality.extra_args || '',
+        n_ctx: c.quality.n_ctx ?? null, max_tokens: c.quality.max_tokens ?? null,
       }
     } catch (e) {
       toast('error', String(e))
@@ -224,11 +283,13 @@ export function TieringSection() {
         fast.value = {
           model_id: c.fast.model_id, model_path: c.fast.model_path,
           extra_args: c.fast.extra_args || '',
+          n_ctx: c.fast.n_ctx ?? null, max_tokens: c.fast.max_tokens ?? null,
         }
       } else {
         quality.value = {
           model_id: c.quality.model_id, model_path: c.quality.model_path,
           extra_args: c.quality.extra_args || '',
+          n_ctx: c.quality.n_ctx ?? null, max_tokens: c.quality.max_tokens ?? null,
         }
       }
       toast('success', t('settings.tiering.resetDone'))

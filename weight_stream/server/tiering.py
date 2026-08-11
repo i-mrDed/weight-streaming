@@ -136,6 +136,16 @@ def _validate_entry(entry: Any, label: str) -> list[str]:
         problems.append(f"{label}: model_path is required")
     elif not Path(model_path).is_file():
         problems.append(f"{label}: file not found: {model_path}")
+    # Per-tier n_ctx / max_tokens (EXP-023) are optional — null means the
+    # server default — but when present they must be sane positive ints,
+    # otherwise the route's int() coercion would 500 on garbage input.
+    for key in ("n_ctx", "max_tokens"):
+        val = entry.get(key)
+        if val is not None and (
+            not isinstance(val, int) or isinstance(val, bool) or val < 1
+        ):
+            problems.append(
+                f"{label}: {key} must be a positive integer (or null)")
     return problems
 
 
