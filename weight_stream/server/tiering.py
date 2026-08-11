@@ -47,23 +47,42 @@ DEFAULT_MAX_PROMPT_CHARS = 2000
 DEFAULT_REASONING_QUALITY = "high"  # reasoning effort >= this → quality tier
 
 # Shipped default pair (EXP-022 / EXP-019 — proven on this rig).
+#
+# The extra_args mirror the EXACT recipe the bench harness measured
+# (EXP-022: "-fa on -t 8 --spec-draft-model … --spec-draft-n-max 2"):
+# `-fa on` is not optional — without flash attention the MTP draft path
+# stops generation early (~430 tokens, mid-thought, EXP-023).
+#
+# n_ctx is raised from the server default 2048: Gemma 4 writes long EN
+# think blocks and the route's load would otherwise cap output at ~1950
+# tokens (n_ctx − prompt), truncating every long answer (EXP-023 found
+# the truncation live via /v1/tiering/route). The two tiers get different
+# n_ctx because the KV cache is NOT free:
+#   - fast (12B, fits fully in VRAM): 8192 — no measurable speed cost
+#     (EXP-023: 71.4 vs 72.3 tok/s pre-fix) and ~8K output headroom.
+#   - quality (26B, already spills to CPU): 4096 — ctx 8192 costs ~13%
+#     decode on this rig (warm 34.1 vs 39.2 at 2048) while 4096 costs
+#     only ~7% and still fits real long answers (~2.5K output budget after
+#     a 3000-char prompt).
 DEFAULT_FAST = {
     "model_id": "gemma-4-12b-qat-mtp",
     "model_path": os.path.expanduser(
         r"~/models/Gemma4-12B-QAT/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf"),
-    "extra_args": ("--spec-type draft-mtp --spec-draft-model "
+    "extra_args": ("-fa on --spec-type draft-mtp --spec-draft-model "
                    r"~/models/Gemma4-12B-QAT/MTP/mtp-gemma-4-12B-it-Q8_0.gguf "
                    "--spec-draft-n-max 2"),
     "n_threads": 8,
+    "n_ctx": 8192,
 }
 DEFAULT_QUALITY = {
     "model_id": "gemma-4-26b-qat-mtp",
     "model_path": os.path.expanduser(
         r"~/models/Gemma4-26B-A4B-QAT/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf"),
-    "extra_args": ("--spec-type draft-mtp --spec-draft-model "
+    "extra_args": ("-fa on --spec-type draft-mtp --spec-draft-model "
                    r"~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf "
                    "--spec-draft-n-max 2"),
     "n_threads": 12,  # EXP-020: -t 12 is the measured optimum for the 26B
+    "n_ctx": 4096,
 }
 
 REASONING_LEVELS = {"off": 0, "low": 1, "medium": 2, "high": 3}
@@ -296,7 +315,10 @@ def pin_tier(
     model_id = Path(main).name.replace(".gguf", "", 1)
     extra = ""
     if draft:
-        extra = (f"--spec-type draft-mtp --spec-draft-model "
+        # Same recipe as the shipped defaults: -fa on is required for the
+        # MTP draft path (EXP-023: without it llama-server stops generation
+        # early mid-thought). n_ctx keeps long answers from truncating.
+        extra = (f"-fa on --spec-type draft-mtp --spec-draft-model "
                  f"{draft.replace(os.sep, '/')} --spec-draft-n-max 2")
 
     cfg = load_config()
@@ -305,6 +327,9 @@ def pin_tier(
         "model_id": model_id,
         "model_path": main,
         "extra_args": extra,
+        # Same split as the shipped defaults: the fast tier (VRAM-resident)
+        # can afford 8192; the quality tier pays real decode for KV size.
+        "n_ctx": 8192 if tier == "fast" else 4096,
     }
     return save_config(cfg)
 

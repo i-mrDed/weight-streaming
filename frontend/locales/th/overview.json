@@ -80,6 +80,8 @@
     "drawerFilter": "กรองตาม tier",
     "filterAll": "ทั้งหมด",
     "filterFast": "เร็ว",
-    "filterQuality": "คุณภาพ"
+    "filterQuality": "คุณภาพ",
+    "exportJson": "Export JSON",
+    "exportMd": "Export MD"
   }
 }

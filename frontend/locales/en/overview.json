@@ -80,6 +80,8 @@
     "drawerFilter": "Filter by tier",
     "filterAll": "All",
     "filterFast": "Fast",
-    "filterQuality": "Quality"
+    "filterQuality": "Quality",
+    "exportJson": "Export JSON",
+    "exportMd": "Export MD"
   }
 }

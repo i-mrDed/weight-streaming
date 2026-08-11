@@ -19,7 +19,8 @@ import { createPoller, refreshOnFocus } from '@/core/poll'
 import { fetchStats, hasGeneration, isGpuBackend, type ModelStats, type StatsPayload } from '@/core/stats'
 import { RingBuffer } from '@/core/ring'
 import { statsFocusModel } from '@/core/nav-hints'
-import { t, fmtNumber, locale } from '@/i18n'
+import { fetchTieringStats, type TieringStats } from '@/core/tiering'
+import { t, fmtNumber, fmtRelative, locale } from '@/i18n'
 import { Heatmap } from './Heatmap'
 
 interface Snapshot {
@@ -150,6 +151,9 @@ export function StatsPage() {
             </Button>
           </EmptyState>
         </Card>
+        {/* Auto-tiering survives with zero models — the router decides
+            on config alone, so its card stays honest instead of hiding */}
+        <TieringCard />
       </div>
     )
   }
@@ -293,6 +297,9 @@ export function StatsPage() {
           idle={idle ? t('stats.gauge.noGeneration') : t('stats.gauge.pagingNa')}
         />
       </div>
+
+      {/* ── Auto-tiering (real route telemetry, split + recent) ── */}
+      <TieringCard />
 
       {/* ── Charts (client ring buffer — session window) ────────── */}
       <div class="st-charts">
@@ -439,5 +446,88 @@ function PageTitle() {
         <span aria-hidden="true">📊</span> {t('nav.stats')}
       </h1>
     </header>
+  )
+}
+
+/* ── Auto-tiering card for Live Stats — big fast/quality split + the
+   three most recent routes. Self-contained poller (3s) so it works in
+   BOTH page states (including the zero-models empty state — the router
+   decides on config alone, so the card stays honest there). */
+function TieringCard() {
+  const stats = useSignal<TieringStats | null>(null)
+  useEffect(() => {
+    const poller = createPoller(async () => {
+      try {
+        stats.value = await fetchTieringStats()
+      } catch {
+        // keep last good value — honest, never a fabricated split
+      }
+    }, 3000)
+    poller.start()
+    poller.kick()
+    const offFocus = refreshOnFocus(async () => poller.kick())
+    return () => {
+      poller.stop()
+      offFocus()
+    }
+  }, [])
+
+  return (
+    <section class="ov-section">
+      <h2 class="ov-section__title">
+        ⚡ {t('stats.tiering.title')}
+        <Tip label={t('stats.tiering.tip')} />
+      </h2>
+      <Card class="ov-tiering">
+        {!stats.value ? (
+          <p class="set-note">{t('common.loading')}</p>
+        ) : !stats.value.enabled ? (
+          <div class="ov-tiering__state">
+            <Badge tone="neutral">{t('common.off')}</Badge>
+            <span class="ov-tiering__note">{t('stats.tiering.disabled')}</span>
+            <Button variant="soft" size="sm" onClick={() => navigate('settings')}>
+              {t('overview.tiering.openSettings')}
+            </Button>
+          </div>
+        ) : stats.value.total_routes === 0 ? (
+          <EmptyState emoji="⚡" title={t('overview.tiering.emptyTitle')} body={t('overview.tiering.emptyBody')}>
+            <Button variant="soft" size="sm" onClick={() => navigate('chat')}>
+              {t('overview.quick.chat')}
+            </Button>
+          </EmptyState>
+        ) : (
+          <>
+            <div class="st-tiering__split">
+              <div class="st-tiering__big st-tiering__big--fast">
+                <span class="st-tiering__num tnum">{fmtNumber(stats.value.by_tier.fast ?? 0)}</span>
+                <span class="st-tiering__label">⚡ {t('stats.tiering.fast')}</span>
+              </div>
+              <div class="st-tiering__big st-tiering__big--quality">
+                <span class="st-tiering__num tnum">{fmtNumber(stats.value.by_tier.quality ?? 0)}</span>
+                <span class="st-tiering__label">🎯 {t('stats.tiering.quality')}</span>
+              </div>
+              <div class="st-tiering__total tnum">
+                {fmtNumber(stats.value.total_routes)}
+                <small> {t('overview.tiering.routes')}</small>
+              </div>
+            </div>
+            {stats.value.recent.length > 0 ? (
+              <ul class="ov-tiering__recent">
+                {stats.value.recent.slice(-3).reverse().map((e, i) => (
+                  <li key={`${e.ts}-${i}`}>
+                    <span class={`ov-tiering__tier ov-tiering__tier--${e.tier}`}>
+                      {e.tier === 'fast' ? '⚡' : '🎯'}
+                    </span>
+                    <span class="ov-tiering__reason" title={e.reason}>{e.reason}</span>
+                    {e.reused ? <Badge tone="info">{t('overview.tiering.reused')}</Badge> : null}
+                    <span class="ov-tiering__when">{fmtRelative(e.ts)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+          </>
+        )}
+      </Card>
+    </section>
   )
 }

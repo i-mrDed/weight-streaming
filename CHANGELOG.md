@@ -7,6 +7,30 @@
 
 ## [Unreleased]
 
+### ⚡ Auto-tiering round 5 — live stats card, history export, gate re-verify
+- **Auto-tiering card in Live Stats**: the Stats page now shows the tier
+  split (big fast/quality numbers), total routes and the newest events
+  — real data from `GET /v1/tiering/stats`, with an honest empty state
+  when nothing has been routed yet.
+- **Export route history**: the Overview drawer can now download the
+  recorded routes as JSON or Markdown (one click, browser download).
+- **EXP-023 — gate re-verified through the PRODUCTION route**: the Thai
+  gate (9 questions) re-run on the shipped Gemma 12B/26B pair via
+  `/v1/tiering/route` — **9/9 with tonal 6/6 on both tiers** (see
+  `research/experiments/EXP-023-reverify-thai-gate/`).
+- **BUG FIX (found by the re-verify): ⚡ Auto truncated long answers.**
+  The route loaded models with the server-wide n_ctx=2048 and the shipped
+  defaults were missing `-fa on` — together they stopped generation
+  mid-thought at ~430 tokens (no `-fa on`) or ~1950 tokens (ctx cap),
+  silently cutting every long answer. Fixes:
+  - Defaults now carry `-fa on` (the exact recipe EXP-022 measured).
+  - Per-tier `n_ctx` in the tier config — fast **8192** (12B fits VRAM,
+    no speed cost), quality **4096** (the 26B pays ~13% decode for an
+    8192 KV cache; 4096 costs ~7% and fits real long answers) — and the
+    route forwards it. Hub/scan pin sets the same per-tier values.
+  - Regression tests: defaults carry the recipe, route forwards n_ctx,
+    a null n_ctx is omitted (never a literal None).
+
 ### ⚡ Auto-tiering — route requests to the right model (user-configurable)
 - **Pin from the Models page**: every scan result now has a "Tier" menu —
   pick ⚡ fast or 🎯 quality and the scanned model becomes that tier

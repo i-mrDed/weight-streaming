@@ -1443,12 +1443,21 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
                 reused_id = None
         effective_id = reused_id or entry["model_id"]
         if reused_id is None:
+            # n_ctx comes from the tier config (default 8192 — the
+            # server-wide 2048 would cap output at ~1950 tokens and
+            # truncate long answers mid-thought, EXP-023). Only pass it
+            # when set: load() pops n_ctx without coalescing None.
+            load_kwargs: dict = {
+                "extra_args": entry.get("extra_args"),
+                "n_threads": entry.get("n_threads"),
+            }
+            if entry.get("n_ctx"):
+                load_kwargs["n_ctx"] = int(entry["n_ctx"])
             try:
                 await tmanager.load_or_get(
                     model_id=entry["model_id"],
                     model_path=entry["model_path"],
-                    extra_args=entry.get("extra_args"),
-                    n_threads=entry.get("n_threads"),
+                    **load_kwargs,
                 )
             except Exception as e:
                 raise HTTPException(

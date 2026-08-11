@@ -1527,6 +1527,53 @@ select.md-input { cursor: pointer; }
   font-size: var(--ws-text-sm);
 }
 
+.ov-tiering-drawer__side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+/* ── Live Stats: big fast/quality split ───────────────────────────── */
+.st-tiering__split {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  flex-wrap: wrap;
+  padding: 4px 2px 8px;
+}
+
+.st-tiering__big {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.st-tiering__num {
+  font-size: 2rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.st-tiering__big--fast .st-tiering__num { color: var(--ws-accent, #facc15); }
+.st-tiering__big--quality .st-tiering__num { color: #f472b6; }
+
+.st-tiering__label {
+  font-size: 0.78rem;
+  color: var(--ws-text-tertiary);
+}
+
+.st-tiering__total {
+  margin-left: auto;
+  font-size: 1.05rem;
+  color: var(--ws-text-secondary);
+}
+
+.st-tiering__total small {
+  font-size: 0.76rem;
+  color: var(--ws-text-tertiary);
+}
+
 .ov-tiering-drawer__list {
   list-style: none;
   margin: 0;

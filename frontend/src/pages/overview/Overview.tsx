@@ -49,6 +49,43 @@ function fmtDuration(ms: number): string {
   return `${sec}s`
 }
 
+function downloadBlob(name: string, content: string, type: string) {
+  const blob = new Blob([content], { type })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+/** Route history → Markdown table (evidence-export, same data as the JSON). */
+function routesToMarkdown(st: TieringStats): string {
+  const rows = st.recent
+    .slice()
+    .reverse()
+    .map((e) => {
+      const when = new Date(e.ts).toISOString()
+      const meta = [
+        e.model_id,
+        e.prompt_chars != null ? `${e.prompt_chars} chars` : '',
+        e.reused ? 'reused' : '',
+      ].filter(Boolean).join(' · ')
+      return `| ${e.tier} | ${when} | ${e.reason.replace(/\|/g, '\\|')} | ${meta} |`
+    })
+    .join('\n')
+  return [
+    '# Auto-tiering route history',
+    '',
+    `Exported: ${new Date().toISOString()} — ${st.total_routes} routes total`,
+    '',
+    '| tier | time (UTC) | reason | model · chars · reused |',
+    '|---|---|---|---|',
+    rows,
+    '',
+  ].join('\n')
+}
+
 /** First model that recorded paging telemetry this session — honest "latest". */
 function pickPaging(stats: StatsPayload | null): { id: string; ms: ModelStats } | null {
   if (!stats) return null
@@ -152,6 +189,7 @@ export function Overview() {
       tierAll.value = tierStats.value // honest fallback: whatever the card has
     }
   }
+  const tAll = tierAll.value // local capture — TS narrowing across signals
   const uptime = onlineSince.current !== null ? fmtDuration(Date.now() - onlineSince.current) : null
 
   const doUnload = async () => {
@@ -489,7 +527,7 @@ export function Overview() {
         side="right"
         width={520}
       >
-        {!tierAll.value ? (
+        {!tAll ? (
           <p class="set-note">{t('common.loading')}</p>
         ) : (
           <>
@@ -505,15 +543,51 @@ export function Overview() {
                   { value: 'quality', label: `🎯 ${t('overview.tiering.filterQuality')}` },
                 ]}
               />
-              <span class="ov-tiering-drawer__count tnum">
-                {fmtNumber(tierAll.value.total_routes)} {t('overview.tiering.routes')}
-              </span>
+              <div class="ov-tiering-drawer__side">
+                <span class="ov-tiering-drawer__count tnum">
+                  {fmtNumber(tAll.total_routes)} {t('overview.tiering.routes')}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() =>
+                    downloadBlob(
+                      `tiering-routes-${new Date().toISOString().slice(0, 10)}.json`,
+                      JSON.stringify(
+                        {
+                          exported_at: new Date().toISOString(),
+                          total_routes: tAll.total_routes,
+                          by_tier: tAll.by_tier,
+                          by_reason: tAll.by_reason,
+                          events: tAll.recent,
+                        },
+                        null,
+                        2,
+                      ),
+                      'application/json',
+                    )
+                  }
+                >
+                  {t('overview.tiering.exportJson')}
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => downloadBlob(
+                    `tiering-routes-${new Date().toISOString().slice(0, 10)}.md`,
+                    routesToMarkdown(tAll),
+                    'text/markdown',
+                  )}
+                >
+                  {t('overview.tiering.exportMd')}
+                </Button>
+              </div>
             </div>
-            {tierAll.value.recent.length === 0 ? (
+            {tAll.recent.length === 0 ? (
               <EmptyState emoji="⚡" title={t('overview.tiering.emptyTitle')} body={t('overview.tiering.emptyBody')} />
             ) : (
               <ul class="ov-tiering-drawer__list">
-                {tierAll.value.recent
+                {tAll.recent
                   .slice()
                   .reverse()
                   .filter((e) => tierFilter.value === 'all' || e.tier === tierFilter.value)

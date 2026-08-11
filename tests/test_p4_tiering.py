@@ -288,6 +288,49 @@ def test_route_short_prompt_uses_fast_tier(tmp_path, monkeypatch, real_gguf):
     assert stub.loaded and stub.loaded[0]["id"] == "fast-m"
 
 
+def test_default_pair_carries_exp022_recipe():
+    """EXP-023 regression: the shipped defaults must match the measured
+    bench recipe (`-fa on` + draft flags) and load with a real n_ctx — the
+    server-wide 2048 would truncate long answers mid-thought. The quality
+    tier uses a smaller ctx: the 26B pays real decode speed for KV size
+    (EXP-023: warm 34.1 @ 8192 vs 39.2 @ 2048), while the VRAM-resident
+    12B does not."""
+    for tier in ("fast", "quality"):
+        entry = tiering.default_config()[tier]
+        assert "-fa on" in entry["extra_args"], f"{tier} missing -fa on"
+    assert tiering.default_config()["fast"]["n_ctx"] == 8192
+    assert tiering.default_config()["quality"]["n_ctx"] == 4096
+
+
+def test_route_forwards_n_ctx_from_config(tmp_path, monkeypatch, real_gguf):
+    """EXP-023 regression: the route must pass the tier's n_ctx to the load
+    (not the server-wide 2048) so long generations are not truncated."""
+    payload = {
+        "fast": {"model_id": "fast-m", "model_path": real_gguf, "n_ctx": 8192},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, stub = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    r = client.post("/v1/tiering/route",
+                    json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200
+    assert stub.loaded[0].get("n_ctx") == 8192
+
+
+def test_route_with_null_n_ctx_skips_the_kwarg(tmp_path, monkeypatch, real_gguf):
+    """An explicit null n_ctx (e.g. a hand-edited config) must not forward
+    a literal None (load() pops n_ctx without coalescing) — the route
+    omits the kwarg so the server default applies."""
+    payload = {
+        "fast": {"model_id": "fast-m", "model_path": real_gguf, "n_ctx": None},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, stub = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    r = client.post("/v1/tiering/route",
+                    json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200
+    assert "n_ctx" not in stub.loaded[0]
+
+
 def test_route_long_prompt_uses_quality_tier(tmp_path, monkeypatch, real_gguf):
     payload = {
         "max_prompt_chars": 100,

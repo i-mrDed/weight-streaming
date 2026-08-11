@@ -80,5 +80,12 @@
     "host": "Host",
     "priority": "Priority",
     "queue": "Queue depth"
+  },
+  "tiering": {
+    "title": "Auto-tiering",
+    "tip": "Real routing telemetry — which tier handled requests and why. Never fabricated.",
+    "disabled": "Auto-tiering is off — enable it in Settings to route between a fast and a quality model.",
+    "fast": "fast routes",
+    "quality": "quality routes"
   }
 }
