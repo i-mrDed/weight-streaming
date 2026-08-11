@@ -35,6 +35,7 @@ def collect_debug_context(
     last_endpoint: Optional[str] = None,
     extra: Optional[Dict[str, Any]] = None,
     log_tail: Optional[List[str]] = None,
+    tiering: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """Build a privacy-safe debug bundle for issue reports."""
     app_version = "unknown"
@@ -70,4 +71,8 @@ def collect_debug_context(
         ctx["server_log_tail"] = log_tail[-50:]
     if extra:
         ctx["extra"] = _redact_dict(extra)
+    if tiering is not None:
+        # Aggregated auto-tiering routing summary (enabled + per-tier/per-
+        # reason totals). The server never sends prompts in a report.
+        ctx["tiering"] = _redact_dict(tiering)
     return ctx

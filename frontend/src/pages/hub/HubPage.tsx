@@ -80,6 +80,7 @@ import {
   type ResearchExperiment,
 } from '@/core/hub'
 import { browseDir, suggestModelId } from '@/core/models'
+import { fetchTieringConfig, pinTier, unpinTier, type TieringConfigResponse } from '@/core/tiering'
 import { assistants, refreshAssistants } from '@/core/assistants'
 // conversations are client-side (localStorage ws-chat-index-v1) — the delete
 // dialogs count their references to a model file straight from the signal
@@ -164,6 +165,9 @@ export function HubPage() {
   // quality gate. Served without network; renders before the latest feed.
   const recommended = useSignal<HubRecommendedEntry[]>([])
   const recommendedError = useSignal<SearchError | null>(null)
+  // Current auto-tiering config — drives the "pinned" badges on quant cards
+  // (a quant whose file is the fast/quality tier shows its badge + unpin).
+  const tierCfg = useSignal<TieringConfigResponse | null>(null)
 
   // Latest GGUF feed (P5.2): a cursor-paginated "recent" browse shown on the
   // idle Hub (before any search) so users discover new models directly.
@@ -259,6 +263,11 @@ export function HubPage() {
           detail: e instanceof ApiError && e.detail ? e.detail : String(e),
         }
       })
+    // tiering config for the pin badges — failure just hides the badges
+    // (the pin buttons themselves still work and report errors honestly)
+    void fetchTieringConfig()
+      .then((r) => (tierCfg.value = r))
+      .catch(() => undefined)
     // a Models-page "find in Hub" shortcut may carry a search term (once)
     const focus = hubFocusQuery.value
     if (focus) {
@@ -307,6 +316,34 @@ export function HubPage() {
     for (const f of files) {
       // eslint-disable-next-line no-await-in-loop
       await startDownload(repoId, f.filename, targetDir.value || undefined)
+    }
+  }
+
+  // Pin a curated quant as an auto-tiering tier. The server resolves the
+  // exact measured filenames on disk (no full scan) and wires MTP draft
+  // flags when the sibling draft file is present.
+  const pinAsTier = async (tier: 'fast' | 'quality', files: { filename: string }[]) => {
+    try {
+      const res = await pinTier(tier, files.map((f) => f.filename))
+      tierCfg.value = { config: res.config, problems: [] }
+      toast('success', t(tier === 'fast' ? 'hub.recPinnedFast' : 'hub.recPinnedQuality'))
+    } catch (e) {
+      toast('error', t('hub.recPinFailed'), {
+        body: e instanceof ApiError && e.detail ? e.detail : String(e),
+      })
+    }
+  }
+
+  // Undo a pin — restore that tier to the shipped default pair.
+  const unpinAsTier = async (tier: 'fast' | 'quality') => {
+    try {
+      const res = await unpinTier(tier)
+      tierCfg.value = { config: res.config, problems: [] }
+      toast('success', t('hub.recUnpinned'))
+    } catch (e) {
+      toast('error', t('hub.recUnpinFailed'), {
+        body: e instanceof ApiError && e.detail ? e.detail : String(e),
+      })
     }
   }
 
@@ -515,8 +552,11 @@ export function HubPage() {
                   <RecommendedCard
                     key={entry.repo_id + entry.name}
                     entry={entry}
+                    tierCfg={tierCfg.value}
                     onDownload={(files) => void downloadGroup(entry.repo_id, files)}
                     onEvidence={(exp) => void openEvidence(exp)}
+                    onPin={(tier, files) => void pinAsTier(tier, files)}
+                    onUnpin={(tier) => void unpinAsTier(tier)}
                   />
                 ))}
               </div>
@@ -980,18 +1020,39 @@ function thaiChip(quant: HubRecommendedQuant): { tone: 'ok' | 'error' | 'neutral
   return { tone, label }
 }
 
+/* A quant's MAIN file name (basename) — the Hub list carries draft files as
+   "MTP/mtp-….gguf", so the main model is the first non-draft entry. The
+   server's pin endpoint uses the SAME rule, so basenames line up. */
+function quantMainFile(quant: HubRecommendedQuant): string {
+  const main = quant.files.find((f) => {
+    const low = f.filename.toLowerCase()
+    const dir = f.filename.split('/').slice(0, -1).join('/').toLowerCase()
+    const isDraft = /mtp|draft/.test(low) && /mtp/.test(dir)
+    return !isDraft
+  })
+  return (main?.filename ?? quant.files[0]?.filename ?? '').split('/').pop() ?? ''
+}
+
 function RecommendedCard({
   entry,
+  tierCfg,
   onDownload,
   onEvidence,
+  onPin,
+  onUnpin,
 }: {
   entry: HubRecommendedEntry
+  tierCfg: TieringConfigResponse | null
   onDownload: (files: HubRecommendedQuant['files']) => void
   onEvidence: (expPath: string) => void
+  onPin: (tier: 'fast' | 'quality', files: HubRecommendedQuant['files']) => void
+  onUnpin: (tier: 'fast' | 'quality') => void
 }) {
   const role = roleMeta(entry.role)
   const author = repoAuthor(entry.repo_id)
   const tagline = pickLocaleText(entry.tagline, locale.value)
+  const fastBasename = tierCfg?.config.fast.model_basename?.toLowerCase() ?? null
+  const qualityBasename = tierCfg?.config.quality.model_basename?.toLowerCase() ?? null
   return (
     <Card class="hub-card hr-card">
       <div class="hub-card__head">
@@ -1034,6 +1095,12 @@ function RecommendedCard({
               </div>
               <div class="hr-quant__chips">
                 {chip ? <Badge tone={chip.tone}>{chip.label}</Badge> : null}
+                {quantMainFile(quant).toLowerCase() === fastBasename ? (
+                  <Badge tone="ok" icon="⚡">{t('hub.recBadgeFast')}</Badge>
+                ) : null}
+                {quantMainFile(quant).toLowerCase() === qualityBasename ? (
+                  <Badge tone="ok" icon="🎯">{t('hub.recBadgeQuality')}</Badge>
+                ) : null}
                 {quant.flags ? (
                   <span class="hr-quant__flags" title={t('hub.recFlagsHint')}>
                     {quant.flags}
@@ -1045,6 +1112,44 @@ function RecommendedCard({
                 <Button variant="ghost" size="sm" onClick={() => onEvidence(quant.experiment)} title={t('hub.recExpTitle')}>
                   <FileBox size={13} aria-hidden="true" /> {t('hub.recExp')}
                 </Button>
+                {quantMainFile(quant).toLowerCase() === fastBasename ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title={t('hub.recUnpinTitle')}
+                    onClick={() => onUnpin('fast')}
+                  >
+                    ↺ {t('hub.recUnpin')}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title={t('hub.recPinTitle')}
+                    onClick={() => onPin('fast', quant.files)}
+                  >
+                    ⚡ {t('hub.recPinFast')}
+                  </Button>
+                )}
+                {quantMainFile(quant).toLowerCase() === qualityBasename ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title={t('hub.recUnpinTitle')}
+                    onClick={() => onUnpin('quality')}
+                  >
+                    ↺ {t('hub.recUnpin')}
+                  </Button>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    title={t('hub.recPinTitle')}
+                    onClick={() => onPin('quality', quant.files)}
+                  >
+                    🎯 {t('hub.recPinQuality')}
+                  </Button>
+                )}
                 <Button variant="soft" size="sm" onClick={() => onDownload(quant.files)}>
                   <DownloadCloud size={13} aria-hidden="true" /> {t('hub.recDownload')}
                 </Button>

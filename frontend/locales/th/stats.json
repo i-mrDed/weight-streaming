@@ -80,5 +80,12 @@
     "host": "โฮสต์",
     "priority": "ความสำคัญ",
     "queue": "ความลึกของคิว"
+  },
+  "tiering": {
+    "title": "Auto-tiering",
+    "tip": "สถิติการ route จริง — คำขอถูกส่งไป tier ไหน ด้วยเหตุผลอะไร ไม่มีการแต่งตัวเลข",
+    "disabled": "Auto-tiering ปิดอยู่ — เปิดใน Settings เพื่อ route ระหว่างโมเดลเร็วกับโมเดลคุณภาพ",
+    "fast": "route เร็ว",
+    "quality": "route คุณภาพ"
   }
 }

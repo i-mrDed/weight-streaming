@@ -87,7 +87,6 @@
   "dlClearFailed": "ล้างไม่สำเร็จ",
   "dlOpenFolder": "เปิดโฟลเดอร์",
   "dlOpenFolderFailed": "เปิดโฟลเดอร์ไม่ได้",
-
   "details": "รายละเอียด",
   "detailTitle": "รายละเอียดโมเดล",
   "detailLoading": "กำลังโหลดรายละเอียด…",
@@ -112,7 +111,6 @@
   "allTags": "แท็กทั้งหมด",
   "fileList": "{{count}} ไฟล์",
   "na": "ไม่มีข้อมูล",
-
   "catChat": "แชท",
   "catCode": "โค้ด",
   "catEmbedding": "embedding",
@@ -124,7 +122,6 @@
   "featVision": "vision",
   "featThai": "ภาษาไทย",
   "featMoe": "MoE",
-
   "filesSummary": "{{files}} ไฟล์ ใน {{quants}} quants",
   "filesGroupHint": "การ์ดจัดกลุ่มไฟล์ตาม quant (หนึ่งป้ายต่อ quant) ส่วนแผงนี้แสดงไฟล์ทั้งหมด รวมถึงแต่ละ shard",
   "perFileNa": "ยอดดาวน์โหลดมีเฉพาะระดับ repo — Hugging Face ไม่มียอดรายไฟล์",
@@ -134,14 +131,12 @@
   "fp16Label": "ไม่ quantize — ใหญ่มาก",
   "nonGguf": "ไฟล์อื่น (ไม่ใช่ GGUF)",
   "nonGgufNote": "ไม่ใช่โมเดล (เช่น README, imatrix) — เซิร์ฟเวอร์ดาวน์โหลดเฉพาะไฟล์ .gguf",
-
   "latestTitle": "ล่าสุดจาก Hugging Face",
   "latestHint": "โมเดล GGUF ล่าสุดเรียงตามการอัปเดตล่าสุดจาก Hugging Face — ไม่ใช่การจัดอันดับหรือรับรองโดยทีม",
   "latestLoading": "กำลังโหลดโมเดลล่าสุด…",
   "pagePrev": "ก่อนหน้า",
   "pageNext": "ถัดไป",
   "pageCounter": "หน้า {{page}}",
-
   "recTitle": "พิสูจน์แล้วบนเครื่องนี้",
   "recHint": "โมเดลที่เราวัดจริงบนเครื่องอ้างอิง (VRAM 12 GB / RAM 64 GB) พร้อม Thai quality gate — ทุกตัวเลขเชื่อมโยงถึงหลักฐานการทดสอบ ปุ่มดาวน์โหลดจะโหลด quant ที่เราวัดจริงตัวนั้น",
   "recLoading": "กำลังโหลดคำแนะนำ…",
@@ -162,5 +157,17 @@
   "recExpResults": "ผลที่วัดได้",
   "recExpAnalysis": "บทสรุป",
   "recFlagsHint": "llama-server flags ที่ใช้ในการวัด",
-  "recDownload": "ดาวน์โหลด"
+  "recDownload": "ดาวน์โหลด",
+  "recPinTitle": "ตั้ง quant นี้เป็น tier ของ auto-tiering (ค้นหาไฟล์ที่วัดจริงบนดิสก์)",
+  "recPinFast": "ตั้ง ⚡ เร็ว",
+  "recPinQuality": "ตั้ง 🎯 คุณภาพ",
+  "recPinnedFast": "ตั้งเป็น tier เร็ว แล้ว (auto-tiering)",
+  "recPinnedQuality": "ตั้งเป็น tier คุณภาพ แล้ว (auto-tiering)",
+  "recPinFailed": "ตั้ง tier ไม่สำเร็จ — โหลดโมเดลนี้ลงเครื่องก่อนหรือยัง?",
+  "recBadgeFast": "tier เร็ว",
+  "recBadgeQuality": "tier คุณภาพ",
+  "recUnpin": "ยกเลิก",
+  "recUnpinTitle": "นำ quant นี้ ออกจาก auto-tiering — คืนค่าเริ่มต้นที่ติดมากับระบบสำหรับ tier นี้",
+  "recUnpinned": "คืน tier เป็นค่าเริ่มต้นแล้ว",
+  "recUnpinFailed": "ไม่สามารถยกเลิกการตั้ง tier ได้"
 }

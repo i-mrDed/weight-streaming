@@ -295,6 +295,9 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     app.state.recent_logs = ring_handler
     # Expose the Hub download manager (test access + P5 wiring convenience).
     app.state.hub_manager = hub_manager
+    # Expose the usage recorder so feature endpoints (auto-tiering routing
+    # stats) can append event telemetry to the same ring + JSONL.
+    app.state.usage_recorder = usage_recorder
 
     # Health check
     @app.get("/health")
@@ -720,6 +723,11 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
                 n_threads=request.n_threads,
                 gpu_layers=request.gpu_layers,
                 kv_cache_type=request.kv_cache_type,
+                # llama-server extra args (e.g. MTP draft flags). The schema
+                # field was missing until now — the endpoint silently
+                # dropped it, which wasted a whole EXP-023 penalty matrix on
+                # flags that never reached the subprocess.
+                extra_args=request.extra_args,
             )
             return ModelActionResponse(
                 status="loaded",
@@ -871,10 +879,33 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:
             logger.exception("Anthropic message failed")
-            raise HTTPException(status_code=500, detail=str(e))
-    
-    # ── Issue Tracking ──────────────────────────────────────────────
-    
+            raise HTTPException(status_code=500, detail=str(e))    # ── Issue Tracking ──────────────────────────────────────────────
+
+    def _tiering_debug_summary() -> Optional[dict]:
+        """Compact auto-tiering snapshot for issue reports: enabled flag +
+        route totals (aggregated per tier/reason — no per-event detail, so
+        the report stays small and contains no prompts). Honest: None when
+        anything fails (a report must never break because of telemetry)."""
+        try:
+            cfg = tiering.load_config()
+            urec = getattr(app.state, "usage_recorder", None)
+            events = urec.history(kind="tier_route") if urec is not None else []
+            by_tier: dict[str, int] = {}
+            by_reason: dict[str, int] = {}
+            for e in events:
+                k = str(e.get("tier", "?"))
+                by_tier[k] = by_tier.get(k, 0) + 1
+                r = str(e.get("reason", "?"))
+                by_reason[r] = by_reason.get(r, 0) + 1
+            return {
+                "enabled": cfg.get("enabled", False),
+                "total_routes": len(events),
+                "by_tier": by_tier,
+                "by_reason": by_reason,
+            }
+        except Exception:
+            return None
+
     @app.get("/v1/debug/context")
     async def debug_context(
         model_path: str | None = None,
@@ -893,6 +924,7 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             last_error=last_error,
             last_endpoint=last_endpoint,
             log_tail=list(recent_errors[-50:]),
+            tiering=_tiering_debug_summary(),
         )
     
     @app.post("/v1/issues")
@@ -902,7 +934,10 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             # Merge server debug context if client context incomplete
             if not body.context.get("app_version"):
                 body.context = {
-                    **collect_debug_context(log_tail=list(recent_errors[-50:])),
+                    **collect_debug_context(
+                        log_tail=list(recent_errors[-50:]),
+                        tiering=_tiering_debug_summary(),
+                    ),
                     **(body.context or {}),
                 }
             issue = issue_service.create(body)
@@ -1384,6 +1419,14 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         Returns ``{tier, model_id, model_path, reason}``. When the config is
         disabled the call is refused (409) — the caller should fall back to
         its own model choice instead of silently routing.
+
+        Reuse-first: when the tier's file is ALREADY loaded (even under a
+        different model_id — e.g. the user loaded it manually), the route
+        reuses it instead of evicting + reloading the same file, and reports
+        the EFFECTIVE loaded model_id (``reused: true``) so the caller can
+        generate against it immediately. Each successful route is recorded
+        into the usage history as a ``tier_route`` event (real telemetry;
+        a recorder hiccup never breaks routing).
         """
         cfg = tiering.load_config()
         if not cfg.get("enabled", False):
@@ -1396,24 +1439,155 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         tier, reason = tiering.decide_tier(cfg, messages, options)
         entry = cfg[tier]
         tmanager = getattr(app.state, "tiering_manager", manager)
-        try:
-            await tmanager.load_or_get(
-                model_id=entry["model_id"],
-                model_path=entry["model_path"],
-                extra_args=entry.get("extra_args"),
-                n_threads=entry.get("n_threads"),
-            )
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"tier '{tier}' model failed to load: {e}",
-            )
+        find = getattr(tmanager, "find_loaded_path", None)
+        reused_id: Optional[str] = None
+        if callable(find):
+            try:
+                reused_id = find(entry["model_path"])
+            except Exception:
+                reused_id = None
+        effective_id = reused_id or entry["model_id"]
+        if reused_id is None:
+            # n_ctx comes from the tier config (default 8192 — the
+            # server-wide 2048 would cap output at ~1950 tokens and
+            # truncate long answers mid-thought, EXP-023). Only pass it
+            # when set: load() pops n_ctx without coalescing None.
+            load_kwargs: dict = {
+                "extra_args": entry.get("extra_args"),
+                "n_threads": entry.get("n_threads"),
+            }
+            if entry.get("n_ctx"):
+                load_kwargs["n_ctx"] = int(entry["n_ctx"])
+            try:
+                await tmanager.load_or_get(
+                    model_id=entry["model_id"],
+                    model_path=entry["model_path"],
+                    **load_kwargs,
+                )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"tier '{tier}' model failed to load: {e}",
+                )
+        urec = getattr(app.state, "usage_recorder", None)
+        if urec is not None:
+            try:
+                urec.record_event(
+                    "tier_route",
+                    tier=tier,
+                    reason=reason,
+                    model_id=effective_id,
+                    model_path=entry["model_path"],
+                    prompt_chars=len(tiering.prompt_text(messages)),
+                    reused=bool(reused_id),
+                )
+            except Exception:
+                pass  # telemetry must never break routing
         return {
             "tier": tier,
-            "model_id": entry["model_id"],
+            "model_id": effective_id,
             "model_path": entry["model_path"],
             "reason": reason,
+            "reused": reused_id is not None,
+            # Per-tier output budget (EXP-023): callers clamp their request's
+            # max_tokens to this — the fast tier is for quick answers and
+            # must not burn the full budget on a degenerate loop.
+            "max_tokens": entry.get("max_tokens"),
         }
+
+    @app.post("/v1/tiering/preview")
+    async def preview_tiering(body: Dict[str, Any]):
+        """Preview the routing decision WITHOUT loading any model — uses the
+        LIVE config, so the answer is always real, never stale.
+
+        Body (same shape as /v1/tiering/route): ``{"messages": [...],
+        "options": {reasoning_mode/effort}}``. Returns ``{tier, reason,
+        model_id, model_path}`` — what WOULD run, not what ran. 409 when
+        the config is disabled (the caller can fall back to its own choice).
+        """
+        cfg = tiering.load_config()
+        if not cfg.get("enabled", False):
+            raise HTTPException(
+                status_code=409,
+                detail="auto-tiering is disabled — fall back to an explicit model",
+            )
+        messages = body.get("messages") or []
+        options = body.get("options") or {}
+        tier, reason = tiering.decide_tier(cfg, messages, options)
+        entry = cfg[tier]
+        return {
+            "tier": tier,
+            "reason": reason,
+            "model_id": entry["model_id"],
+            "model_path": entry["model_path"],
+        }
+
+    @app.post("/v1/tiering/unpin")
+    async def unpin_tiering(body: Dict[str, Any]):
+        """Restore one tier to the shipped default (undo a user pin).
+
+        Body: ``{"tier": "fast"|"quality"}``. Only that tier changes — the
+        other tier and the enabled/threshold settings are untouched. 400 for
+        an invalid tier name.
+        """
+        try:
+            saved = tiering.unpin_tier(str(body.get("tier", "")))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"status": "saved", "config": tiering.resolve_state(saved)}
+
+    @app.get("/v1/tiering/stats")
+    async def tiering_stats(limit: int = 100):
+        """Auto-tiering routing statistics — real telemetry from the usage
+        history ``tier_route`` events (never fabricated).
+
+        Returns the enabled flag (from config), totals per tier/reason/model,
+        and the newest events (capped by ``limit``, latest 10 in ``recent``).
+        A fresh install has ``total_routes: 0`` — an honest empty, not a lie.
+        """
+        cfg = tiering.load_config()
+        urec = getattr(app.state, "usage_recorder", None)
+        events = (urec.history(kind="tier_route") if urec is not None else [])
+        recent = events[-limit:] if limit and limit > 0 else events
+        by_tier: dict[str, int] = {}
+        by_reason: dict[str, int] = {}
+        by_model: dict[str, int] = {}
+        for e in events:
+            k = str(e.get("tier", "?"))
+            by_tier[k] = by_tier.get(k, 0) + 1
+            k2 = str(e.get("reason", "?"))
+            by_reason[k2] = by_reason.get(k2, 0) + 1
+            k3 = str(e.get("model_id", "?"))
+            by_model[k3] = by_model.get(k3, 0) + 1
+        return {
+            "enabled": cfg.get("enabled", False),
+            "total_routes": len(events),
+            "by_tier": by_tier,
+            "by_reason": by_reason,
+            "by_model": by_model,
+            "recent": events[-10:],
+            "count": len(recent),
+        }
+
+    @app.post("/v1/tiering/pin")
+    async def pin_tiering(body: Dict[str, Any]):
+        """Pin a tier from exact file names (Hub recommended list → disk).
+
+        Body: ``{"tier": "fast"|"quality", "files": ["main.gguf", ...]}``.
+        Resolves the files under the model search dirs (no full scan), wires
+        MTP draft flags when a sibling draft file is present, saves, and
+        returns the updated config. 400 with a readable message when a file
+        is not on disk or the tier is invalid.
+        """
+        try:
+            saved = tiering.pin_tier(
+                str(body.get("tier", "")),
+                [str(f) for f in (body.get("files") or [])],
+                get_model_search_dirs(),
+            )
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"status": "saved", "config": tiering.resolve_state(saved)}
 
     return app, manager
 

@@ -47,23 +47,54 @@ DEFAULT_MAX_PROMPT_CHARS = 2000
 DEFAULT_REASONING_QUALITY = "high"  # reasoning effort >= this → quality tier
 
 # Shipped default pair (EXP-022 / EXP-019 — proven on this rig).
+#
+# The extra_args mirror the EXACT recipe the bench harness measured
+# (EXP-022: "-fa on -t 8 --spec-draft-model … --spec-draft-n-max 2"):
+# `-fa on` is not optional — without flash attention the MTP draft path
+# stops generation early (~430 tokens, mid-thought, EXP-023).
+#
+# n_ctx is raised from the server default 2048: Gemma 4 writes long EN
+# think blocks and the route's load would otherwise cap output at ~1950
+# tokens (n_ctx − prompt), truncating every long answer (EXP-023 found
+# the truncation live via /v1/tiering/route). The two tiers get different
+# n_ctx because the KV cache is NOT free:
+#   - fast (12B, fits fully in VRAM): 8192 — no measurable speed cost
+#     (EXP-023: 71.4 vs 72.3 tok/s pre-fix) and ~8K output headroom.
+#   - quality (26B, already spills to CPU): 4096 — ctx 8192 costs ~13%
+#     decode on this rig (warm 34.1 vs 39.2 at 2048) while 4096 costs
+#     only ~7% and still fits real long answers (~2.5K output budget after
+#     a 3000-char prompt).
 DEFAULT_FAST = {
     "model_id": "gemma-4-12b-qat-mtp",
     "model_path": os.path.expanduser(
         r"~/models/Gemma4-12B-QAT/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf"),
-    "extra_args": ("--spec-type draft-mtp --spec-draft-model "
+    "extra_args": ("-fa on --spec-type draft-mtp --spec-draft-model "
                    r"~/models/Gemma4-12B-QAT/MTP/mtp-gemma-4-12B-it-Q8_0.gguf "
                    "--spec-draft-n-max 2"),
     "n_threads": 8,
+    "n_ctx": 8192,
+    # Output budget cap: the fast tier is for QUICK answers. Gemma 4 can
+    # fall into a deterministic repetition loop on hard questions at
+    # temperature 0 (EXP-023: "let me re-verify…" until the token cap —
+    # repeat/presence/DRY penalties all verified-in-cmdline and none
+    # escape it); 2048 bounds the burn to ~30 s while leaving room for
+    # every normal answer. The client (⚡ Auto chat + the gate) clamps to
+    # this.
+    "max_tokens": 2048,
 }
 DEFAULT_QUALITY = {
     "model_id": "gemma-4-26b-qat-mtp",
     "model_path": os.path.expanduser(
         r"~/models/Gemma4-26B-A4B-QAT/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf"),
-    "extra_args": ("--spec-type draft-mtp --spec-draft-model "
+    "extra_args": ("-fa on --spec-type draft-mtp --spec-draft-model "
                    r"~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf "
                    "--spec-draft-n-max 2"),
     "n_threads": 12,  # EXP-020: -t 12 is the measured optimum for the 26B
+    "n_ctx": 4096,
+    # 8192 = schema cap: the quality tier answers the same hard questions
+    # cleanly (EXP-023 tonal 6/6 with a summary table in ~1800 tokens), so
+    # it gets the full budget for genuinely long reasoning.
+    "max_tokens": 8192,
 }
 
 REASONING_LEVELS = {"off": 0, "low": 1, "medium": 2, "high": 3}
@@ -177,15 +208,143 @@ def save_config(cfg: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _same_path(a: Any, b: Any) -> bool:
+    """Normalized (case-fold + realpath + ~-expanded) path equality — the
+    same rule the manager uses when reusing an already-loaded model."""
+    try:
+        return os.path.normcase(os.path.realpath(os.path.expanduser(str(a or "")))) == \
+            os.path.normcase(os.path.realpath(os.path.expanduser(str(b or ""))))
+    except Exception:
+        return False
+
+
+def is_default_tier(cfg: dict[str, Any], tier: str) -> bool:
+    """True when a tier still points at the shipped default entry (model id +
+    path + draft flags) — i.e. the user never pinned/edited it. Compares the
+    NORMALIZED config (``load_config``/``normalize_config`` output), so ~ and
+    separator spellings can't fake a difference."""
+    if tier not in ("fast", "quality"):
+        return False
+    # Normalize the shipped default exactly like a stored config (~ and
+    # separator expansion) so a default-on-disk compares equal to the
+    # default-in-code — spelling differences can't fake a pin.
+    d = normalize_config(default_config())[tier]
+    entry = cfg.get(tier) or {}
+    return (
+        entry.get("model_id") == d["model_id"]
+        and _same_path(entry.get("model_path"), d["model_path"])
+        and str(entry.get("extra_args", "")).replace("/", "\\") ==
+        str(d["extra_args"]).replace("/", "\\")
+    )
+
+
 def resolve_state(cfg: dict[str, Any]) -> dict[str, Any]:
-    """Attach per-tier on-disk resolution so the UI can show a broken pair."""
+    """Attach per-tier on-disk resolution so the UI can show a broken pair,
+    plus the file basename (for Hub pin badges) and whether the tier is still
+    the shipped default (for the unpin/reset affordance)."""
     out = dict(cfg)
     for tier in ("fast", "quality"):
         entry = cfg.get(tier) or {}
         resolved = bool(entry.get("model_path")) and Path(
             entry["model_path"]).is_file()
-        out[tier] = {**entry, "file_resolved": resolved}
+        out[tier] = {
+            **entry,
+            "file_resolved": resolved,
+            "model_basename": Path(str(entry.get("model_path", ""))).name,
+            "is_default": is_default_tier(cfg, tier),
+        }
     return out
+
+
+def unpin_tier(tier: str) -> dict[str, Any]:
+    """Restore ONE tier to the shipped default entry (undo a user pin from
+    the Hub/Settings). The other tier and the enabled/threshold settings are
+    untouched. Raises ValueError on an invalid tier name."""
+    if tier not in ("fast", "quality"):
+        raise ValueError(f"tier must be 'fast' or 'quality', got {tier!r}")
+    cfg = load_config()
+    cfg[tier] = dict(default_config()[tier])
+    return save_config(cfg)
+
+
+# ── pin from model files (Hub recommended list) ────────────────────────
+
+
+def find_model_file(filename: str, search_dirs: list[str]) -> Optional[str]:
+    """Locate a GGUF file (by exact name, case-insensitive) under the given
+    model directories. Returns the absolute path or None. Walks each dir
+    lazily and stops at the first match — the Hub recommended list pins
+    real downloaded files without forcing a full model scan."""
+    # The Hub list carries paths like "MTP/mtp-gemma-...gguf" — match on
+    # the bare basename (search walks every directory anyway).
+    wanted = Path(filename).name.lower()
+    for d in search_dirs:
+        root = Path(d)
+        if not root.is_dir():
+            continue
+        # Walk with a cap so a huge store (DS V4 shards) can't hang the
+        # request — honest limitation, not a silent timeout.
+        for dirpath, dirnames, filenames in os.walk(root):
+            dirnames[:] = [x for x in dirnames if x.lower() != "node_modules"]
+            for name in filenames:
+                if name.lower() == wanted:
+                    return str(Path(dirpath) / name)
+    return None
+
+
+def pin_tier(
+    tier: str,
+    files: list[str],
+    search_dirs: list[str],
+) -> dict[str, Any]:
+    """Pin a tier from file names (the Hub recommended list provides the
+    exact quant filenames it measured). Resolves each file on disk, wires
+    MTP draft flags when a sibling draft is present, and saves.
+
+    Raises ValueError (user-readable) when the tier or a required file is
+    not found on disk.
+    """
+    if tier not in ("fast", "quality"):
+        raise ValueError(f"tier must be 'fast' or 'quality', got {tier!r}")
+    if not files:
+        raise ValueError("files must be a non-empty list of filenames")
+
+    main: Optional[str] = None
+    draft: Optional[str] = None
+    for f in files:
+        found = find_model_file(f, search_dirs)
+        if not found:
+            raise ValueError(f"file not found on disk: {f}")
+        low = f.lower()
+        if any(x in low for x in ("mtp", "draft")) and "mtp" in Path(found).parent.name.lower():
+            draft = found
+        elif main is None:
+            main = found
+    if main is None:
+        raise ValueError(
+            "none of the files look like a main model (only MTP drafts given)")
+
+    model_id = Path(main).name.replace(".gguf", "", 1)
+    extra = ""
+    if draft:
+        # Same recipe as the shipped defaults: -fa on is required for the
+        # MTP draft path (EXP-023: without it llama-server stops generation
+        # early mid-thought). n_ctx keeps long answers from truncating.
+        extra = (f"-fa on --spec-type draft-mtp --spec-draft-model "
+                 f"{draft.replace(os.sep, '/')} --spec-draft-n-max 2")
+
+    cfg = load_config()
+    cfg[tier] = {
+        **cfg.get(tier, {}),
+        "model_id": model_id,
+        "model_path": main,
+        "extra_args": extra,
+        # Same split as the shipped defaults: the fast tier (VRAM-resident)
+        # can afford 8192; the quality tier pays real decode for KV size.
+        "n_ctx": 8192 if tier == "fast" else 4096,
+        "max_tokens": 2048 if tier == "fast" else 8192,
+    }
+    return save_config(cfg)
 
 
 # ── pure decision rule ──────────────────────────────────────────────────

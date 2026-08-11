@@ -65,5 +65,23 @@
     "colTokens": "Tokens",
     "colSpeed": "tok/s",
     "colWhen": "When"
+  },
+  "tiering": {
+    "title": "Auto-tiering",
+    "tip": "Real routing telemetry from /v1/tiering/stats — which tier handled requests and why. Never fabricated.",
+    "disabled": "Auto-tiering is off — enable it in Settings to route requests between a fast and a quality model.",
+    "openSettings": "Open Settings",
+    "emptyTitle": "No routes yet",
+    "emptyBody": "Send a chat with the ⚡ Auto model selected and routing statistics will appear here.",
+    "routes": "routes",
+    "reused": "reused",
+    "viewAll": "View all",
+    "drawerTitle": "Auto-tiering routes",
+    "drawerFilter": "Filter by tier",
+    "filterAll": "All",
+    "filterFast": "Fast",
+    "filterQuality": "Quality",
+    "exportJson": "Export JSON",
+    "exportMd": "Export MD"
   }
 }

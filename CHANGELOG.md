@@ -7,12 +7,93 @@
 
 ## [Unreleased]
 
+### ⚡ Auto-tiering round 6 — bound the fast tier's output budget (EXP-023 loop)
+- **Per-tier `max_tokens`**: the tier config now carries an output budget
+  per tier — fast **2048** (quick answers; a degenerate repetition loop —
+  Gemma 4's temp-0 "let me re-verify…" — burns at most ~30 s instead of
+  the full 8192) and quality **8192** (the 26B answers the same hard
+  questions cleanly). `POST /v1/tiering/route` returns the tier's
+  `max_tokens`; the ⚡ Auto chat clamps its request to it (`min(user
+  setting, tier cap)`); the Thai-gate runner uses the route's budget per
+  tier. Pinning a model from Hub/scan sets the same per-tier cap.
+- **`/v1/models/load` now accepts `extra_args`**: the field was missing
+  from `ModelLoadRequest`, so manual loads silently DROPPED llama-server
+  flags (caught live in EXP-023 — a whole penalty matrix ran without its
+  flags). The schema field forwards to the backend (same path the tiering
+  route uses), so manual loads can carry e.g. MTP draft flags.
+- **EXP-023 findings documented**: the 12B repetition loop was tested with
+  repeat/presence/DRY penalties (all verified in the live cmdline) — none
+  escape the temp-0 attractor; the loop is a benchmarking-path artifact
+  (product chat is temp 0.7 + max_tokens 1024 and does not loop). See
+  `research/experiments/EXP-023-reverify-thai-gate/results.md`.
+
+### ⚡ Auto-tiering round 5 — live stats card, history export, gate re-verify
+- **Auto-tiering card in Live Stats**: the Stats page now shows the tier
+  split (big fast/quality numbers), total routes and the newest events
+  — real data from `GET /v1/tiering/stats`, with an honest empty state
+  when nothing has been routed yet.
+- **Export route history**: the Overview drawer can now download the
+  recorded routes as JSON or Markdown (one click, browser download).
+- **EXP-023 — gate re-verified through the PRODUCTION route**: the Thai
+  gate (9 questions) re-run on the shipped Gemma 12B/26B pair via
+  `/v1/tiering/route` — **9/9 with tonal 6/6 on both tiers** (see
+  `research/experiments/EXP-023-reverify-thai-gate/`).
+- **BUG FIX (found by the re-verify): ⚡ Auto truncated long answers.**
+  The route loaded models with the server-wide n_ctx=2048 and the shipped
+  defaults were missing `-fa on` — together they stopped generation
+  mid-thought at ~430 tokens (no `-fa on`) or ~1950 tokens (ctx cap),
+  silently cutting every long answer. Fixes:
+  - Defaults now carry `-fa on` (the exact recipe EXP-022 measured).
+  - Per-tier `n_ctx` in the tier config — fast **8192** (12B fits VRAM,
+    no speed cost), quality **4096** (the 26B pays ~13% decode for an
+    8192 KV cache; 4096 costs ~7% and fits real long answers) — and the
+    route forwards it. Hub/scan pin sets the same per-tier values.
+  - Regression tests: defaults carry the recipe, route forwards n_ctx,
+    a null n_ctx is omitted (never a literal None).
+
 ### ⚡ Auto-tiering — route requests to the right model (user-configurable)
 - **Pin from the Models page**: every scan result now has a "Tier" menu —
   pick ⚡ fast or 🎯 quality and the scanned model becomes that tier
   (fetch-merge-save, other tier untouched). Pinning a Gemma QAT model
   auto-wires its MTP draft flags from the sibling `MTP/` file (EXP-022
   measured +20% with draft-mtp); pinning a DIFFERENT model clears the
+  stale draft args so they never leak into another model's cmdline.
+- **Pin from the Hub**: every "Proven on this rig" card now has
+  ⚡ fast / 🎯 quality buttons that call the new `POST /v1/tiering/pin`
+  endpoint — resolves the exact measured quant files on disk, wires the
+  MTP draft sibling, and saves the tier without needing a full scan
+  (adds `recPin*` strings to en/th hub locales).
+- **Overlap fix**: the Models scan result "Tier" popup (Menu-wrapped
+  button-in-button) overlapped the "Use in load form" button — replaced
+  with two inline compact buttons (⚡ fast / 🎯 quality), no popup.
+- `data/tiering.json` (machine-local absolute paths) is now gitignored
+  — the server regenerates the default pair when the file is missing.
+- **Unpin + active-tier badges**: Hub quant cards that ARE the fast/quality
+  tier show a ⚡/🎯 badge and their pin button becomes ↺ Unpin (undo →
+  restores the shipped default via new `POST /v1/tiering/unpin`); Settings
+  shows a "Reset to default" button per non-default tier. The config
+  response now carries `model_basename` + `is_default` per tier.
+- **Reuse-already-loaded on route**: `/v1/tiering/route` now checks the
+  loaded models by NORMALIZED PATH before loading — if the tier's file is
+  already resident (even under a different model_id, e.g. loaded manually)
+  it reuses it instead of evicting + reloading, and returns the effective
+  `model_id` with `reused: true`.
+- **Routing stats (Overview)**: every successful route is recorded into the
+  usage history as a `kind: tier_route` event (shared ring + JSONL, never
+  mixed into the generation history). New `GET /v1/tiering/stats`
+  aggregates totals per tier/reason/model + the newest events; the Overview
+  dashboard shows a live Auto-tiering card (total, ⚡/🎯 split, recent
+  reasons, reused marker) with an honest empty/disabled state.
+- **Test the router (Settings)**: a prompt box + reasoning selector calls
+  the new `POST /v1/tiering/preview` — decides the tier from the LIVE
+  config WITHOUT loading any model (verified: it never spawns a backend)
+  and shows tier + reason + the model that would run.
+- **Route history drawer (Overview)**: the Auto-tiering card now has
+  "View all" → a drawer listing every recorded route (up to 200) with a
+  fast/quality filter and per-event model/chars/reused metadata.
+- **Debug context**: issue reports now carry a compact auto-tiering
+  snapshot (enabled + totals per tier/reason — no prompts, no per-event
+  detail) through `collect_debug_context(tiering=…)`.
   previous model's extra args so a stale draft path can never leak into
   the new model's llama-server cmdline.
 - **Any two models, not hardcoded**: Settings → Auto-tiering lets the user

@@ -87,7 +87,6 @@
   "dlClearFailed": "Clear failed",
   "dlOpenFolder": "Open folder",
   "dlOpenFolderFailed": "Could not open the folder",
-
   "details": "Details",
   "detailTitle": "Model details",
   "detailLoading": "Loading details…",
@@ -112,7 +111,6 @@
   "allTags": "All tags",
   "fileList": "{{count}} files",
   "na": "n/a",
-
   "catChat": "chat",
   "catCode": "code",
   "catEmbedding": "embedding",
@@ -124,7 +122,6 @@
   "featVision": "vision",
   "featThai": "Thai",
   "featMoe": "MoE",
-
   "filesSummary": "{{files}} files in {{quants}} quants",
   "filesGroupHint": "Cards group files by quant (one badge per quant). This panel lists every file, including each shard.",
   "perFileNa": "Download counts are per repository only — Hugging Face does not provide per-file counts.",
@@ -134,14 +131,12 @@
   "fp16Label": "unquantized — very large",
   "nonGguf": "Other files (not GGUF)",
   "nonGgufNote": "These are not models (e.g. README, imatrix) — the server only downloads .gguf files.",
-
   "latestTitle": "Latest from Hugging Face",
   "latestHint": "Newest GGUF models by last update, straight from Hugging Face — not ranked or endorsed by us.",
   "latestLoading": "Loading latest models…",
   "pagePrev": "Previous",
   "pageNext": "Next",
   "pageCounter": "Page {{page}}",
-
   "recTitle": "Proven on this rig",
   "recHint": "Models we measured on the reference machine (12 GB VRAM / 64 GB RAM) with the Thai quality gate — every number links to its experiment evidence. Download fetches exactly the quant we tested.",
   "recLoading": "Loading recommendations…",
@@ -162,5 +157,17 @@
   "recExpResults": "Measured results",
   "recExpAnalysis": "Verdict",
   "recFlagsHint": "llama-server flags used in the measurement",
-  "recDownload": "Download"
+  "recDownload": "Download",
+  "recPinTitle": "Pin this exact quant as an auto-tiering tier (resolves the measured files on disk)",
+  "recPinFast": "Pin ⚡ fast",
+  "recPinQuality": "Pin 🎯 quality",
+  "recPinnedFast": "Pinned as the fast tier (auto-tiering)",
+  "recPinnedQuality": "Pinned as the quality tier (auto-tiering)",
+  "recPinFailed": "Could not pin the tier — is this model downloaded?",
+  "recBadgeFast": "fast tier",
+  "recBadgeQuality": "quality tier",
+  "recUnpin": "Unpin",
+  "recUnpinTitle": "Remove this quant from auto-tiering — restore the shipped default for this tier",
+  "recUnpinned": "Tier restored to the default",
+  "recUnpinFailed": "Could not unpin the tier"
 }

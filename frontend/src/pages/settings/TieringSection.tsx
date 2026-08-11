@@ -13,8 +13,11 @@ import { t } from '@/i18n'
 import { scanModels, type ScanModel } from '@/core/models'
 import {
   fetchTieringConfig,
+  previewTiering,
   saveTieringConfig,
+  unpinTier,
   type TieringConfig,
+  type TieringPreviewResponse,
 } from '@/core/tiering'
 
 interface Props {
@@ -122,6 +125,13 @@ export function TieringSection() {
   const quality = useSignal<{ model_id: string; model_path: string; extra_args: string }>({
     model_id: '', model_path: '', extra_args: '',
   })
+  // "Test the router" box — decides WITHOUT loading any model (server-side
+  // live config, so the answer is always real).
+  const previewPrompt = useSignal('')
+  const previewReasoning = useSignal<'off' | 'low' | 'medium' | 'high'>('off')
+  const previewing = useSignal(false)
+  const previewResult = useSignal<TieringPreviewResponse | null>(null)
+  const previewError = useSignal('')
 
   async function load() {
     loading.value = true
@@ -181,6 +191,52 @@ export function TieringSection() {
     }
   }
 
+  async function doPreview() {
+    if (!previewPrompt.value.trim()) {
+      toast('error', t('settings.tiering.previewEmpty'))
+      return
+    }
+    previewing.value = true
+    previewError.value = ''
+    previewResult.value = null
+    try {
+      previewResult.value = await previewTiering({
+        messages: [{ role: 'user', content: previewPrompt.value }],
+        options: {
+          reasoning_mode: previewReasoning.value === 'off' ? undefined : previewReasoning.value,
+        },
+      })
+    } catch (e) {
+      previewError.value = e instanceof Error ? e.message : String(e)
+    } finally {
+      previewing.value = false
+    }
+  }
+
+  // Restore ONE tier to the shipped default (undo a Hub/Models pin or an
+  // edit) without touching the other tier or the thresholds.
+  async function resetTier(tier: 'fast' | 'quality') {
+    try {
+      const res = await unpinTier(tier)
+      cfg.value = res.config
+      const c = res.config
+      if (tier === 'fast') {
+        fast.value = {
+          model_id: c.fast.model_id, model_path: c.fast.model_path,
+          extra_args: c.fast.extra_args || '',
+        }
+      } else {
+        quality.value = {
+          model_id: c.quality.model_id, model_path: c.quality.model_path,
+          extra_args: c.quality.extra_args || '',
+        }
+      }
+      toast('success', t('settings.tiering.resetDone'))
+    } catch (e) {
+      toast('error', String(e))
+    }
+  }
+
   return (
     <Card class="set-card">
       <div class="set-row">
@@ -206,20 +262,34 @@ export function TieringSection() {
       ) : (
         <>
           <div class="tier-grid">
-            <ModelPicker
-              label={`⚡ ${t('settings.tiering.fastTier')}`}
-              value={fast.value}
-              models={models.value}
-              resolved={cfg.value?.fast.file_resolved}
-              onChange={(v) => (fast.value = v)}
-            />
-            <ModelPicker
-              label={`🎯 ${t('settings.tiering.qualityTier')}`}
-              value={quality.value}
-              models={models.value}
-              resolved={cfg.value?.quality.file_resolved}
-              onChange={(v) => (quality.value = v)}
-            />
+            <div class="tier-col">
+              <ModelPicker
+                label={`⚡ ${t('settings.tiering.fastTier')}`}
+                value={fast.value}
+                models={models.value}
+                resolved={cfg.value?.fast.file_resolved}
+                onChange={(v) => (fast.value = v)}
+              />
+              {cfg.value?.fast.is_default === false ? (
+                <button class="tier-reset" onClick={() => void resetTier('fast')}>
+                  ↺ {t('settings.tiering.reset')}
+                </button>
+              ) : null}
+            </div>
+            <div class="tier-col">
+              <ModelPicker
+                label={`🎯 ${t('settings.tiering.qualityTier')}`}
+                value={quality.value}
+                models={models.value}
+                resolved={cfg.value?.quality.file_resolved}
+                onChange={(v) => (quality.value = v)}
+              />
+              {cfg.value?.quality.is_default === false ? (
+                <button class="tier-reset" onClick={() => void resetTier('quality')}>
+                  ↺ {t('settings.tiering.reset')}
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div class="set-row">
@@ -237,6 +307,52 @@ export function TieringSection() {
                 if (!Number.isNaN(n) && n > 0) maxChars.value = n
               }}
             />
+          </div>
+
+          {/* ── Test the router (decides without loading) ────────── */}
+          <div class="tier-preview">
+            <div class="tier-preview__head">
+              <strong>{t('settings.tiering.previewTitle')}</strong>
+              <span class="set-note">{t('settings.tiering.previewNote')}</span>
+            </div>
+            <textarea
+              class="tier-preview__input"
+              rows={3}
+              placeholder={t('settings.tiering.previewPlaceholder')}
+              value={previewPrompt.value}
+              onInput={(e) => (previewPrompt.value = (e.target as HTMLTextAreaElement).value)}
+            />
+            <div class="tier-preview__row">
+              <Segmented
+                ariaLabel={t('settings.tiering.previewReasoning')}
+                size="sm"
+                value={previewReasoning.value}
+                onChange={(v) => (previewReasoning.value = v as 'off' | 'low' | 'medium' | 'high')}
+                options={['off', 'low', 'medium', 'high'].map((v) => ({ value: v, label: v }))}
+              />
+              <Button
+                variant="soft"
+                size="sm"
+                loading={previewing.value}
+                onClick={() => void doPreview()}
+                disabled={!previewPrompt.value.trim()}
+              >
+                ⚡ {t('settings.tiering.previewGo')}
+              </Button>
+            </div>
+            {previewResult.value ? (
+              <div class={`tier-preview__result tier-preview__result--${previewResult.value.tier}`}>
+                <strong>
+                  {previewResult.value.tier === 'fast' ? '⚡' : '🎯'} {t('settings.tiering.previewTier_' + previewResult.value.tier)}
+                </strong>
+                <span class="set-note">
+                  {previewResult.value.reason} · {previewResult.value.model_id}
+                </span>
+              </div>
+            ) : null}
+            {previewError.value ? (
+              <p class="tier-preview__error">{previewError.value}</p>
+            ) : null}
           </div>
 
           <div class="set-actions">

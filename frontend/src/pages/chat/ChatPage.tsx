@@ -301,12 +301,18 @@ export function ChatPage() {
     // Auto-tiering: when the conversation is on ⚡ Auto, ask the server to
     // route this request to fast or quality and use the resolved model.
     let modelId = c.model
+    // The tier's own output budget (EXP-023): the fast tier is for quick
+    // answers — clamp max_tokens so a degenerate long generation (Gemma 4
+    // repetition loop) burns at most the tier's budget, never the user's
+    // 8K setting.
+    let tierMaxTokens: number | null = null
     if (c.model === AUTO_MODEL) {
       try {
         const routed = await routeTiering({ messages, options: {
           reasoning_mode: reasoningCapable ? reasoningMode.value : undefined,
         } })
         modelId = routed.model_id
+        tierMaxTokens = routed.max_tokens ?? null
         toast('info', `${t('chat.model.auto')} → ${routed.tier === 'fast' ? '⚡' : '🎯'} ${routed.model_id}`)
       } catch (e) {
         toast('error', String(e))
@@ -321,7 +327,7 @@ export function ChatPage() {
       stream: true,
       temperature: c.params.temperature,
       top_p: c.params.top_p,
-      max_tokens: c.params.max_tokens,
+      max_tokens: tierMaxTokens ? Math.min(c.params.max_tokens, tierMaxTokens) : c.params.max_tokens,
       reasoning_effort: effort.value,
       reasoning_mode: reasoningCapable ? reasoningMode.value : undefined,
       thinking_budget: reasoningCapable ? thinkingBudget.value : undefined,
