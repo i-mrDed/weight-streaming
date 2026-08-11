@@ -27,7 +27,7 @@
 | ✅ | Smoke scripts (`test_llama_server.py`, `test_tools.py`, `test_mcp.py`, `test_assistants.py`) — path เป็น env-driven | 🟡 | 2026-08-11: `WS_TEST_MODEL` + `WS_DATA_DIR` fallback เป็น temp dir |
 | ✅ | `scripts/measure_*.py` — default `WS_TEST_MODEL` จาก `D:/models/...` → `~/models/...` | 🟡 | 2026-08-11: 6 scripts; `os.path.expanduser` ตอนอ่านค่า (convention เดียวกับ tiering.py) |
 | ✅ | Experiment artifacts (`research/experiments/EXP-0*/`) + `docs/MODEL_INVENTORY.md` — ～-ize paths | 🟢 | 2026-08-11: 20 ไฟล์ (`C:/Users/dedch/...`, `C:\Users\dedch\...`, `D:/models`, `D:\models`) → `~/models/...`; audit doc ใช้ `<user>` placeholder; JSON ตรวจ parse ผ่าน; `git grep dedch` ใน research+docs สะอาด |
-| ⬜ | ลบ `Qwen3.6-35B-A3B-UD-IQ2_M.gguf.part` (7.9 GB) ออกจาก working tree | 🟢 | gitignored ไม่ถูก push แต่กินพื้นที่ repo root (user: ยังไม่ให้ลบ) |
+| ✅ | ลบ `Qwen3.6-35B-A3B-UD-IQ2_M.gguf.part` (7.8 GB) ออกจาก working tree | 🟢 | 2026-08-11: ยืนยันเป็น download ค้าง 73% (mtime ค้าง 7.5h, hub task = 0, ไม่มีโค้ดอ่านไฟล์นี้; โมเดลเต็มอยู่ที่ D:/models แล้ว) → ลบ — Hermeticity Fixes ปิดครบทุกข้อ |
 
 ---
 
