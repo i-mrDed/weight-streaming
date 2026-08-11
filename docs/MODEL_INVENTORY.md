@@ -1,6 +1,6 @@
 # Model Inventory (บันทึกตำแหน่ง + บทบาทของโมเดลทั้งหมด)
 
-> อัปเดตล่าสุด: 2026-08-10 — ควรอัปเดตทุกครั้งที่ดาวน์โหลด/ลบ/ย้ายโมเดล
+> อัปเดตล่าสุด: 2026-08-11 — ควรอัปเดตทุกครั้งที่ดาวน์โหลด/ลบ/ย้ายโมเดล
 > **กฎ:** ดาวน์โหลดผ่าน hub → เขียนที่ `WS_MODELS_DIR` (ถ้าตั้ง) หรือโฟลเดอร์ default
 > (รวม `~/models` = `C:\Users\<user>\models` บน Windows) — ดู `weight_stream/server/config.py`
 > และหน้า Models → LIBRARY ของ console เพื่อดูรายการจริงเสมอ
@@ -13,7 +13,8 @@
 | Qwen3.6-35B-A3B | UD-IQ2_M | 10.7 GB | `D:\models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ2_M.gguf` | unsloth (HF) | **Thai-safe benchmark บน 12 GB** (43–56 tok/s) — ก่อน EXP-019 เป็น daily driver ไทย | ✅ ใช้ประจำ |
 | Qwen3.6-35B-A3B | UD-IQ2_XXS | 10.0 GB | `D:\models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf` | unsloth (HF) | non-Thai speed king (61–66 tok/s) — Thai tonal FAIL (EXP-018) | ✅ วัดเสร็จ (EXP-018) |
 | Qwen3.6-35B-A3B | UD-IQ1_M | 9.4 GB | `D:\models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ1_M.gguf` | unsloth (HF) | speed-first (74.7 tok/s) — Thai tonal FAIL | ✅ วัดเสร็จ (EXP-011) |
-| **Gemma 4 26B-A4B** | QAT UD-Q4_K_XL + MTP draft Q8_0 | 14.25 + 0.46 GB | `C:\Users\dedch\models\Gemma4-26B-A4B-QAT\` (+ `MTP\`) | unsloth (HF) | **NEW daily driver (ไทย): Thai gate 9/9 + tonal 6/6 PERFECT, 45–47 tok/s ด้วย MTP (EXP-019)** | ✅ วัดเสร็จ (EXP-019) — ใช้กับ `--spec-type draft-mtp` |
+| **Gemma 4 12B** | QAT UD-Q4_K_XL + MTP draft Q8_0 | 6.72 + 0.47 GB | `C:\Users\dedch\models\Gemma4-12B-QAT\` (+ `MTP\`) | unsloth (HF) | **NEW daily driver เร็วสุด (ไทย): Thai 9/9 + tonal 6/6, 75.7 tok/s sustained — พอดี VRAM 12 GB (EXP-022)** | ✅ วัดเสร็จ (EXP-022) — ใช้กับ `--spec-type draft-mtp -t 8` |
+| **Gemma 4 26B-A4B** | QAT UD-Q4_K_XL + MTP draft Q8_0 | 14.25 + 0.46 GB | `C:\Users\dedch\models\Gemma4-26B-A4B-QAT\` (+ `MTP\`) | unsloth (HF) | **quality-first daily driver (ไทย): Thai 9/9 + tonal 6/6 PERFECT, 49–51 tok/s ด้วย MTP+t12 (EXP-019/020)** | ✅ วัดเสร็จ (EXP-019+EXP-020) — ใช้กับ `-t 12 --spec-type draft-mtp` |
 | Qwen3-0.6B-Q8_0 | Q8_0 | 0.6 GB | `C:\Users\dedch\models\Qwen3-0.6B-Q8_0.gguf` | — | draft/helper ขนาดเล็ก | ✅ |
 
 ## 🧠 Embedding models
@@ -39,6 +40,7 @@
 |---|---|---|---|---|
 | Gemma 4 26B-A4B | QAT Q4_K_M (เล็กลงจาก Q4_K_XL ถ้าต้องการประหยัด VRAM) | ~12–13 GB | ~13 GB | ⏸ ตัวเลือกถ้า Q4_K_XL spill รบกวน (ตอนนี้ 45–47 tok/s ใช้ได้) |
 | DeepSeek-V4-Flash-0731 | **UD-IQ2_M** (`--variant iq2m`) | ~96 GB | ~40 GB | ⏸ เลื่อนก่อน (กำไร 8% ไม่คุ้ม — ตัดสินใจแล้ว) |
+| ik_llama.cpp fork | Windows build (ไม่มี binary — ต้อง build) | ~8–10 GB (toolchain) | ⏸ เลื่อน — EXP-021: mainline ใหม่กว่าไม่ชนะ b9967, 3060 เป็นคอขวด |
 
 ## 🗑️ ประวัติการลบ
 

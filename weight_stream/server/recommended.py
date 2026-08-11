@@ -30,13 +30,56 @@ ROLE_BALANCED = "balanced"  # Thai-safe but slower than the speed tier
 
 RECOMMENDED: list[dict] = [
     {
+        "repo_id": "unsloth/gemma-4-12B-it-qat-GGUF",
+        "name": "Gemma 4 12B",
+        "arch": "dense 12B",
+        "role": ROLE_THAI,
+        "tagline": {
+            "en": "Fastest Thai-safe model measured on this rig — fits fully in VRAM",
+            "th": "โมเดลไทยปลอดภัยที่เร็วสุดที่วัดได้บนเครื่องนี้ — พอดี VRAM",
+        },
+        "quants": [
+            {
+                "quant": "UD-Q4_K_XL + MTP draft Q8_0",
+                "files": [
+                    {"filename": "gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
+                     "bytes": 6_716_356_800},
+                    {"filename": "MTP/mtp-gemma-4-12B-it-Q8_0.gguf",
+                     "bytes": 465_127_936},
+                ],
+                "total_bytes": 7_181_484_736,
+                "tok_s_min": 68,
+                "tok_s_max": 76,
+                "thai_correct": 9,
+                "thai_total": 9,
+                "thai_tonal_correct": 6,
+                "thai_tonal_total": 6,
+                "experiment": "research/experiments/EXP-022-gemma4-12b",
+                "notes": {
+                    "en": ("Fits entirely in 12 GB VRAM (no CPU spill) — the "
+                           "fastest Thai-safe model measured on this rig: "
+                           "75.7 tok/s sustained with Thai gate 9/9 + tonal "
+                           "6/6 (EXP-022). +52% faster than the 26B QAT at "
+                           "the same Thai quality; threads don't matter "
+                           "(t8 = t12)."),
+                    "th": ("พอดี VRAM 12 GB ทั้งหมด (ไม่ spill) — โมเดลที่เร็ว "
+                           "สุดและไทยปลอดภัยที่วัดได้บนเครื่องนี้: 75.7 tok/s "
+                           "ต่อเนื่อง + Thai gate 9/9 + วรรณยุกต์ 6/6 "
+                           "(EXP-022) เร็วกว่า 26B QAT +52% ด้วยคุณภาพไทย "
+                           "เท่ากัน"),
+                },
+                "flags": "-t 8 --spec-type draft-mtp --spec-draft-n-max 2",
+            },
+        ],
+    },
+    {
         "repo_id": "unsloth/gemma-4-26B-A4B-it-qat-GGUF",
         "name": "Gemma 4 26B-A4B",
         "arch": "MoE 26B-A4B",
         "role": ROLE_THAI,
         "tagline": {
-            "en": "Thai-safe daily driver — QAT keeps Q4 ≈ Q8 quality",
-            "th": "ตัวหลักใช้ภาษาไทย — QAT รักษาคุณภาพ Q4 ≈ Q8",
+            "en": "Thai-safe quality-first — the stronger 26B-A4B, ~50 tok/s",
+            "th": "คุณภาพนำ ไทยปลอดภัย — 26B-A4B ที่เก่งกว่า, ~50 tok/s",
         },
         "quants": [
             {
@@ -48,8 +91,8 @@ RECOMMENDED: list[dict] = [
                      "bytes": 461_785_600},
                 ],
                 "total_bytes": 14_710_832_704,
-                "tok_s_min": 45,
-                "tok_s_max": 47,
+                "tok_s_min": 47,
+                "tok_s_max": 51,
                 "thai_correct": 9,
                 "thai_total": 9,
                 "thai_tonal_correct": 6,
@@ -58,14 +101,16 @@ RECOMMENDED: list[dict] = [
                 "notes": {
                     "en": ("QAT (quantization-aware training) sidesteps the "
                            "IQ-quant quality cliff — the ONLY tested model with "
-                           "a perfect Thai tonal score (EXP-019). MTP "
-                           "speculative decoding gives ~+20% vs baseline."),
+                           "a perfect Thai tonal score (EXP-019). MTP gives "
+                           "~+20%; -t 12 (EXP-020) adds ~+13% more (49-51 "
+                           "tok/s sustained)."),
                     "th": ("QAT (การฝึกแบบตระหนักถึง quantization) ข้ามหน้าผา "
                            "คุณภาพของ IQ quant — โมเดลเดียวที่ทดสอบแล้วได้ "
-                           "คะแนนวรรณยุกต์ไทยเต็ม (EXP-019) MTP speculative "
-                           "decoding ให้ +~20% เทียบ baseline"),
+                           "คะแนนวรรณยุกต์ไทยเต็ม (EXP-019) MTP ให้ +~20% "
+                           "และ -t 12 (EXP-020) เพิ่มอีก ~+13% (49-51 tok/s "
+                           "ต่อเนื่อง)"),
                 },
-                "flags": "--spec-type draft-mtp --spec-draft-n-max 2",
+                "flags": "-t 12 --spec-type draft-mtp --spec-draft-n-max 2",
             },
         ],
     },

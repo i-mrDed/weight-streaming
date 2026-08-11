@@ -174,6 +174,19 @@ def restart_server(port: int, extra_args: str, project_root: Path,
     raise RuntimeError("server did not come up")
 
 
+def restore_clean_server(port: int, project_root: Path,
+                         log_path: Optional[Path] = None) -> None:
+    """Restart the API server WITHOUT WS_LLAMA_EXTRA_ARGS so the harness
+    leaves the machine as it found it.
+
+    Without this, the LAST config's extra args stay in the server's
+    environment (e.g. ``--spec-draft-model <gemma-4-12B draft>``) and leak
+    into every later model load — unrelated models then crash llama-server
+    at spawn (file not found / incompatible draft). Restarting with empty
+    extra args restores the clean-room baseline."""
+    restart_server(port, "", project_root, log_path=log_path)
+
+
 def llama_cmdline() -> str:
     if not _win():
         return ""

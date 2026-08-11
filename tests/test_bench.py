@@ -123,6 +123,23 @@ def test_verify_extra_args_last_occurrence_wins():
     assert measure.verify_extra_args(cmd, "-t 16") == []
 
 
+def test_restore_clean_server_starts_with_empty_extra_args(monkeypatch):
+    # Regression (EXP-022): the last config's WS_LLAMA_EXTRA_ARGS must not
+    # linger in the server env after a sweep — a stale --spec-draft-model
+    # crashed unrelated model loads. restore_clean_server must restart the
+    # server with EMPTY extra args.
+    from pathlib import Path
+
+    calls = []
+
+    def fake_restart(port, extra_args, project_root, log_path=None):
+        calls.append((port, extra_args))
+
+    monkeypatch.setattr(measure, "restart_server", fake_restart)
+    measure.restore_clean_server(8765, Path("."))
+    assert calls == [(8765, "")], f"expected empty extra args, got {calls}"
+
+
 # ── measure: /v1/stats shape normalization ─────────────────────────────
 
 

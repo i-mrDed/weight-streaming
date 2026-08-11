@@ -23,6 +23,13 @@ scripts/.ctx_scaling_out.json
 scripts/.ncmoe_matrix_out.json
 scripts/.dsv4flash_matrix_out.json
 scripts/.threads_scaling_out.json
+# one-off command/matrix artifacts (EXP-020/021 sweeps)
+scripts/.exp0*.sh
+scripts/.exp0*.log
+scripts/.exp0*.json
+scripts/.ws-*.log
+# downloaded engine binaries (large, never committed)
+tools/llama-b10357/
 scripts/.ws-server-matrix.log
 scripts/.ws-matrix.log
 

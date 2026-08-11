@@ -1,0 +1,32 @@
+{
+  "model": "D:\\models\\Qwen3.6-35B-A3B-GGUF\\Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf",
+  "configs": [
+    {
+      "config": "default",
+      "extra_args": "",
+      "flag_in_cmdline": false,
+      "cold": {
+        "tok_s": 62.25862645861693,
+        "elapsed_s": 1.9274437427520752,
+        "token_count": 120,
+        "faults_per_token": 567.5,
+        "fault_mb_per_token": 2.325,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      "warm": {
+        "tok_s": 56.739654342476236,
+        "elapsed_s": 2.1149230003356934,
+        "token_count": 120,
+        "faults_per_token": 899.0,
+        "fault_mb_per_token": 3.682,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    }
+  ]
+}

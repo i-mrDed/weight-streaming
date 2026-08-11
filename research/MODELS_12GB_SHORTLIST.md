@@ -49,10 +49,22 @@ Community verdict 2026: *"INSANE even for VRAM-constrained systems"* — เป�
 ## 🎯 แผนทดสอบ (ทำเสร็จหมดแล้ว — EXP-018/019)
 
 1. ✅ **วัด UD-IQ2_XXS ของ Qwen3.6** → 61–66 tok/s แต่ **ไทยล้ม 1/6** → reject (EXP-018)
-2. ✅ **วัด Gemma 4 26B QAT+MTP** → **45–47 tok/s + ไทย 9/9 + tonal 6/6** → **ชนะ = daily driver ไทยใหม่** (EXP-019)
-3. ✅ **บันทึก** MODEL_INVENTORY + EXP ใหม่
+2. ✅ **วัด Gemma 4 26B QAT+MTP** → **45–47 tok/s + ไทย 9/9 + tonal 6/6** → **ชนะ = daily driver ไทยใหม่** (EXP-019) → config sweep เจอ **t12 = 49–51 tok/s** (EXP-020)
+3. ✅ **วัด Gemma 4 12B QAT+MTP** → **75.7 tok/s + ไทย 9/9 + tonal 6/6** → **daily driver เร็วสุด** (EXP-022)
+4. ✅ **engine swap proxy**: mainline b10357 ≈ b9967 (EXP-021) → ik build เลื่อน (ดู `IK_LLAMA_EVAL.md`)
+5. ✅ **บันทึก** MODEL_INVENTORY + EXP ใหม่ + recommended list ใน Hub
 
-> ถัดไปถ้าอยากได้เร็วขึ้น: `ik_llama.cpp` fork (+45% บน Qwen3.6 — ต้อง build เอง) หรือ Gemma 4 Q4_K_M (เล็กลง → spill น้อยลง → เร็วขึ้น)
+## 🏆 Leaderboard สุดท้าย (12 GB VRAM — วัดจริง, clean room)
+
+| โมเดล | tok/s | ไทย tonal | ใช้เมื่อ |
+|---|---|---|---|
+| **Gemma 4 12B QAT+MTP** | **76** | ✅ 6/6 | daily driver เร็วสุด (EXP-022) |
+| Qwen3.6 IQ1_M | 74.7 | ❌ 0/6 | non-Thai speed (EXP-011) |
+| Qwen3.6 IQ2_XXS | 61–66 | ❌ 1/6 | non-Thai speed (EXP-018) |
+| **Gemma 4 26B QAT+MTP** | **49–51** | ✅ 6/6 | quality-first ไทย (EXP-019/020) |
+| Qwen3.6 IQ2_M | 43–56 | ✅ | ไทย (EXP-011) |
+
+> **บทสรุป: ความเร็ว + ภาษาไทย อยู่ด้วยกันได้แล้วบน 12 GB — 12B QAT+MTP (76 tok/s) หรือ 26B QAT+MTP (50 tok/s) ตามระดับงาน** — หมดยุคต้องเลือกอย่างใดอย่างหนึ่ง
 
 ## 🔍 ที่มาข้อมูล (2026-07/08)
 

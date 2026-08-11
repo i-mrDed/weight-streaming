@@ -1,0 +1,194 @@
+{
+  "model": "C:\\Users\\dedch\\models\\Gemma4-26B-A4B-QAT\\gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+  "configs": [
+    {
+      "config": "t4",
+      "extra_args": "-fa on -t 4 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "flag_in_cmdline": true,
+      "cold": {
+        "tok_s": 31.003360836128024,
+        "elapsed_s": 3.8382935523986816,
+        "token_count": 119,
+        "faults_per_token": 1977.0,
+        "fault_mb_per_token": 8.098,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      "warm": {
+        "tok_s": 35.165798633984615,
+        "elapsed_s": 3.383969783782959,
+        "token_count": 119,
+        "faults_per_token": 1124.4,
+        "fault_mb_per_token": 4.605,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    },
+    {
+      "config": "t6",
+      "extra_args": "-fa on -t 6 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "flag_in_cmdline": true,
+      "cold": {
+        "tok_s": 38.58682298828253,
+        "elapsed_s": 3.083954334259033,
+        "token_count": 119,
+        "faults_per_token": 1847.7,
+        "fault_mb_per_token": 7.568,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      "warm": {
+        "tok_s": 41.977468579271736,
+        "elapsed_s": 2.8348541259765625,
+        "token_count": 119,
+        "faults_per_token": 1250.0,
+        "fault_mb_per_token": 5.12,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    },
+    {
+      "config": "t8",
+      "extra_args": "-fa on -t 8 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "flag_in_cmdline": true,
+      "cold": {
+        "tok_s": 35.901768034963645,
+        "elapsed_s": 3.3145999908447266,
+        "token_count": 119,
+        "faults_per_token": 1938.1,
+        "fault_mb_per_token": 7.939,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      "warm": {
+        "tok_s": 43.44833116551085,
+        "elapsed_s": 2.7388854026794434,
+        "token_count": 119,
+        "faults_per_token": 1175.4,
+        "fault_mb_per_token": 4.814,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    },
+    {
+      "config": "t12",
+      "extra_args": "-fa on -t 12 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "flag_in_cmdline": true,
+      "cold": {
+        "tok_s": 41.783857547737256,
+        "elapsed_s": 2.847989797592163,
+        "token_count": 119,
+        "faults_per_token": 1881.2,
+        "fault_mb_per_token": 7.705,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      "warm": {
+        "tok_s": 48.98952440263851,
+        "elapsed_s": 2.429090738296509,
+        "token_count": 119,
+        "faults_per_token": 1199.9,
+        "fault_mb_per_token": 4.915,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    },
+    {
+      "config": "t16",
+      "extra_args": "-fa on -t 16 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "flag_in_cmdline": true,
+      "cold": {
+        "tok_s": 35.27291414964041,
+        "elapsed_s": 3.3736934661865234,
+        "token_count": 119,
+        "faults_per_token": 1865.8,
+        "fault_mb_per_token": 7.642,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      "warm": {
+        "tok_s": 44.78697931392914,
+        "elapsed_s": 2.65702223777771,
+        "token_count": 119,
+        "faults_per_token": 1301.1,
+        "fault_mb_per_token": 5.329,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    },
+    {
+      "config": "fa off t8",
+      "extra_args": "-t 8 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "flag_in_cmdline": true,
+      "cold": {
+        "tok_s": 41.30054922076914,
+        "elapsed_s": 2.881317615509033,
+        "token_count": 119,
+        "faults_per_token": 1930.9,
+        "fault_mb_per_token": 7.909,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      "warm": {
+        "tok_s": 43.993084463938864,
+        "elapsed_s": 2.704970598220825,
+        "token_count": 119,
+        "faults_per_token": 1176.9,
+        "fault_mb_per_token": 4.821,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    },
+    {
+      "config": "kv q8 t8",
+      "extra_args": "-fa on -t 8 -ctk q8_0 -ctv q8_0 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "flag_in_cmdline": true,
+      "cold": {
+        "tok_s": 37.24283465445878,
+        "elapsed_s": 3.1952455043792725,
+        "token_count": 119,
+        "faults_per_token": 1877.9,
+        "fault_mb_per_token": 7.692,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      "warm": {
+        "tok_s": 44.66818996534454,
+        "elapsed_s": 2.664088249206543,
+        "token_count": 119,
+        "faults_per_token": 1057.6,
+        "fault_mb_per_token": 4.332,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    }
+  ]
+}

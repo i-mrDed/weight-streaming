@@ -581,6 +581,18 @@ def cmd_bench(args):
     except Exception:
         pass
 
+    # The last config's WS_LLAMA_EXTRA_ARGS would otherwise linger in the
+    # server's environment and leak into unrelated loads (observed: stale
+    # --spec-draft-model crashed a later 'test' model load). Restore the
+    # clean server unless the user explicitly asked to manage it themselves.
+    if not args.no_restart:
+        try:
+            measure.restore_clean_server(args.port, project_root)
+            print("[bench] server restored to clean baseline "
+                  "(no extra args)")
+        except Exception as e:
+            print(f"   server restore failed: {e}")
+
     out = {"model": model_path, "configs": results}
     if gate:
         out["quality_gate"] = gate

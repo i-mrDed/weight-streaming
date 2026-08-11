@@ -7,6 +7,34 @@
 
 ## [Unreleased]
 
+### ⚡ Daily driver upgraded — Gemma 4 12B QAT+MTP (EXP-022)
+- **New fastest Thai-safe model on this rig: 75.7 tok/s sustained, Thai
+  gate 9/9 + tonal 6/6** — the 6.72 GB model + 0.47 GB MTP draft fit
+  entirely in 12 GB VRAM (faults/tok ~450 vs ~1200 for the 26B, no CPU
+  spill, GPU-bound: t8 = t12). +52% faster than the 26B QAT at the same
+  Thai quality, beating the Qwen speed kings (IQ1_M 74.7 / IQ2_XXS
+  61–66) which FAIL the tonal gate.
+- Leaderboard (this machine): 12B QAT+MTP 76 (daily driver speed) ·
+  Qwen IQ1_M 74.7 (non-Thai) · Qwen IQ2_XXS 61–66 (non-Thai) ·
+  26B QAT+MTP 49–51 (quality-first) — the 12B + 26B pair now covers
+  speed AND quality with Thai safe on both.
+- EXP-020 (config sweep): **26B optimum = `-t 12`** — warm 48.99
+  (+12.7% vs t8), gate sustained 50.71, Thai unchanged; t16 regresses,
+  fa-off and KV-q8 are no-ops at 2048 ctx.
+- EXP-021 (engine swap proxy for ik_llama.cpp): mainline b10357 ≈ Jan
+  b9967 (62/57 vs 43–62/52–61) → engine is not the bottleneck; ik build
+  deferred (`research/IK_LLAMA_EVAL.md`). Lesson: prebuilt llama.cpp
+  needs the separate `cudart-llama-bin` zip or it silently falls back to
+  CPU (first run: 9 tok/s, discarded) — verify `--list-devices`.
+- Hub "Proven on this rig" updated: Gemma 4 12B added as the top
+  (thai) entry, 26B re-labelled quality-first, Gemma flags now carry
+  the measured optimum (`-t 12` for 26B).
+- Harness hardening (found by the 12B bench): after a sweep, the server
+  is now restarted WITHOUT `WS_LLAMA_EXTRA_ARGS` — the last config's
+  env (e.g. stale `--spec-draft-model`) used to linger and crash
+  unrelated model loads; `measure.restore_clean_server()` restores the
+  clean-room baseline (+ test).
+
 ### 🌐 Hub — recommendations hardened (localisation + in-app evidence)
 - ``tagline``/``notes`` in the curated list now ship BOTH project languages
   (``{"en", "th"}``) — the UI picks the active locale while the measured
