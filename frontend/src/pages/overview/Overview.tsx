@@ -21,8 +21,10 @@ import {
 import { Card } from '@/components/Card'
 import { Button } from '@/components/Button'
 import { Badge } from '@/components/Badge'
+import { Drawer } from '@/components/Drawer'
 import { EmptyState } from '@/components/EmptyState'
 import { Dialog } from '@/components/Dialog'
+import { Segmented } from '@/components/Segmented'
 import { Tip } from '@/components/Tip'
 import { Gauge } from '@/components/Gauge'
 import { toast } from '@/components/Toast'
@@ -62,6 +64,11 @@ export function Overview() {
   const activity = useSignal<UsageRecord[] | null>(null) // null = not fetched yet
   const tierStats = useSignal<TieringStats | null>(null) // null = not fetched yet
   const unreachable = useSignal(false)
+  // Auto-tiering detail drawer — the card shows a summary; the drawer lists
+  // every recorded route with a fast/quality filter.
+  const tierDrawerOpen = useSignal(false)
+  const tierFilter = useSignal<'all' | 'fast' | 'quality'>('all')
+  const tierAll = useSignal<TieringStats | null>(null)
   const onlineSince = useRef<number | null>(null)
   const tick = useSignal(0) // 1s heartbeat for the uptime label
   const unloadTarget = useSignal<string | null>(null)
@@ -135,6 +142,16 @@ export function Overview() {
   const issues = openIssueCount.value
   // heartbeat read → re-render every second so the uptime label ticks
   void tick.value
+
+  const openTierDrawer = async () => {
+    tierDrawerOpen.value = true
+    tierFilter.value = 'all'
+    try {
+      tierAll.value = await fetchTieringStats(200)
+    } catch {
+      tierAll.value = tierStats.value // honest fallback: whatever the card has
+    }
+  }
   const uptime = onlineSince.current !== null ? fmtDuration(Date.now() - onlineSince.current) : null
 
   const doUnload = async () => {
@@ -384,6 +401,9 @@ export function Overview() {
                     ))}
                   </ul>
                 ) : null}
+                <Button variant="ghost" size="sm" onClick={() => void openTierDrawer()}>
+                  {t('overview.tiering.viewAll')} →
+                </Button>
               </>
             )}
           </Card>
@@ -460,6 +480,64 @@ export function Overview() {
           </div>
         </section>
       </div>
+
+      {/* ── Auto-tiering detail drawer ────────────────────────── */}
+      <Drawer
+        open={tierDrawerOpen.value}
+        onClose={() => (tierDrawerOpen.value = false)}
+        title={t('overview.tiering.drawerTitle')}
+        side="right"
+        width={520}
+      >
+        {!tierAll.value ? (
+          <p class="set-note">{t('common.loading')}</p>
+        ) : (
+          <>
+            <div class="ov-tiering-drawer__toolbar">
+              <Segmented
+                ariaLabel={t('overview.tiering.drawerFilter')}
+                size="sm"
+                value={tierFilter.value}
+                onChange={(v) => (tierFilter.value = v as 'all' | 'fast' | 'quality')}
+                options={[
+                  { value: 'all', label: t('overview.tiering.filterAll') },
+                  { value: 'fast', label: `⚡ ${t('overview.tiering.filterFast')}` },
+                  { value: 'quality', label: `🎯 ${t('overview.tiering.filterQuality')}` },
+                ]}
+              />
+              <span class="ov-tiering-drawer__count tnum">
+                {fmtNumber(tierAll.value.total_routes)} {t('overview.tiering.routes')}
+              </span>
+            </div>
+            {tierAll.value.recent.length === 0 ? (
+              <EmptyState emoji="⚡" title={t('overview.tiering.emptyTitle')} body={t('overview.tiering.emptyBody')} />
+            ) : (
+              <ul class="ov-tiering-drawer__list">
+                {tierAll.value.recent
+                  .slice()
+                  .reverse()
+                  .filter((e) => tierFilter.value === 'all' || e.tier === tierFilter.value)
+                  .map((e, i) => (
+                    <li key={`${e.ts}-${i}`}>
+                      <span class={`ov-tiering__tier ov-tiering__tier--${e.tier}`}>
+                        {e.tier === 'fast' ? '⚡' : '🎯'}
+                      </span>
+                      <div class="ov-tiering-drawer__body">
+                        <span class="ov-tiering__reason" title={e.reason}>{e.reason}</span>
+                        <span class="ov-tiering-drawer__meta tnum">
+                          {e.model_id}
+                          {e.prompt_chars != null ? ` · ${fmtNumber(e.prompt_chars)} chars` : ''}
+                          {e.reused ? ` · ${t('overview.tiering.reused')}` : ''}
+                        </span>
+                      </div>
+                      <span class="ov-tiering__when">{fmtRelative(e.ts)}</span>
+                    </li>
+                  ))}
+              </ul>
+            )}
+          </>
+        )}
+      </Drawer>
 
       {/* ── Unload confirm ────────────────────────────────────── */}
       <Dialog

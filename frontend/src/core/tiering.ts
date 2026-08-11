@@ -38,6 +38,15 @@ export interface TieringRouteResponse {
   model_id: string
   model_path: string
   reason: string
+  /** True when the tier's file was already loaded (reused, not reloaded). */
+  reused?: boolean
+}
+
+export interface TieringPreviewResponse {
+  tier: 'fast' | 'quality'
+  reason: string
+  model_id: string
+  model_path: string
 }
 
 export function fetchTieringConfig(): Promise<TieringConfigResponse> {
@@ -56,6 +65,16 @@ export function routeTiering(req: TieringRouteRequest): Promise<TieringRouteResp
     method: 'POST',
     body: JSON.stringify(req),
   }, { timeoutMs: 5 * 60_000 })
+}
+
+/** Decide the tier for a prompt WITHOUT loading any model — uses the LIVE
+    config server-side, so the answer is always real. Used by the Settings
+    "test the router" box. */
+export function previewTiering(req: TieringRouteRequest): Promise<TieringPreviewResponse> {
+  return apiJSON<TieringPreviewResponse>('/v1/tiering/preview', {
+    method: 'POST',
+    body: JSON.stringify(req),
+  }, { timeoutMs: 10_000 })
 }
 
 /** Pin a tier from exact file names (Hub recommended list → disk). The
@@ -104,8 +123,9 @@ export interface TieringStats {
   count: number
 }
 
-export function fetchTieringStats(): Promise<TieringStats> {
-  return apiJSON<TieringStats>('/v1/tiering/stats', undefined, { timeoutMs: 10_000 })
+export function fetchTieringStats(limit?: number): Promise<TieringStats> {
+  const q = limit != null && limit > 0 ? `?limit=${limit}` : ''
+  return apiJSON<TieringStats>(`/v1/tiering/stats${q}`, undefined, { timeoutMs: 10_000 })
 }
 
 /** Swap one tier of the config (fetch current → merge → save). Used by the

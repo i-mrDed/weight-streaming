@@ -40,6 +40,16 @@
   aggregates totals per tier/reason/model + the newest events; the Overview
   dashboard shows a live Auto-tiering card (total, ⚡/🎯 split, recent
   reasons, reused marker) with an honest empty/disabled state.
+- **Test the router (Settings)**: a prompt box + reasoning selector calls
+  the new `POST /v1/tiering/preview` — decides the tier from the LIVE
+  config WITHOUT loading any model (verified: it never spawns a backend)
+  and shows tier + reason + the model that would run.
+- **Route history drawer (Overview)**: the Auto-tiering card now has
+  "View all" → a drawer listing every recorded route (up to 200) with a
+  fast/quality filter and per-event model/chars/reused metadata.
+- **Debug context**: issue reports now carry a compact auto-tiering
+  snapshot (enabled + totals per tier/reason — no prompts, no per-event
+  detail) through `collect_debug_context(tiering=…)`.
   previous model's extra args so a stale draft path can never leak into
   the new model's llama-server cmdline.
 - **Any two models, not hardcoded**: Settings → Auto-tiering lets the user

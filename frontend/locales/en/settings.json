@@ -173,7 +173,15 @@
     "needPair": "Both tiers need a model ID and a file path.",
     "saved": "Auto-tiering config saved",
     "reset": "Reset to default",
-    "resetDone": "Tier restored to the shipped default"
+    "resetDone": "Tier restored to the shipped default",
+    "previewTitle": "Test the router",
+    "previewNote": "Type a prompt and see which tier it would go to — the decision uses the LIVE config and loads nothing.",
+    "previewPlaceholder": "Paste a prompt to see how the router would decide…",
+    "previewReasoning": "Reasoning request",
+    "previewGo": "Test route",
+    "previewEmpty": "Type a prompt first",
+    "previewTier_fast": "Fast tier",
+    "previewTier_quality": "Quality tier"
   },
   "toast": {
     "densityChanged": "Density: {{name}}",

@@ -490,3 +490,86 @@ def test_tiering_stats_empty_on_fresh_install(tmp_path, monkeypatch):
     assert st["total_routes"] == 0
     assert st["by_tier"] == {}
     assert st["recent"] == []
+
+
+# ── preview endpoint (decide WITHOUT loading) ─────────────────────────
+
+
+def test_preview_returns_decision_without_loading(
+    tmp_path, monkeypatch, real_gguf
+):
+    payload = {
+        "fast": {"model_id": "fast-m", "model_path": real_gguf},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, stub = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    r = client.post("/v1/tiering/preview",
+                    json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tier"] == "fast"
+    assert "reason" in body
+    assert body["model_id"] == "fast-m"
+    assert body["model_path"] == real_gguf
+    # The critical property: preview NEVER loads anything.
+    assert stub.loaded == []
+
+
+def test_preview_long_prompt_picks_quality(tmp_path, monkeypatch, real_gguf):
+    payload = {
+        "max_prompt_chars": 100,
+        "fast": {"model_id": "fast-m", "model_path": real_gguf},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, _ = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    r = client.post("/v1/tiering/preview", json={
+        "messages": [{"role": "user", "content": "x" * 200}],
+    })
+    assert r.status_code == 200
+    assert r.json()["tier"] == "quality"
+
+
+def test_preview_disabled_returns_409(tmp_path, monkeypatch, real_gguf):
+    payload = {
+        "enabled": False,
+        "fast": {"model_id": "f", "model_path": real_gguf},
+        "quality": {"model_id": "q", "model_path": real_gguf},
+    }
+    client, _ = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    r = client.post("/v1/tiering/preview", json={"messages": []})
+    assert r.status_code == 409
+    assert "disabled" in r.json()["detail"]
+
+
+# ── debug context includes the tiering snapshot ───────────────────────
+
+
+def test_debug_context_includes_tiering_summary(
+    tmp_path, monkeypatch, real_gguf, isolated_history
+):
+    payload = {
+        "max_prompt_chars": 100,
+        "fast": {"model_id": "fast-m", "model_path": real_gguf},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, _ = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    # Two real route decisions → two tier_route events.
+    assert client.post("/v1/tiering/route", json={
+        "messages": [{"role": "user", "content": "hi"}],
+    }).status_code == 200
+    assert client.post("/v1/tiering/route", json={
+        "messages": [{"role": "user", "content": "x" * 200}],
+    }).status_code == 200
+    ctx = client.get("/v1/debug/context").json()
+    assert "tiering" in ctx
+    assert ctx["tiering"]["enabled"] is True
+    assert ctx["tiering"]["total_routes"] == 2
+    assert ctx["tiering"]["by_tier"] == {"fast": 1, "quality": 1}
+
+
+def test_collect_debug_context_tiering_optional():
+    from weight_stream.issues.context import collect_debug_context
+    base = collect_debug_context()
+    assert "tiering" not in base
+    with_t = collect_debug_context(tiering={"enabled": True, "total_routes": 0})
+    assert with_t["tiering"] == {"enabled": True, "total_routes": 0}

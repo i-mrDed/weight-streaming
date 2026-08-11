@@ -74,6 +74,12 @@
     "emptyTitle": "ยังไม่มี route",
     "emptyBody": "ส่งแชทโดยเลือกโมเดล ⚡ Auto แล้วสถิติการ route จะปรากฏที่นี่",
     "routes": "ครั้ง",
-    "reused": "ใช้โมเดลเดิม"
+    "reused": "ใช้โมเดลเดิม",
+    "viewAll": "ดูทั้งหมด",
+    "drawerTitle": "ประวัติการ route",
+    "drawerFilter": "กรองตาม tier",
+    "filterAll": "ทั้งหมด",
+    "filterFast": "เร็ว",
+    "filterQuality": "คุณภาพ"
   }
 }

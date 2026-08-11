@@ -173,7 +173,15 @@
     "needPair": "ทั้งสอง tier ต้องมีรหัสโมเดลและ path ไฟล์",
     "saved": "บันทึกค่า auto-tiering แล้ว",
     "reset": "คืนค่าเริ่มต้น",
-    "resetDone": "คืน tier เป็นค่าเริ่มต้นแล้ว"
+    "resetDone": "คืน tier เป็นค่าเริ่มต้นแล้ว",
+    "previewTitle": "ลอง route",
+    "previewNote": "พิมพ์ prompt แล้วดูว่าจะถูกส่งไป tier ไหน — การตัดสินใช้ config จริงและไม่โหลดอะไรเลย",
+    "previewPlaceholder": "วาง prompt เพื่อดูว่า router จะตัดสินอย่างไร…",
+    "previewReasoning": "ระดับ reasoning",
+    "previewGo": "ลอง route",
+    "previewEmpty": "พิมพ์ prompt ก่อน",
+    "previewTier_fast": "Tier เร็ว",
+    "previewTier_quality": "Tier คุณภาพ"
   },
   "toast": {
     "densityChanged": "ความหนาแน่น: {{name}}",

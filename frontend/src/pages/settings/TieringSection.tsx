@@ -13,9 +13,11 @@ import { t } from '@/i18n'
 import { scanModels, type ScanModel } from '@/core/models'
 import {
   fetchTieringConfig,
+  previewTiering,
   saveTieringConfig,
   unpinTier,
   type TieringConfig,
+  type TieringPreviewResponse,
 } from '@/core/tiering'
 
 interface Props {
@@ -123,6 +125,13 @@ export function TieringSection() {
   const quality = useSignal<{ model_id: string; model_path: string; extra_args: string }>({
     model_id: '', model_path: '', extra_args: '',
   })
+  // "Test the router" box — decides WITHOUT loading any model (server-side
+  // live config, so the answer is always real).
+  const previewPrompt = useSignal('')
+  const previewReasoning = useSignal<'off' | 'low' | 'medium' | 'high'>('off')
+  const previewing = useSignal(false)
+  const previewResult = useSignal<TieringPreviewResponse | null>(null)
+  const previewError = useSignal('')
 
   async function load() {
     loading.value = true
@@ -179,6 +188,28 @@ export function TieringSection() {
       toast('success', t('settings.tiering.saved'))
     } catch (e) {
       toast('error', String(e))
+    }
+  }
+
+  async function doPreview() {
+    if (!previewPrompt.value.trim()) {
+      toast('error', t('settings.tiering.previewEmpty'))
+      return
+    }
+    previewing.value = true
+    previewError.value = ''
+    previewResult.value = null
+    try {
+      previewResult.value = await previewTiering({
+        messages: [{ role: 'user', content: previewPrompt.value }],
+        options: {
+          reasoning_mode: previewReasoning.value === 'off' ? undefined : previewReasoning.value,
+        },
+      })
+    } catch (e) {
+      previewError.value = e instanceof Error ? e.message : String(e)
+    } finally {
+      previewing.value = false
     }
   }
 
@@ -276,6 +307,52 @@ export function TieringSection() {
                 if (!Number.isNaN(n) && n > 0) maxChars.value = n
               }}
             />
+          </div>
+
+          {/* ── Test the router (decides without loading) ────────── */}
+          <div class="tier-preview">
+            <div class="tier-preview__head">
+              <strong>{t('settings.tiering.previewTitle')}</strong>
+              <span class="set-note">{t('settings.tiering.previewNote')}</span>
+            </div>
+            <textarea
+              class="tier-preview__input"
+              rows={3}
+              placeholder={t('settings.tiering.previewPlaceholder')}
+              value={previewPrompt.value}
+              onInput={(e) => (previewPrompt.value = (e.target as HTMLTextAreaElement).value)}
+            />
+            <div class="tier-preview__row">
+              <Segmented
+                ariaLabel={t('settings.tiering.previewReasoning')}
+                size="sm"
+                value={previewReasoning.value}
+                onChange={(v) => (previewReasoning.value = v as 'off' | 'low' | 'medium' | 'high')}
+                options={['off', 'low', 'medium', 'high'].map((v) => ({ value: v, label: v }))}
+              />
+              <Button
+                variant="soft"
+                size="sm"
+                loading={previewing.value}
+                onClick={() => void doPreview()}
+                disabled={!previewPrompt.value.trim()}
+              >
+                ⚡ {t('settings.tiering.previewGo')}
+              </Button>
+            </div>
+            {previewResult.value ? (
+              <div class={`tier-preview__result tier-preview__result--${previewResult.value.tier}`}>
+                <strong>
+                  {previewResult.value.tier === 'fast' ? '⚡' : '🎯'} {t('settings.tiering.previewTier_' + previewResult.value.tier)}
+                </strong>
+                <span class="set-note">
+                  {previewResult.value.reason} · {previewResult.value.model_id}
+                </span>
+              </div>
+            ) : null}
+            {previewError.value ? (
+              <p class="tier-preview__error">{previewError.value}</p>
+            ) : null}
           </div>
 
           <div class="set-actions">

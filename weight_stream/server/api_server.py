@@ -874,10 +874,33 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:
             logger.exception("Anthropic message failed")
-            raise HTTPException(status_code=500, detail=str(e))
-    
-    # ── Issue Tracking ──────────────────────────────────────────────
-    
+            raise HTTPException(status_code=500, detail=str(e))    # ── Issue Tracking ──────────────────────────────────────────────
+
+    def _tiering_debug_summary() -> Optional[dict]:
+        """Compact auto-tiering snapshot for issue reports: enabled flag +
+        route totals (aggregated per tier/reason — no per-event detail, so
+        the report stays small and contains no prompts). Honest: None when
+        anything fails (a report must never break because of telemetry)."""
+        try:
+            cfg = tiering.load_config()
+            urec = getattr(app.state, "usage_recorder", None)
+            events = urec.history(kind="tier_route") if urec is not None else []
+            by_tier: dict[str, int] = {}
+            by_reason: dict[str, int] = {}
+            for e in events:
+                k = str(e.get("tier", "?"))
+                by_tier[k] = by_tier.get(k, 0) + 1
+                r = str(e.get("reason", "?"))
+                by_reason[r] = by_reason.get(r, 0) + 1
+            return {
+                "enabled": cfg.get("enabled", False),
+                "total_routes": len(events),
+                "by_tier": by_tier,
+                "by_reason": by_reason,
+            }
+        except Exception:
+            return None
+
     @app.get("/v1/debug/context")
     async def debug_context(
         model_path: str | None = None,
@@ -896,6 +919,7 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             last_error=last_error,
             last_endpoint=last_endpoint,
             log_tail=list(recent_errors[-50:]),
+            tiering=_tiering_debug_summary(),
         )
     
     @app.post("/v1/issues")
@@ -905,7 +929,10 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             # Merge server debug context if client context incomplete
             if not body.context.get("app_version"):
                 body.context = {
-                    **collect_debug_context(log_tail=list(recent_errors[-50:])),
+                    **collect_debug_context(
+                        log_tail=list(recent_errors[-50:]),
+                        tiering=_tiering_debug_summary(),
+                    ),
                     **(body.context or {}),
                 }
             issue = issue_service.create(body)
@@ -1448,6 +1475,33 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             "model_path": entry["model_path"],
             "reason": reason,
             "reused": reused_id is not None,
+        }
+
+    @app.post("/v1/tiering/preview")
+    async def preview_tiering(body: Dict[str, Any]):
+        """Preview the routing decision WITHOUT loading any model — uses the
+        LIVE config, so the answer is always real, never stale.
+
+        Body (same shape as /v1/tiering/route): ``{"messages": [...],
+        "options": {reasoning_mode/effort}}``. Returns ``{tier, reason,
+        model_id, model_path}`` — what WOULD run, not what ran. 409 when
+        the config is disabled (the caller can fall back to its own choice).
+        """
+        cfg = tiering.load_config()
+        if not cfg.get("enabled", False):
+            raise HTTPException(
+                status_code=409,
+                detail="auto-tiering is disabled — fall back to an explicit model",
+            )
+        messages = body.get("messages") or []
+        options = body.get("options") or {}
+        tier, reason = tiering.decide_tier(cfg, messages, options)
+        entry = cfg[tier]
+        return {
+            "tier": tier,
+            "reason": reason,
+            "model_id": entry["model_id"],
+            "model_path": entry["model_path"],
         }
 
     @app.post("/v1/tiering/unpin")
