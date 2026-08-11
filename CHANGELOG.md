@@ -7,6 +7,22 @@
 
 ## [Unreleased]
 
+### fix: CI — tiering tests no longer depend on the dev machine's model files
+- **Hermetic defaults**: the shipped tier defaults (`~/models/Gemma4-12B-QAT/...`)
+  were expanded at import time, baking the *developer's* home into the
+  defaults — the pin/unpin tests passed locally only because the real Gemma
+  files exist on the dev machine and failed on CI runners (no models dir).
+  The literal `~` paths are now expanded lazily by `_expand()` at load/save
+  time, so any machine expands them to its own home.
+- **Test fixture `fake_default_models`**: stubs the default Gemma pair under a
+  temp HOME (USERPROFILE+HOME) for the 4 pin/unpin tests that restore +
+  validate the default tier — `test_pin_finds_files_and_wires_draft`,
+  `test_pin_sets_per_tier_max_tokens`, `test_unpin_restores_default_tier`,
+  `test_unpin_persists_to_disk`.
+- Verified by simulating a CI-like machine (`HOME` pointing at a nonexistent
+  dir): full suite 369 passed, matching the CI failure mode exactly (was
+  `ValueError: ... file not found` on the runner's home path).
+
 ### ⚡ Auto-tiering round 6 — bound the fast tier's output budget (EXP-023 loop)
 - **Per-tier `max_tokens`**: the tier config now carries an output budget
   per tier — fast **2048** (quick answers; a degenerate repetition loop —

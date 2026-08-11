@@ -66,8 +66,10 @@ DEFAULT_REASONING_QUALITY = "high"  # reasoning effort >= this → quality tier
 #     a 3000-char prompt).
 DEFAULT_FAST = {
     "model_id": "gemma-4-12b-qat-mtp",
-    "model_path": os.path.expanduser(
-        r"~/models/Gemma4-12B-QAT/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf"),
+    # Literal ~ paths — expanded lazily by _expand() at load/save time so
+    # the shipped defaults are NOT baked to the machine that imported the
+    # module (tests set a temp HOME; any machine gets its own expansion).
+    "model_path": r"~/models/Gemma4-12B-QAT/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
     "extra_args": ("-fa on --spec-type draft-mtp --spec-draft-model "
                    r"~/models/Gemma4-12B-QAT/MTP/mtp-gemma-4-12B-it-Q8_0.gguf "
                    "--spec-draft-n-max 2"),
@@ -84,8 +86,7 @@ DEFAULT_FAST = {
 }
 DEFAULT_QUALITY = {
     "model_id": "gemma-4-26b-qat-mtp",
-    "model_path": os.path.expanduser(
-        r"~/models/Gemma4-26B-A4B-QAT/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf"),
+    "model_path": r"~/models/Gemma4-26B-A4B-QAT/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
     "extra_args": ("-fa on --spec-type draft-mtp --spec-draft-model "
                    r"~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf "
                    "--spec-draft-n-max 2"),
