@@ -24,6 +24,22 @@
   with two inline compact buttons (⚡ fast / 🎯 quality), no popup.
 - `data/tiering.json` (machine-local absolute paths) is now gitignored
   — the server regenerates the default pair when the file is missing.
+- **Unpin + active-tier badges**: Hub quant cards that ARE the fast/quality
+  tier show a ⚡/🎯 badge and their pin button becomes ↺ Unpin (undo →
+  restores the shipped default via new `POST /v1/tiering/unpin`); Settings
+  shows a "Reset to default" button per non-default tier. The config
+  response now carries `model_basename` + `is_default` per tier.
+- **Reuse-already-loaded on route**: `/v1/tiering/route` now checks the
+  loaded models by NORMALIZED PATH before loading — if the tier's file is
+  already resident (even under a different model_id, e.g. loaded manually)
+  it reuses it instead of evicting + reloading, and returns the effective
+  `model_id` with `reused: true`.
+- **Routing stats (Overview)**: every successful route is recorded into the
+  usage history as a `kind: tier_route` event (shared ring + JSONL, never
+  mixed into the generation history). New `GET /v1/tiering/stats`
+  aggregates totals per tier/reason/model + the newest events; the Overview
+  dashboard shows a live Auto-tiering card (total, ⚡/🎯 split, recent
+  reasons, reused marker) with an honest empty/disabled state.
   previous model's extra args so a stale draft path can never leak into
   the new model's llama-server cmdline.
 - **Any two models, not hardcoded**: Settings → Auto-tiering lets the user

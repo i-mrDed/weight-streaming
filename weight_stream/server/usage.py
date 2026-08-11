@@ -94,22 +94,58 @@ class UsageRecorder:
             self._persist()
         return rec
 
+    def record_event(
+        self,
+        kind: str,
+        *,
+        ts: Optional[int] = None,
+        **fields: Any,
+    ) -> dict:
+        """Append one non-generation event (e.g. an auto-tiering route) to the
+        SAME ring + JSONL. Event records carry a ``kind`` key that the
+        generation ``history()`` filters out, so the two telemetry streams
+        share storage but never mix in responses.
+
+        ``None`` fields are dropped (honest: absent, never fabricated).
+        """
+        rec: dict = {
+            "ts": int(ts if ts is not None else time.time() * 1000),
+            "kind": kind,
+        }
+        for k, v in fields.items():
+            if v is not None:
+                rec[k] = v
+        with self._lock:
+            self._records.append(rec)
+            if len(self._records) > self._capacity:
+                self._records = self._records[-self._capacity:]
+            self._persist()
+        return rec
+
     # ── Reading ─────────────────────────────────────────────────────
 
     def history(
         self,
         limit: Optional[int] = None,
         since: Optional[int] = None,
+        kind: Optional[str] = None,
     ) -> list[dict]:
         """Return records oldest→newest.
 
         ``since`` filters to ``ts >= since`` (epoch ms); ``limit`` keeps the
         newest N of what remains (clamped to the ring capacity).
+        ``kind`` filters to ONE event kind: pass an explicit kind to get
+        only those events, or leave None to get only generation records
+        (they carry no ``kind`` key) — event telemetry never mixes in.
         """
         with self._lock:
             records = list(self._records)
         if since is not None:
             records = [r for r in records if r.get("ts", 0) >= since]
+        if kind is not None:
+            records = [r for r in records if r.get("kind") == kind]
+        else:
+            records = [r for r in records if "kind" not in r]
         if limit is not None:
             records = records[-limit:] if limit > 0 else []
         return records

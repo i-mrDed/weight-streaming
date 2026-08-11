@@ -295,6 +295,9 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
     app.state.recent_logs = ring_handler
     # Expose the Hub download manager (test access + P5 wiring convenience).
     app.state.hub_manager = hub_manager
+    # Expose the usage recorder so feature endpoints (auto-tiering routing
+    # stats) can append event telemetry to the same ring + JSONL.
+    app.state.usage_recorder = usage_recorder
 
     # Health check
     @app.get("/health")
@@ -1384,6 +1387,14 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         Returns ``{tier, model_id, model_path, reason}``. When the config is
         disabled the call is refused (409) — the caller should fall back to
         its own model choice instead of silently routing.
+
+        Reuse-first: when the tier's file is ALREADY loaded (even under a
+        different model_id — e.g. the user loaded it manually), the route
+        reuses it instead of evicting + reloading the same file, and reports
+        the EFFECTIVE loaded model_id (``reused: true``) so the caller can
+        generate against it immediately. Each successful route is recorded
+        into the usage history as a ``tier_route`` event (real telemetry;
+        a recorder hiccup never breaks routing).
         """
         cfg = tiering.load_config()
         if not cfg.get("enabled", False):
@@ -1396,23 +1407,94 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         tier, reason = tiering.decide_tier(cfg, messages, options)
         entry = cfg[tier]
         tmanager = getattr(app.state, "tiering_manager", manager)
-        try:
-            await tmanager.load_or_get(
-                model_id=entry["model_id"],
-                model_path=entry["model_path"],
-                extra_args=entry.get("extra_args"),
-                n_threads=entry.get("n_threads"),
-            )
-        except Exception as e:
-            raise HTTPException(
-                status_code=500,
-                detail=f"tier '{tier}' model failed to load: {e}",
-            )
+        find = getattr(tmanager, "find_loaded_path", None)
+        reused_id: Optional[str] = None
+        if callable(find):
+            try:
+                reused_id = find(entry["model_path"])
+            except Exception:
+                reused_id = None
+        effective_id = reused_id or entry["model_id"]
+        if reused_id is None:
+            try:
+                await tmanager.load_or_get(
+                    model_id=entry["model_id"],
+                    model_path=entry["model_path"],
+                    extra_args=entry.get("extra_args"),
+                    n_threads=entry.get("n_threads"),
+                )
+            except Exception as e:
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"tier '{tier}' model failed to load: {e}",
+                )
+        urec = getattr(app.state, "usage_recorder", None)
+        if urec is not None:
+            try:
+                urec.record_event(
+                    "tier_route",
+                    tier=tier,
+                    reason=reason,
+                    model_id=effective_id,
+                    model_path=entry["model_path"],
+                    prompt_chars=len(tiering.prompt_text(messages)),
+                    reused=bool(reused_id),
+                )
+            except Exception:
+                pass  # telemetry must never break routing
         return {
             "tier": tier,
-            "model_id": entry["model_id"],
+            "model_id": effective_id,
             "model_path": entry["model_path"],
             "reason": reason,
+            "reused": reused_id is not None,
+        }
+
+    @app.post("/v1/tiering/unpin")
+    async def unpin_tiering(body: Dict[str, Any]):
+        """Restore one tier to the shipped default (undo a user pin).
+
+        Body: ``{"tier": "fast"|"quality"}``. Only that tier changes — the
+        other tier and the enabled/threshold settings are untouched. 400 for
+        an invalid tier name.
+        """
+        try:
+            saved = tiering.unpin_tier(str(body.get("tier", "")))
+        except ValueError as e:
+            raise HTTPException(status_code=400, detail=str(e))
+        return {"status": "saved", "config": tiering.resolve_state(saved)}
+
+    @app.get("/v1/tiering/stats")
+    async def tiering_stats(limit: int = 100):
+        """Auto-tiering routing statistics — real telemetry from the usage
+        history ``tier_route`` events (never fabricated).
+
+        Returns the enabled flag (from config), totals per tier/reason/model,
+        and the newest events (capped by ``limit``, latest 10 in ``recent``).
+        A fresh install has ``total_routes: 0`` — an honest empty, not a lie.
+        """
+        cfg = tiering.load_config()
+        urec = getattr(app.state, "usage_recorder", None)
+        events = (urec.history(kind="tier_route") if urec is not None else [])
+        recent = events[-limit:] if limit and limit > 0 else events
+        by_tier: dict[str, int] = {}
+        by_reason: dict[str, int] = {}
+        by_model: dict[str, int] = {}
+        for e in events:
+            k = str(e.get("tier", "?"))
+            by_tier[k] = by_tier.get(k, 0) + 1
+            k2 = str(e.get("reason", "?"))
+            by_reason[k2] = by_reason.get(k2, 0) + 1
+            k3 = str(e.get("model_id", "?"))
+            by_model[k3] = by_model.get(k3, 0) + 1
+        return {
+            "enabled": cfg.get("enabled", False),
+            "total_routes": len(events),
+            "by_tier": by_tier,
+            "by_reason": by_reason,
+            "by_model": by_model,
+            "recent": events[-10:],
+            "count": len(recent),
         }
 
     @app.post("/v1/tiering/pin")

@@ -180,26 +180,21 @@ def test_save_config_raises_on_missing_file(tmp_path, monkeypatch):
         tiering.save_config(cfg)
 
 
-# ── endpoints (stub manager — no real load) ────────────────────────────class _StubManager:
-    """Loads are recorded, never performed — the route endpoint must not
-    spawn a real llama-server in tests."""
-
-    def __init__(self):
-        self.loaded = []
-
-    async def load_or_get(self, model_id, model_path, **kwargs):
-        self.loaded.append({"id": model_id, "path": model_path, **kwargs})
-
-
+# ── endpoints (stub manager — no real load) ────────────────────────────
 class _StubManager:
     """Loads are recorded, never performed — the route endpoint must not
     spawn a real llama-server in tests."""
 
     def __init__(self):
         self.loaded = []
+        # path → model_id the manager claims is ALREADY loaded (reuse tests)
+        self.pretend_loaded = {}
 
     async def load_or_get(self, model_id, model_path, **kwargs):
         self.loaded.append({"id": model_id, "path": model_path, **kwargs})
+
+    def find_loaded_path(self, path):
+        return self.pretend_loaded.get(path)
 
 
 @pytest.fixture
@@ -207,6 +202,14 @@ def real_gguf(tmp_path):
     f = tmp_path / "m.gguf"
     f.write_bytes(b"GGUF")
     return str(f)
+
+
+@pytest.fixture
+def isolated_history(tmp_path, monkeypatch):
+    """Point the usage recorder's JSONL at a temp file so tier_route events
+    written by endpoint tests never touch the real data/usage_history.jsonl."""
+    monkeypatch.setenv("WS_USAGE_HISTORY_FILE", str(tmp_path / "usage.jsonl"))
+    return str(tmp_path / "usage.jsonl")
 
 
 def test_get_tiering_config_returns_defaults(tmp_path, monkeypatch):
@@ -255,6 +258,9 @@ def test_put_tiering_config_rejects_missing_file(tmp_path, monkeypatch):
 
 def _stub_app(tmp_path, monkeypatch, real_gguf, payload=None):
     monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    # Route tests record tier_route events — keep them OUT of the real
+    # data/usage_history.jsonl (isolated per-test usage store).
+    monkeypatch.setenv("WS_USAGE_HISTORY_FILE", str(tmp_path / "usage.jsonl"))
     app, _ = create_app(ServerConfig())
     stub = _StubManager()
     app.state.tiering_manager = stub
@@ -361,3 +367,126 @@ def test_route_disabled_returns_409(tmp_path, monkeypatch, real_gguf):
     r = client.post("/v1/tiering/route", json={"messages": []})
     assert r.status_code == 409
     assert "disabled" in r.json()["detail"]
+
+
+# ── unpin endpoint (Hub/Settings → restore shipped default) ───────────
+
+
+def test_unpin_restores_default_tier(tmp_path, monkeypatch, real_gguf):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    # Pin a non-default model to fast first (a real file on disk).
+    r = client.put("/v1/tiering/config", json={
+        "fast": {"model_id": "my-model", "model_path": real_gguf},
+        "quality": {"model_id": "gemma-4-26b-qat-mtp",
+                    "model_path": real_gguf},
+    })
+    assert r.status_code == 200
+    body = r.json()["config"]
+    assert body["fast"]["model_id"] == "my-model"
+    assert body["fast"]["is_default"] is False
+    # Unpin only fast — quality must be untouched.
+    r = client.post("/v1/tiering/unpin", json={"tier": "fast"})
+    assert r.status_code == 200, r.text
+    cfg = r.json()["config"]
+    assert cfg["fast"]["model_id"] == "gemma-4-12b-qat-mtp"
+    assert cfg["fast"]["is_default"] is True
+    assert cfg["quality"]["model_id"] == "gemma-4-26b-qat-mtp"
+
+
+def test_unpin_invalid_tier_returns_400(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    r = client.post("/v1/tiering/unpin", json={"tier": "turbo"})
+    assert r.status_code == 400
+    assert "'fast' or 'quality'" in r.json()["detail"]
+
+
+def test_unpin_persists_to_disk(tmp_path, monkeypatch, real_gguf):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    assert client.put("/v1/tiering/config", json={
+        "fast": {"model_id": "mine", "model_path": real_gguf},
+        "quality": {"model_id": "q", "model_path": real_gguf},
+    }).status_code == 200
+    assert client.post("/v1/tiering/unpin",
+                       json={"tier": "fast"}).status_code == 200
+    on_disk = json.loads((tmp_path / "t.json").read_text(encoding="utf-8"))
+    assert on_disk["fast"]["model_id"] == "gemma-4-12b-qat-mtp"
+
+
+# ── route reuse-by-path + tiering stats ───────────────────────────────
+
+
+def test_route_reuses_already_loaded_model(tmp_path, monkeypatch, real_gguf):
+    payload = {
+        "fast": {"model_id": "fast-m", "model_path": real_gguf},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, stub = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    # The same file is already resident under a DIFFERENT model_id (the
+    # user loaded it manually) — the route must reuse it, not reload.
+    stub.pretend_loaded[real_gguf] = "manual-id"
+    r = client.post("/v1/tiering/route",
+                    json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["tier"] == "fast"
+    assert body["model_id"] == "manual-id"  # effective loaded id
+    assert body["reused"] is True
+    assert stub.loaded == []  # no evict+reload happened
+
+
+def test_route_not_reused_when_not_loaded(tmp_path, monkeypatch, real_gguf):
+    payload = {
+        "fast": {"model_id": "fast-m", "model_path": real_gguf},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, stub = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    r = client.post("/v1/tiering/route",
+                    json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200
+    assert r.json()["model_id"] == "fast-m"
+    assert r.json()["reused"] is False
+    assert stub.loaded and stub.loaded[0]["id"] == "fast-m"
+
+
+def test_route_records_event_and_stats_aggregate(
+    tmp_path, monkeypatch, real_gguf, isolated_history
+):
+    payload = {
+        "max_prompt_chars": 100,
+        "fast": {"model_id": "fast-m", "model_path": real_gguf},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, _ = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    # Two routes: one fast, one quality (long prompt).
+    r1 = client.post("/v1/tiering/route",
+                     json={"messages": [{"role": "user", "content": "hi"}]})
+    r2 = client.post("/v1/tiering/route", json={
+        "messages": [{"role": "user", "content": "x" * 200}],
+    })
+    assert r1.status_code == 200 and r2.status_code == 200
+    st = client.get("/v1/tiering/stats").json()
+    assert st["enabled"] is True
+    assert st["total_routes"] == 2
+    assert st["by_tier"] == {"fast": 1, "quality": 1}
+    assert st["count"] == 2
+    assert st["recent"][0]["tier"] == "fast"
+    # Generation history must NOT contain the event records (no mixing).
+    hist = client.get("/v1/usage/history").json()
+    assert hist["count"] == 0
+
+
+def test_tiering_stats_empty_on_fresh_install(tmp_path, monkeypatch):
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    monkeypatch.setenv("WS_USAGE_HISTORY_FILE", str(tmp_path / "usage.jsonl"))
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    st = client.get("/v1/tiering/stats").json()
+    assert st["total_routes"] == 0
+    assert st["by_tier"] == {}
+    assert st["recent"] == []

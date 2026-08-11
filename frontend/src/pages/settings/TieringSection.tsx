@@ -14,6 +14,7 @@ import { scanModels, type ScanModel } from '@/core/models'
 import {
   fetchTieringConfig,
   saveTieringConfig,
+  unpinTier,
   type TieringConfig,
 } from '@/core/tiering'
 
@@ -181,6 +182,30 @@ export function TieringSection() {
     }
   }
 
+  // Restore ONE tier to the shipped default (undo a Hub/Models pin or an
+  // edit) without touching the other tier or the thresholds.
+  async function resetTier(tier: 'fast' | 'quality') {
+    try {
+      const res = await unpinTier(tier)
+      cfg.value = res.config
+      const c = res.config
+      if (tier === 'fast') {
+        fast.value = {
+          model_id: c.fast.model_id, model_path: c.fast.model_path,
+          extra_args: c.fast.extra_args || '',
+        }
+      } else {
+        quality.value = {
+          model_id: c.quality.model_id, model_path: c.quality.model_path,
+          extra_args: c.quality.extra_args || '',
+        }
+      }
+      toast('success', t('settings.tiering.resetDone'))
+    } catch (e) {
+      toast('error', String(e))
+    }
+  }
+
   return (
     <Card class="set-card">
       <div class="set-row">
@@ -206,20 +231,34 @@ export function TieringSection() {
       ) : (
         <>
           <div class="tier-grid">
-            <ModelPicker
-              label={`⚡ ${t('settings.tiering.fastTier')}`}
-              value={fast.value}
-              models={models.value}
-              resolved={cfg.value?.fast.file_resolved}
-              onChange={(v) => (fast.value = v)}
-            />
-            <ModelPicker
-              label={`🎯 ${t('settings.tiering.qualityTier')}`}
-              value={quality.value}
-              models={models.value}
-              resolved={cfg.value?.quality.file_resolved}
-              onChange={(v) => (quality.value = v)}
-            />
+            <div class="tier-col">
+              <ModelPicker
+                label={`⚡ ${t('settings.tiering.fastTier')}`}
+                value={fast.value}
+                models={models.value}
+                resolved={cfg.value?.fast.file_resolved}
+                onChange={(v) => (fast.value = v)}
+              />
+              {cfg.value?.fast.is_default === false ? (
+                <button class="tier-reset" onClick={() => void resetTier('fast')}>
+                  ↺ {t('settings.tiering.reset')}
+                </button>
+              ) : null}
+            </div>
+            <div class="tier-col">
+              <ModelPicker
+                label={`🎯 ${t('settings.tiering.qualityTier')}`}
+                value={quality.value}
+                models={models.value}
+                resolved={cfg.value?.quality.file_resolved}
+                onChange={(v) => (quality.value = v)}
+              />
+              {cfg.value?.quality.is_default === false ? (
+                <button class="tier-reset" onClick={() => void resetTier('quality')}>
+                  ↺ {t('settings.tiering.reset')}
+                </button>
+              ) : null}
+            </div>
           </div>
 
           <div class="set-row">

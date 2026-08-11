@@ -171,7 +171,9 @@
     "resolved": "file found",
     "missing": "file missing",
     "needPair": "Both tiers need a model ID and a file path.",
-    "saved": "Auto-tiering config saved"
+    "saved": "Auto-tiering config saved",
+    "reset": "Reset to default",
+    "resetDone": "Tier restored to the shipped default"
   },
   "toast": {
     "densityChanged": "Density: {{name}}",

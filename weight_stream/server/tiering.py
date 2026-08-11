@@ -177,15 +177,63 @@ def save_config(cfg: dict[str, Any]) -> dict[str, Any]:
     return normalized
 
 
+def _same_path(a: Any, b: Any) -> bool:
+    """Normalized (case-fold + realpath + ~-expanded) path equality — the
+    same rule the manager uses when reusing an already-loaded model."""
+    try:
+        return os.path.normcase(os.path.realpath(os.path.expanduser(str(a or "")))) == \
+            os.path.normcase(os.path.realpath(os.path.expanduser(str(b or ""))))
+    except Exception:
+        return False
+
+
+def is_default_tier(cfg: dict[str, Any], tier: str) -> bool:
+    """True when a tier still points at the shipped default entry (model id +
+    path + draft flags) — i.e. the user never pinned/edited it. Compares the
+    NORMALIZED config (``load_config``/``normalize_config`` output), so ~ and
+    separator spellings can't fake a difference."""
+    if tier not in ("fast", "quality"):
+        return False
+    # Normalize the shipped default exactly like a stored config (~ and
+    # separator expansion) so a default-on-disk compares equal to the
+    # default-in-code — spelling differences can't fake a pin.
+    d = normalize_config(default_config())[tier]
+    entry = cfg.get(tier) or {}
+    return (
+        entry.get("model_id") == d["model_id"]
+        and _same_path(entry.get("model_path"), d["model_path"])
+        and str(entry.get("extra_args", "")).replace("/", "\\") ==
+        str(d["extra_args"]).replace("/", "\\")
+    )
+
+
 def resolve_state(cfg: dict[str, Any]) -> dict[str, Any]:
-    """Attach per-tier on-disk resolution so the UI can show a broken pair."""
+    """Attach per-tier on-disk resolution so the UI can show a broken pair,
+    plus the file basename (for Hub pin badges) and whether the tier is still
+    the shipped default (for the unpin/reset affordance)."""
     out = dict(cfg)
     for tier in ("fast", "quality"):
         entry = cfg.get(tier) or {}
         resolved = bool(entry.get("model_path")) and Path(
             entry["model_path"]).is_file()
-        out[tier] = {**entry, "file_resolved": resolved}
+        out[tier] = {
+            **entry,
+            "file_resolved": resolved,
+            "model_basename": Path(str(entry.get("model_path", ""))).name,
+            "is_default": is_default_tier(cfg, tier),
+        }
     return out
+
+
+def unpin_tier(tier: str) -> dict[str, Any]:
+    """Restore ONE tier to the shipped default entry (undo a user pin from
+    the Hub/Settings). The other tier and the enabled/threshold settings are
+    untouched. Raises ValueError on an invalid tier name."""
+    if tier not in ("fast", "quality"):
+        raise ValueError(f"tier must be 'fast' or 'quality', got {tier!r}")
+    cfg = load_config()
+    cfg[tier] = dict(default_config()[tier])
+    return save_config(cfg)
 
 
 # ── pin from model files (Hub recommended list) ────────────────────────

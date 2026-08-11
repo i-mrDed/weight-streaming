@@ -171,7 +171,9 @@
     "resolved": "พบไฟล์",
     "missing": "ไม่พบไฟล์",
     "needPair": "ทั้งสอง tier ต้องมีรหัสโมเดลและ path ไฟล์",
-    "saved": "บันทึกค่า auto-tiering แล้ว"
+    "saved": "บันทึกค่า auto-tiering แล้ว",
+    "reset": "คืนค่าเริ่มต้น",
+    "resetDone": "คืน tier เป็นค่าเริ่มต้นแล้ว"
   },
   "toast": {
     "densityChanged": "ความหนาแน่น: {{name}}",

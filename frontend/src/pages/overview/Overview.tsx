@@ -32,6 +32,7 @@ import { t, fmtNumber, fmtRelative, relativeDay, locale } from '@/i18n'
 import { createPoller, refreshOnFocus } from '@/core/poll'
 import { fetchStats, type StatsPayload, type ModelStats } from '@/core/stats'
 import { fetchUsageHistory, type UsageRecord } from '@/core/config'
+import { fetchTieringStats, type TieringStats } from '@/core/tiering'
 import { guessQuant, unloadModel } from '@/core/models'
 import { health, models, serverVersion } from '@/core/store'
 import { openIssueCount } from '@/core/issues'
@@ -59,6 +60,7 @@ export function Overview() {
   locale.value // subscribe: relative labels re-render on language switch
   const stats = useSignal<StatsPayload | null>(null)
   const activity = useSignal<UsageRecord[] | null>(null) // null = not fetched yet
+  const tierStats = useSignal<TieringStats | null>(null) // null = not fetched yet
   const unreachable = useSignal(false)
   const onlineSince = useRef<number | null>(null)
   const tick = useSignal(0) // 1s heartbeat for the uptime label
@@ -74,9 +76,12 @@ export function Overview() {
       try {
         // Independent fetches: a usage-history hiccup must not blank the
         // stats, and vice versa (both stay honest — last good value or empty).
-        const [st, usage] = await Promise.allSettled([fetchStats(), fetchUsageHistory(5)])
+        const [st, usage, tiers] = await Promise.allSettled([
+          fetchStats(), fetchUsageHistory(5), fetchTieringStats(),
+        ])
         if (st.status === 'fulfilled') stats.value = st.value
         if (usage.status === 'fulfilled') activity.value = usage.value.history.slice().reverse()
+        if (tiers.status === 'fulfilled') tierStats.value = tiers.value
         unreachable.value = st.status === 'rejected'
       } catch {
         unreachable.value = true
@@ -324,6 +329,62 @@ export function Overview() {
                   ))}
                 </tbody>
               </table>
+            )}
+          </Card>
+        </section>
+
+        {/* ── Auto-tiering stats (real route telemetry) ────────── */}
+        <section class="ov-section">
+          <h2 class="ov-section__title">
+            ⚡ {t('overview.tiering.title')}
+            <Tip label={t('overview.tiering.tip')} />
+          </h2>
+          <Card class="ov-tiering">
+            {!tierStats.value ? (
+              <p class="set-note">{t('common.loading')}</p>
+            ) : !tierStats.value.enabled ? (
+              <div class="ov-tiering__state">
+                <Badge tone="neutral">{t('common.off')}</Badge>
+                <span class="ov-tiering__note">{t('overview.tiering.disabled')}</span>
+                <Button variant="soft" size="sm" onClick={() => navigate('settings')}>
+                  {t('overview.tiering.openSettings')}
+                </Button>
+              </div>
+            ) : tierStats.value.total_routes === 0 ? (
+              <EmptyState
+                emoji="⚡"
+                title={t('overview.tiering.emptyTitle')}
+                body={t('overview.tiering.emptyBody')}
+              >
+                <Button variant="soft" size="sm" onClick={() => navigate('chat')}>
+                  <MessageSquare size={14} aria-hidden="true" /> {t('overview.quick.chat')}
+                </Button>
+              </EmptyState>
+            ) : (
+              <>
+                <div class="ov-tiering__nums tnum">
+                  <span class="ov-tiering__total">
+                    {fmtNumber(tierStats.value.total_routes)}
+                    <small> {t('overview.tiering.routes')}</small>
+                  </span>
+                  <span>⚡ {fmtNumber(tierStats.value.by_tier.fast ?? 0)}</span>
+                  <span>🎯 {fmtNumber(tierStats.value.by_tier.quality ?? 0)}</span>
+                </div>
+                {tierStats.value.recent.length > 0 ? (
+                  <ul class="ov-tiering__recent">
+                    {tierStats.value.recent.slice(-3).reverse().map((e, i) => (
+                      <li key={`${e.ts}-${i}`}>
+                        <span class={`ov-tiering__tier ov-tiering__tier--${e.tier}`}>
+                          {e.tier === 'fast' ? '⚡' : '🎯'}
+                        </span>
+                        <span class="ov-tiering__reason" title={e.reason}>{e.reason}</span>
+                        {e.reused ? <Badge tone="info">{t('overview.tiering.reused')}</Badge> : null}
+                        <span class="ov-tiering__when">{fmtRelative(e.ts)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
+              </>
             )}
           </Card>
         </section>

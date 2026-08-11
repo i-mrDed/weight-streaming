@@ -24,6 +24,7 @@ from __future__ import annotations
 import asyncio
 import concurrent.futures
 import logging
+import os
 import threading
 import time
 from typing import Any, AsyncIterator, Callable, Dict, Iterator, Optional
@@ -356,6 +357,24 @@ class ModelManager:
                 pass
         if model_id not in self._models:
             await self.load(model_id, model_path, **kwargs)
+
+    def find_loaded_path(self, path: str) -> Optional[str]:
+        """Return the model_id of a loaded model whose FILE matches `path`
+        (normalized realpath + case-fold + ~-expanded).
+
+        Used by the auto-tiering route so a request for a tier whose model
+        is ALREADY resident — even under a different model_id (the user may
+        have loaded it manually) — reuses it instead of evicting + reloading
+        the same file. Returns None when no loaded model matches.
+        """
+        target = os.path.normcase(os.path.realpath(os.path.expanduser(str(path or ""))))
+        for mid, model in list(self._models.items()):
+            cfg = self._configs.get(mid, {})
+            mp = cfg.get("model_path") or getattr(model, "model_path", "") or ""
+            if mp and os.path.normcase(os.path.realpath(
+                    os.path.expanduser(str(mp)))) == target:
+                return mid
+        return None
 
     # ── Generation ──────────────────────────────────────────────────
 

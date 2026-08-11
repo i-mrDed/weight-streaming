@@ -65,5 +65,15 @@
     "colTokens": "โทเคน",
     "colSpeed": "tok/s",
     "colWhen": "เมื่อไหร่"
+  },
+  "tiering": {
+    "title": "Auto-tiering",
+    "tip": "สถิติการ route จริงจาก /v1/tiering/stats — คำขอถูกส่งไป tier ไหน ด้วยเหตุผลอะไร ไม่มีการแต่งตัวเลข",
+    "disabled": "Auto-tiering ปิดอยู่ — เปิดใน Settings เพื่อ route คำขอระหว่างโมเดลเร็วกับโมเดลคุณภาพ",
+    "openSettings": "เปิด Settings",
+    "emptyTitle": "ยังไม่มี route",
+    "emptyBody": "ส่งแชทโดยเลือกโมเดล ⚡ Auto แล้วสถิติการ route จะปรากฏที่นี่",
+    "routes": "ครั้ง",
+    "reused": "ใช้โมเดลเดิม"
   }
 }

@@ -9,6 +9,10 @@ export interface TierEntry {
   n_threads?: number | null
   /** Server-attached: whether the configured file resolves on disk. */
   file_resolved?: boolean
+  /** Server-attached: basename of the configured model file (Hub badge match). */
+  model_basename?: string
+  /** Server-attached: whether this tier still points at the shipped default. */
+  is_default?: boolean
 }
 
 export interface TieringConfig {
@@ -65,6 +69,43 @@ export function pinTier(
     method: 'POST',
     body: JSON.stringify({ tier, files }),
   }, { timeoutMs: 60_000 })
+}
+
+/** Undo a user pin — restore ONE tier to the shipped default (Hub/Settings
+    reset button). The other tier and thresholds are untouched. */
+export function unpinTier(
+  tier: 'fast' | 'quality',
+): Promise<{ status: string; config: TieringConfig }> {
+  return apiJSON<{ status: string; config: TieringConfig }>('/v1/tiering/unpin', {
+    method: 'POST',
+    body: JSON.stringify({ tier }),
+  }, { timeoutMs: 30_000 })
+}
+
+/* ── Routing stats (Overview dashboard) ── */
+
+export interface TierRouteEvent {
+  ts: number // epoch ms
+  tier: 'fast' | 'quality'
+  reason: string
+  model_id: string
+  model_path?: string
+  prompt_chars?: number
+  reused?: boolean
+}
+
+export interface TieringStats {
+  enabled: boolean
+  total_routes: number
+  by_tier: Record<string, number>
+  by_reason: Record<string, number>
+  by_model: Record<string, number>
+  recent: TierRouteEvent[]
+  count: number
+}
+
+export function fetchTieringStats(): Promise<TieringStats> {
+  return apiJSON<TieringStats>('/v1/tiering/stats', undefined, { timeoutMs: 10_000 })
 }
 
 /** Swap one tier of the config (fetch current → merge → save). Used by the
