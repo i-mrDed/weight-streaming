@@ -37,6 +37,7 @@ import {
   XCircle,
 } from 'lucide-preact'
 import { ApiError } from '@/core/api'
+import { renderMarkdown } from '@/core/markdown'
 import {
   activeDownloads,
   cancelDownload,
@@ -57,7 +58,6 @@ import {
 } from '@/core/downloads'
 import {
   fmtBytes,
-  GITHUB_BLOB_BASE,
   hfRepoUrl,
   HUB_TERMINAL,
   hubModel,
@@ -66,8 +66,10 @@ import {
   hubSearchPage,
   modelCategory,
   modelFeatures,
+  pickLocaleText,
   repoAuthor,
   repoName,
+  researchExperiment,
   type HubModelDetail,
   type HubRecommendedEntry,
   type HubRecommendedQuant,
@@ -75,6 +77,7 @@ import {
   type HubSearchResult,
   type HubSort,
   type HubTask,
+  type ResearchExperiment,
 } from '@/core/hub'
 import { browseDir, suggestModelId } from '@/core/models'
 import { assistants, refreshAssistants } from '@/core/assistants'
@@ -137,6 +140,11 @@ export function HubPage() {
 
   const detailRepo = useSignal<string | null>(null) // model-detail drawer
   const filesRepo = useSignal<string | null>(null) // file-picker drawer
+  // in-app experiment evidence (Evidence buttons on recommended cards)
+  const evidencePath = useSignal<string | null>(null)
+  const evidence = useSignal<ResearchExperiment | null>(null)
+  const evidenceLoading = useSignal(false)
+  const evidenceError = useSignal<SearchError | null>(null)
   // on-demand detail cache (server also caches ~15 min — repeat opens are instant)
   const detailCache = useSignal<Record<string, HubModelDetail>>({})
   const detailLoading = useSignal<string | null>(null)
@@ -327,6 +335,23 @@ export function HubPage() {
     void ensureDetail(repoId)
   }
 
+  const openEvidence = async (expPath: string) => {
+    evidencePath.value = expPath
+    evidence.value = null
+    evidenceLoading.value = true
+    evidenceError.value = null
+    try {
+      evidence.value = await researchExperiment(expPath)
+    } catch (e) {
+      evidenceError.value = {
+        status: e instanceof ApiError ? e.status : undefined,
+        detail: e instanceof ApiError && e.detail ? e.detail : String(e),
+      }
+    } finally {
+      evidenceLoading.value = false
+    }
+  }
+
   const confirmDelete = async (task: HubTask, deleteFile: boolean) => {
     deletingNow.value = true
     try {
@@ -487,7 +512,12 @@ export function HubPage() {
             <>
               <div class="hub-grid">
                 {recommended.value.map((entry) => (
-                  <RecommendedCard key={entry.repo_id + entry.name} entry={entry} onDownload={(files) => void downloadGroup(entry.repo_id, files)} />
+                  <RecommendedCard
+                    key={entry.repo_id + entry.name}
+                    entry={entry}
+                    onDownload={(files) => void downloadGroup(entry.repo_id, files)}
+                    onEvidence={(exp) => void openEvidence(exp)}
+                  />
                 ))}
               </div>
               <p class="hub-rec__caveat">
@@ -598,6 +628,16 @@ export function HubPage() {
         onRetry={() => {
           if (dRepo) void ensureDetail(dRepo)
         }}
+      />
+
+      {/* ── Experiment evidence drawer (Evidence buttons — in-app, no GitHub) ── */}
+      <ExperimentDrawer
+        open={evidencePath.value !== null}
+        onClose={() => (evidencePath.value = null)}
+        path={evidencePath.value}
+        data={evidence.value}
+        loading={evidenceLoading.value}
+        error={evidenceError.value}
       />
 
       {/* ── File picker drawer (trigger = card right → right sheet) ── */}
@@ -943,12 +983,15 @@ function thaiChip(quant: HubRecommendedQuant): { tone: 'ok' | 'error' | 'neutral
 function RecommendedCard({
   entry,
   onDownload,
+  onEvidence,
 }: {
   entry: HubRecommendedEntry
   onDownload: (files: HubRecommendedQuant['files']) => void
+  onEvidence: (expPath: string) => void
 }) {
   const role = roleMeta(entry.role)
   const author = repoAuthor(entry.repo_id)
+  const tagline = pickLocaleText(entry.tagline, locale.value)
   return (
     <Card class="hub-card hr-card">
       <div class="hub-card__head">
@@ -973,10 +1016,11 @@ function RecommendedCard({
         <span class="hub-card__author dialog-text--dim">{entry.arch}</span>
         {author ? <span class="hub-card__author dialog-text--dim">{author}</span> : null}
       </div>
-      <p class="hr-card__tagline">{entry.tagline}</p>
+      <p class="hr-card__tagline">{tagline}</p>
       <div class="hr-card__quants">
         {entry.quants.map((quant) => {
           const chip = thaiChip(quant)
+          const notes = quant.notes ? pickLocaleText(quant.notes, locale.value) : null
           return (
             <div key={quant.quant} class="hr-quant">
               <div class="hr-quant__head">
@@ -996,17 +1040,11 @@ function RecommendedCard({
                   </span>
                 ) : null}
               </div>
-              {quant.notes ? <p class="hr-quant__notes">{quant.notes}</p> : null}
+              {notes ? <p class="hr-quant__notes">{notes}</p> : null}
               <div class="hr-quant__actions">
-                <a
-                  class="btn btn--ghost btn--sm"
-                  href={`${GITHUB_BLOB_BASE}/${quant.experiment}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  title={t('hub.recExpTitle')}
-                >
+                <Button variant="ghost" size="sm" onClick={() => onEvidence(quant.experiment)} title={t('hub.recExpTitle')}>
                   <FileBox size={13} aria-hidden="true" /> {t('hub.recExp')}
-                </a>
+                </Button>
                 <Button variant="soft" size="sm" onClick={() => onDownload(quant.files)}>
                   <DownloadCloud size={13} aria-hidden="true" /> {t('hub.recDownload')}
                 </Button>
@@ -1016,6 +1054,69 @@ function RecommendedCard({
         })}
       </div>
     </Card>
+  )
+}
+
+/* ── In-app experiment evidence drawer ───────────────────────────────
+   Reads the experiment's markdown record through /v1/research/experiment
+   (path-validated server-side) and renders it with the same XSS-safe
+   markdown pipeline as the Docs page. The repo being private never blocks
+   the user from reading the evidence behind a recommendation. */
+
+function ExperimentDrawer({
+  open,
+  onClose,
+  path,
+  data,
+  loading,
+  error,
+}: {
+  open: boolean
+  onClose: () => void
+  path: string | null
+  data: ResearchExperiment | null
+  loading: boolean
+  error: SearchError | null
+}) {
+  const fileLabel = (name: string): string => {
+    if (name.toLowerCase() === 'setup.md') return t('hub.recExpSetup')
+    if (name.toLowerCase() === 'results.md') return t('hub.recExpResults')
+    if (name.toLowerCase() === 'analysis.md') return t('hub.recExpAnalysis')
+    return name
+  }
+  return (
+    <Drawer open={open} onClose={onClose} title={t('hub.recExpTitle')} side="right" width={560}>
+      {loading ? (
+        <div class="hub-rec__loading">
+          <span class="btn__spinner" aria-hidden="true" />
+          <span class="dialog-text--dim">{t('hub.recExpLoading')}</span>
+        </div>
+      ) : error ? (
+        <Card class="hub-banner">
+          <XCircle size={18} aria-hidden="true" />
+          <div class="hub-banner__text">
+            <strong>{t('hub.recExpLoadFailed')}</strong>
+            <p>{error.detail}</p>
+          </div>
+        </Card>
+      ) : data ? (
+        <div class="rex">
+          <p class="rex__path dialog-text--dim" title={data.path}>
+            <FileBox size={13} aria-hidden="true" /> {data.path}
+          </p>
+          {data.files.map((f) => (
+            <section key={f.name} class="rex__file">
+              <h3 class="rex__file-title">{fileLabel(f.name)}</h3>
+              <div class="rex__body docs__md" dangerouslySetInnerHTML={{ __html: renderMarkdown(f.markdown) }} />
+            </section>
+          ))}
+        </div>
+      ) : path ? (
+        <div class="hub-rec__loading">
+          <span class="btn__spinner" aria-hidden="true" />
+        </div>
+      ) : null}
+    </Drawer>
   )
 }
 

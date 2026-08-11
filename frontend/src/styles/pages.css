@@ -1209,6 +1209,14 @@ select.md-input { cursor: pointer; }
 .hr-quant__notes { margin: 0; font-size: var(--ws-text-xs); color: var(--ws-text-secondary); line-height: 1.5; }
 .hr-quant__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; }
 
+/* In-app experiment evidence drawer (reuses .docs__md for the body) */
+.rex { display: flex; flex-direction: column; gap: 16px; }
+.rex__path { display: flex; align-items: center; gap: 6px; margin: 0; font-size: var(--ws-text-xs); word-break: break-all; }
+.rex__file { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--ws-border-subtle); }
+.rex__file:first-of-type { border-top: none; padding-top: 0; }
+.rex__file-title { margin: 0; font-size: var(--ws-text-xs); font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ws-text-tertiary); }
+.rex__body { max-height: 60vh; overflow-y: auto; }
+
 .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
 
 /* Feedback #1: the base .card has NO padding by design (cf. .iss-card) — the

@@ -7,6 +7,23 @@
 
 ## [Unreleased]
 
+### 🌐 Hub — recommendations hardened (localisation + in-app evidence)
+- ``tagline``/``notes`` in the curated list now ship BOTH project languages
+  (``{"en", "th"}``) — the UI picks the active locale while the measured
+  numbers stay a single source of truth (locale-switch verified in-app).
+- Evidence buttons open the experiment record INSIDE the app via the new
+  ``GET /v1/research/experiment/{path}`` endpoint (server/research.py) —
+  path-validated by realpath containment (traversal → 400, unknown → 404),
+  only ``*.md`` files ever read, returned in setup → results → analysis
+  order and rendered with the same XSS-safe markdown pipeline as the Docs
+  page. No GitHub link needed (the repo is private).
+- ``docs/CURATION_CHECKLIST.md`` — the repeatable process for a model to
+  earn a "Proven on this rig" slot (clean room, Thai gate, verified bytes,
+  evidence links) + role rules (a Thai-tonal-failing quant is never
+  allowed a thai/balanced badge); linked from BENCHMARKING.md.
+- New offline tests: locale completeness, research service containment,
+  endpoint contract (3 new — suite at 325 passed).
+
 ### 🌐 Hub — "Proven on this rig" recommendations (`/v1/hub/recommended`)
 - Curated list of models MEASURED on the reference machine (12 GB VRAM /
   64 GB RAM), each backed by an experiment record under

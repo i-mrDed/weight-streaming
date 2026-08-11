@@ -155,7 +155,12 @@
   "recThai": "ไทย",
   "recTonal": "วรรณยุกต์",
   "recExp": "หลักฐาน",
-  "recExpTitle": "บันทึกการทดลองพร้อมการวัดเต็มรูปแบบ",
+  "recExpTitle": "บันทึกการทดลอง — การวัดเต็มรูปแบบ",
+  "recExpLoading": "กำลังโหลดบันทึกการทดลอง…",
+  "recExpLoadFailed": "โหลดบันทึกการทดลองไม่ได้",
+  "recExpSetup": "ที่มา & วิธีวัด (setup)",
+  "recExpResults": "ผลที่วัดได้",
+  "recExpAnalysis": "บทสรุป",
   "recFlagsHint": "llama-server flags ที่ใช้ในการวัด",
   "recDownload": "ดาวน์โหลด"
 }

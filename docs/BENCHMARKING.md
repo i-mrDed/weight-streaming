@@ -72,3 +72,8 @@ python -m weight_stream bench path/to/model.gguf --no-restart
 - [ ] Same `n_ctx` / threads for side-by-side comparisons
 - [ ] Record cold AND warm AND the gate number — never only one
 - [ ] Save the JSON export next to the experiment doc (see `research/experiments/`)
+
+> Once a model passes the gate AND has a full experiment record, it can
+> earn a slot in the Hub's "Proven on this rig" recommendations — see
+> [`docs/CURATION_CHECKLIST.md`](CURATION_CHECKLIST.md) for the exact
+> requirements (clean room, Thai gate, verified file sizes, evidence links).

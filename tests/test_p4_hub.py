@@ -1614,9 +1614,13 @@ def test_recommended_data_integrity():
         assert entry["repo_id"].count("/") == 1
         assert entry["name"]
         assert entry["role"] in ("thai", "speed", "balanced")
+        # human-readable fields ship BOTH project languages, never one
+        assert entry["tagline"]["en"].strip() and entry["tagline"]["th"].strip()
         assert entry["quants"], "an entry must carry at least one quant"
         for quant in entry["quants"]:
             assert quant["quant"]
+            if quant["notes"] is not None:
+                assert quant["notes"]["en"].strip() and quant["notes"]["th"].strip()
             assert quant["files"], "download set must be exact, never empty"
             # total must equal the real sum of its files — never a rounded lie
             assert quant["total_bytes"] == sum(f["bytes"] for f in quant["files"])
@@ -1650,3 +1654,68 @@ def test_hub_recommended_endpoint_contract(models_dir, monkeypatch, tmp_path):
         # payload must match the module exactly (no server-side decoration)
         from weight_stream.server.recommended import to_payload
         assert body == to_payload()
+
+
+# ── In-app experiment evidence (P5.x) ─────────────────────────────────
+# The Evidence buttons read research/experiments/* through the API — the
+# path must stay contained (no traversal), only *.md may be read, and the
+# record returns setup → results → analysis in that order.
+
+
+def test_research_experiment_service(tmp_path, monkeypatch):
+    from weight_stream.server import research as researchmod
+
+    exp = tmp_path / "research" / "experiments" / "EXP-XXX-fake"
+    exp.mkdir(parents=True)
+    (exp / "setup.md").write_text("# setup", encoding="utf-8")
+    (exp / "analysis.md").write_text("# analysis", encoding="utf-8")
+    (exp / "results.md").write_text("# results", encoding="utf-8")
+    (exp / "notes.txt").write_text("not markdown", encoding="utf-8")  # skipped
+    monkeypatch.setattr(researchmod, "experiments_root",
+                        lambda: str(tmp_path / "research" / "experiments"))
+
+    out = researchmod.experiment("EXP-XXX-fake")
+    assert [f["name"] for f in out["files"]] == ["setup.md", "results.md", "analysis.md"]
+    assert out["path"] == "research/experiments/EXP-XXX-fake"
+    # the full repo-relative prefix is accepted too
+    out2 = researchmod.experiment("research/experiments/EXP-XXX-fake")
+    assert out2["files"] == out["files"]
+
+
+def test_research_experiment_rejects_escape(tmp_path, monkeypatch):
+    from weight_stream.server import research as researchmod
+    from weight_stream.server.research import ResearchValidationError
+
+    monkeypatch.setattr(researchmod, "experiments_root",
+                        lambda: str(tmp_path / "research" / "experiments"))
+    for bad in ("..", "../..", "..\..", "../config.py", "/etc/passwd",
+                "EXP-X/../../config.py", ""):
+        with pytest.raises(ResearchValidationError) as ei:
+            researchmod.experiment(bad)
+        assert ei.value.status == 400
+    with pytest.raises(ResearchValidationError) as ei:
+        researchmod.experiment("EXP-XXX-missing")
+    assert ei.value.status == 404
+
+
+def test_research_experiment_endpoint_contract(models_dir, monkeypatch, tmp_path):
+    from weight_stream.server import research as researchmod
+
+    exp = tmp_path / "research" / "experiments" / "EXP-XXX-fake"
+    exp.mkdir(parents=True)
+    (exp / "setup.md").write_text("# setup", encoding="utf-8")
+    (exp / "results.md").write_text("# results", encoding="utf-8")
+    monkeypatch.setattr(researchmod, "experiments_root",
+                        lambda: str(tmp_path / "research" / "experiments"))
+
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        r = c.get("/v1/research/experiment/EXP-XXX-fake")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["path"] == "research/experiments/EXP-XXX-fake"
+        assert [f["name"] for f in body["files"]] == ["setup.md", "results.md"]
+        assert "# setup" in body["files"][0]["markdown"]
+        # unknown experiment → 404; traversal → 400
+        assert c.get("/v1/research/experiment/EXP-XXX-nope").status_code == 404
+        assert c.get("/v1/research/experiment/%2e%2e%2f%2e%2e%2fconfig.py").status_code == 400

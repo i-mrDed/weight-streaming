@@ -155,7 +155,12 @@
   "recThai": "Thai",
   "recTonal": "tonal",
   "recExp": "Evidence",
-  "recExpTitle": "Experiment record with the full measurement",
+  "recExpTitle": "Experiment record — the full measurement",
+  "recExpLoading": "Loading experiment record…",
+  "recExpLoadFailed": "Could not load the experiment record",
+  "recExpSetup": "Why & how (setup)",
+  "recExpResults": "Measured results",
+  "recExpAnalysis": "Verdict",
   "recFlagsHint": "llama-server flags used in the measurement",
   "recDownload": "Download"
 }

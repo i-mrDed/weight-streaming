@@ -47,6 +47,7 @@ from .logs import (
 )
 from .hub import DownloadManager, HubUpstreamError, HubValidationError
 from .recommended import to_payload as recommended_payload
+from .research import ResearchValidationError, experiment as read_experiment
 from .openai_compat import handle_chat_completion
 from .anthropic_compat import handle_anthropic_messages
 from ..issues import (
@@ -1003,6 +1004,17 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         are from this machine; other hardware will differ).
         """
         return recommended_payload()
+
+    @app.get("/v1/research/experiment/{exp_path:path}")
+    async def research_experiment(exp_path: str):
+        """Serve one experiment's markdown record for the in-app Evidence
+        viewer (research/experiments/). Path validated by containment — no
+        traversal, only ``*.md`` files ever read (server/research.py).
+        """
+        try:
+            return read_experiment(exp_path)
+        except ResearchValidationError as e:
+            raise HTTPException(status_code=e.status, detail=str(e))
 
     @app.get("/v1/hub/model/{repo_id:path}")
     async def hub_model(repo_id: str):

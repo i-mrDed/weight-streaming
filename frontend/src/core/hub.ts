@@ -95,6 +95,13 @@ export interface HubRecommendedFile {
   bytes: number
 }
 
+/** Human-readable text that ships in both project languages; the UI picks
+    the active one, the measured numbers stay a single source of truth. */
+export interface HubLocaleText {
+  en: string
+  th: string
+}
+
 export interface HubRecommendedQuant {
   quant: string
   /** the exact download set — the Hub downloads precisely these */
@@ -111,8 +118,8 @@ export interface HubRecommendedQuant {
   thai_tonal_total: number | null
   /** repo-relative path to the evidence (research/experiments/EXP-*) */
   experiment: string
-  /** free-form measurement/usage note (already localised server-side) */
-  notes: string | null
+  /** free-form measurement/usage note, localised */
+  notes: HubLocaleText | null
   /** llama-server flags the measurement used (e.g. MTP); null = none */
   flags: string | null
 }
@@ -125,7 +132,7 @@ export interface HubRecommendedEntry {
   arch: string
   /** drives the badge colour/icon in the UI */
   role: HubRecommendedRole
-  tagline: string
+  tagline: HubLocaleText
   quants: HubRecommendedQuant[]
 }
 
@@ -134,11 +141,37 @@ export interface HubRecommendedResponse {
   count: number
 }
 
-/** GitHub blob base for experiment links (repo-relative ``experiment`` paths). */
-export const GITHUB_BLOB_BASE = 'https://github.com/i-mrDed/weight-streaming/blob/main'
+/** Pick the active language from a locale dict; falls back to English, then
+    to whatever exists (a missing locale never blanks a label). */
+export function pickLocaleText(txt: HubLocaleText, lang: string): string {
+  return txt[lang as keyof HubLocaleText] ?? txt.en ?? txt.th
+}
 
 export function hubRecommended(): Promise<HubRecommendedResponse> {
   return apiJSON<HubRecommendedResponse>('/v1/hub/recommended', undefined, { timeoutMs: 10_000 })
+}
+
+/* ── In-app experiment evidence (GET /v1/research/experiment/{path}) ──
+   The Evidence button opens the experiment record INSIDE the app (the repo
+   is private — no GitHub link needed). The server validates the path stays
+   under research/experiments/ and returns the folder's markdown files. */
+
+export interface ResearchExperimentFile {
+  /** e.g. setup.md / results.md / analysis.md */
+  name: string
+  markdown: string
+}
+
+export interface ResearchExperiment {
+  /** the validated experiment dir (research/experiments/EXP-XXX-…/) */
+  path: string
+  /** real byte sizes per file; 0/null only when the read failed */
+  files: ResearchExperimentFile[]
+}
+
+export function researchExperiment(expPath: string): Promise<ResearchExperiment> {
+  const enc = expPath.split('/').map(encodeURIComponent).join('/')
+  return apiJSON<ResearchExperiment>(`/v1/research/experiment/${enc}`, undefined, { timeoutMs: 10_000 })
 }
 
 export function hubModel(repoId: string): Promise<HubModelDetail> {
