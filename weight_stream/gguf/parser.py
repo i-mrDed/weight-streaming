@@ -397,3 +397,228 @@ class GGUFParser:
         # Align to GGUF alignment
         padded = (raw_size + alignment - 1) // alignment * alignment
         return padded
+
+
+@dataclass
+class SplitTensorInfo(TensorInfo):
+    """TensorInfo extended with split-shard location."""
+    shard_index: int = 0
+    global_offset: int = 0      # absolute offset across the concatenated shards
+    offset_in_shard: int = 0    # absolute offset within its own shard file
+
+
+class GGUFSplitParser:
+    """
+    GGUF parser for models split across multiple shard files (e.g.
+    unsloth DS V4 Flash 4-shard UD-IQ3_XXS).
+
+    Builds a unified tensor index across all shards with GLOBAL offsets
+    (as if the shards were concatenated in order), so prefetch engines can
+    address tensors by one absolute offset space.
+
+    Offset math (verified against real 4-shard model, 2026-08-11):
+        global_offset(t) = sum(file_size of shards before s)
+                         + data_offset(shard s)
+                         + sum(padded32(n_bytes) of tensors before t in shard s)
+
+    Usage:
+        parser = GGUFSplitParser([shard1, shard2, shard3, shard4])
+        loc = parser.tensor_location("blk.0.ffn_gate_exps.weight")
+        # -> (shard_index=1, offset_in_shard=..., global_offset=..., size_bytes=...)
+        em = parser.get_expert_map_global()
+    """
+
+    ALIGNMENT = 32  # GGUF default data alignment (general.alignment)
+
+    def __init__(self, model_paths: List[str]):
+        if not model_paths:
+            raise ValueError("model_paths must contain at least one shard")
+        # Sort shards naturally: 00001-of-00004 < 00002-of-00004 ...
+        self.shard_paths = sorted(model_paths)
+        self.shard_count = len(self.shard_paths)
+
+        self._shard_readers: List[GGUFReader] = []
+        self._shard_sizes: List[int] = []
+        self._shard_data_offsets: List[int] = []
+        self._shard_base: List[int] = []      # global base of each shard
+        self.tensors: List[SplitTensorInfo] = []
+        self._tensors_by_name: Dict[str, SplitTensorInfo] = {}
+        self.metadata: Dict[str, Any] = {}
+
+        self._load()
+        self.n_tensors = len(self.tensors)
+
+    # ── loading ──────────────────────────────────────────────────────
+
+    def _load(self):
+        global_base = 0
+        for s, path in enumerate(self.shard_paths):
+            size = Path(path).stat().st_size
+            reader = GGUFReader(str(path))
+            self._shard_readers.append(reader)
+            self._shard_sizes.append(size)
+            self._shard_data_offsets.append(reader.data_offset)
+            self._shard_base.append(global_base)
+
+            # metadata: take from the shard that has real KV fields
+            if not self.metadata and len(reader.fields) > 5:
+                self._extract_metadata(reader)
+
+            # tensors
+            cum = reader.data_offset
+            for raw in reader.tensors:
+                shape = tuple(int(d) for d in raw.shape)
+                if not shape:
+                    continue
+                ggml_type = int(raw.tensor_type)
+                size_bytes = self._padded(int(raw.n_bytes))
+                ti = SplitTensorInfo(
+                    name=raw.name,
+                    shape=shape,
+                    ggml_type=ggml_type,
+                    file_offset=cum,                 # offset within shard
+                    size_bytes=size_bytes,
+                    shard_index=s,
+                    global_offset=global_base + cum,
+                    offset_in_shard=cum,
+                )
+                self.tensors.append(ti)
+                self._tensors_by_name[raw.name] = ti
+                cum += size_bytes
+            global_base += size
+
+    @staticmethod
+    def _padded(n: int) -> int:
+        return (n + GGUFSplitParser.ALIGNMENT - 1) // GGUFSplitParser.ALIGNMENT * GGUFSplitParser.ALIGNMENT
+
+    def _extract_metadata(self, reader: GGUFReader):
+        """Copy the important KV fields from the primary shard."""
+        for key, field in reader.fields.items():
+            if key.startswith("GGUF."):
+                continue
+            try:
+                if not field.data:
+                    continue
+                idx = field.data[0]
+                if idx >= len(field.parts):
+                    continue
+                raw = field.parts[idx]
+                if hasattr(raw, "tolist"):
+                    val = raw.tolist()
+                    if isinstance(val, list) and len(val) == 1:
+                        val = val[0]
+                    # bytes -> utf-8 string (GGUF strings are stored as uint8 arrays)
+                    if isinstance(val, list):
+                        try:
+                            s = bytes(val).decode("utf-8", "replace")
+                            if s.isprintable():
+                                val = s
+                        except Exception:
+                            pass
+                    # numpy scalar -> python native
+                    if hasattr(val, "item"):
+                        val = val.item()
+                else:
+                    val = raw
+                self.metadata[key] = val
+            except Exception:
+                continue
+
+    # ── public API ───────────────────────────────────────────────────
+
+    def close(self):
+        self._shard_readers.clear()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.close()
+
+    def get_tensor(self, name: str) -> Optional[SplitTensorInfo]:
+        return self._tensors_by_name.get(name)
+
+    def tensor_location(self, name: str) -> Optional[SplitTensorInfo]:
+        """Location of a tensor across the split: (shard, global offset, size)."""
+        return self._tensors_by_name.get(name)
+
+    def get_tensors_by_pattern(self, pattern: str) -> List[SplitTensorInfo]:
+        import fnmatch
+        return [t for t in self.tensors if fnmatch.fnmatch(t.name, pattern)]
+
+    def get_expert_tensors(self) -> List[SplitTensorInfo]:
+        return [t for t in self.tensors
+                if ("exps" in t.name.lower() or "expert" in t.name.lower()
+                    or "moe" in t.name.lower()) and len(t.shape) >= 3]
+
+    def get_expert_map_global(self) -> Dict[int, Dict[int, List[ExpertRange]]]:
+        """Per-layer, per-expert offset map with GLOBAL offsets (split-aware)."""
+        expert_map: Dict[int, Dict[int, List[ExpertRange]]] = {}
+        for t in self.get_expert_tensors():
+            layer = t.layer_id
+            if layer < 0:
+                continue
+            if layer not in expert_map:
+                expert_map[layer] = {}
+            n_experts = t.shape[-1] if len(t.shape) >= 3 else 1
+            per = t.size_bytes // n_experts
+            for ei in range(n_experts):
+                if ei not in expert_map[layer]:
+                    expert_map[layer][ei] = []
+                start = t.global_offset + ei * per
+                expert_map[layer][ei].append(ExpertRange(
+                    layer=layer,
+                    expert_idx=ei,
+                    projection=t.projection_type,
+                    start_offset=start,
+                    end_offset=start + per,
+                    size_bytes=per,
+                    tensor_name=t.name,
+                ))
+        return expert_map
+
+    def detect_architecture(self) -> Dict[str, Any]:
+        arch = str(self.metadata.get("general.architecture", "unknown")).lower()
+        n_layers = 0
+        for k in (f"{arch}.block_count", "deepseek4.block_count", "block_count"):
+            if k in self.metadata:
+                try:
+                    n_layers = int(self.metadata[k])
+                    break
+                except (ValueError, TypeError):
+                    pass
+        total_experts = 1
+        for k in (f"{arch}.expert_count", "deepseek4.expert_count", "expert_count"):
+            if k in self.metadata:
+                try:
+                    total_experts = int(self.metadata[k])
+                    break
+                except (ValueError, TypeError):
+                    pass
+        active = 1
+        for k in (f"{arch}.expert_used_count", "deepseek4.expert_used_count",
+                  "expert_used_count"):
+            if k in self.metadata:
+                try:
+                    active = int(self.metadata[k])
+                    break
+                except (ValueError, TypeError):
+                    pass
+        return {
+            "arch_name": arch,
+            "is_moe": len(self.get_expert_tensors()) > 0 or total_experts > 1,
+            "total_experts": total_experts,
+            "active_experts": active,
+            "num_layers": n_layers,
+            "file_size_gb": round(sum(self._shard_sizes) / (1024 ** 3), 2),
+            "total_tensors": self.n_tensors,
+            "shard_count": self.shard_count,
+            "shard_sizes_gb": [round(s / (1024 ** 3), 2) for s in self._shard_sizes],
+        }
+
+    def __repr__(self) -> str:
+        return (
+            f"GGUFSplitParser({len(self.shard_paths)} shards, "
+            f"{len(self.tensors)} tensors, "
+            f"~{sum(self._shard_sizes) / 1024**3:.2f} GB)"
+        )
