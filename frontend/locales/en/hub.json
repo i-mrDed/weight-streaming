@@ -140,5 +140,22 @@
   "latestLoading": "Loading latest models…",
   "pagePrev": "Previous",
   "pageNext": "Next",
-  "pageCounter": "Page {{page}}"
+  "pageCounter": "Page {{page}}",
+
+  "recTitle": "Proven on this rig",
+  "recHint": "Models we measured on the reference machine (12 GB VRAM / 64 GB RAM) with the Thai quality gate — every number links to its experiment evidence. Download fetches exactly the quant we tested.",
+  "recLoading": "Loading recommendations…",
+  "recLoadFailed": "Could not load recommendations",
+  "recCaveat": "Numbers were measured on the project's reference machine (i9-9900KF · RTX 3060 12 GB · 64 GB RAM). Your hardware will differ — the Thai verdict and the relative ordering between quants are the portable part.",
+  "recCaveatHint": "Honest-telemetry rule: measured ranges only, never projected.",
+  "recRole_thai": "Thai-safe daily driver",
+  "recRole_balanced": "Thai-safe · slower",
+  "recRole_speed": "Speed-first · Thai not safe",
+  "recTokHint": "Measured generation speed on the reference rig (clean room, same llama-server build).",
+  "recThai": "Thai",
+  "recTonal": "tonal",
+  "recExp": "Evidence",
+  "recExpTitle": "Experiment record with the full measurement",
+  "recFlagsHint": "llama-server flags used in the measurement",
+  "recDownload": "Download"
 }

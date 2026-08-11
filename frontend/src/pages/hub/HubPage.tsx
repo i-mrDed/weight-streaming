@@ -57,17 +57,21 @@ import {
 } from '@/core/downloads'
 import {
   fmtBytes,
+  GITHUB_BLOB_BASE,
   hfRepoUrl,
   HUB_TERMINAL,
   hubModel,
+  hubRecommended,
   hubSearch,
   hubSearchPage,
   modelCategory,
   modelFeatures,
   repoAuthor,
   repoName,
-  type HubDetailFile,
   type HubModelDetail,
+  type HubRecommendedEntry,
+  type HubRecommendedQuant,
+  type HubRecommendedRole,
   type HubSearchResult,
   type HubSort,
   type HubTask,
@@ -146,6 +150,12 @@ export function HubPage() {
   const clearOpen = useSignal(false)
   const clearingNow = useSignal(false)
   const clearDeleteFiles = useSignal(false)
+
+  // Curated "proven on this rig" (P5.x): static server data — every entry is
+  // backed by a measured experiment (research/experiments/) incl. the Thai
+  // quality gate. Served without network; renders before the latest feed.
+  const recommended = useSignal<HubRecommendedEntry[]>([])
+  const recommendedError = useSignal<SearchError | null>(null)
 
   // Latest GGUF feed (P5.2): a cursor-paginated "recent" browse shown on the
   // idle Hub (before any search) so users discover new models directly.
@@ -232,6 +242,15 @@ export function HubPage() {
     // existing downloads survive page navigation (tasks live on the server;
     // the shared store keeps their SSE/progress alive across pages)
     void refreshDownloads()
+    // curated recommendations are static server data — no network, no cache
+    void hubRecommended()
+      .then((res) => (recommended.value = res.recommended))
+      .catch((e) => {
+        recommendedError.value = {
+          status: e instanceof ApiError ? e.status : undefined,
+          detail: e instanceof ApiError && e.detail ? e.detail : String(e),
+        }
+      })
     // a Models-page "find in Hub" shortcut may carry a search term (once)
     const focus = hubFocusQuery.value
     if (focus) {
@@ -274,7 +293,9 @@ export function HubPage() {
 
   // Queue every shard of a quant one after another through the same
   // download+SSE flow (the server has no batch endpoint — honest and simple).
-  const downloadGroup = async (repoId: string, files: HubDetailFile[]) => {
+  // Accepts any file shape that carries a filename (search results, detail
+  // files, or curated recommendations).
+  const downloadGroup = async (repoId: string, files: { filename: string }[]) => {
     for (const f of files) {
       // eslint-disable-next-line no-await-in-loop
       await startDownload(repoId, f.filename, targetDir.value || undefined)
@@ -440,6 +461,41 @@ export function HubPage() {
             </section>
           ))}
         </div>
+      ) : null}
+
+      {/* ── Proven-on-this-rig recommendations (curated, evidence-backed) ── */}
+      {!searched.value && !searchError.value ? (
+        <section class="hub-rec">
+          <h2 class="hub-rec__title">
+            {t('hub.recTitle')}
+            <Tip label={t('hub.recHint')} />
+          </h2>
+          {recommendedError.value ? (
+            <Card class="hub-banner">
+              <XCircle size={18} aria-hidden="true" />
+              <div class="hub-banner__text">
+                <strong>{t('hub.recLoadFailed')}</strong>
+                <p>{recommendedError.value.detail}</p>
+              </div>
+            </Card>
+          ) : recommended.value.length === 0 ? (
+            <div class="hub-rec__loading">
+              <span class="btn__spinner" aria-hidden="true" />
+              <span class="dialog-text--dim">{t('hub.recLoading')}</span>
+            </div>
+          ) : (
+            <>
+              <div class="hub-grid">
+                {recommended.value.map((entry) => (
+                  <RecommendedCard key={entry.repo_id + entry.name} entry={entry} onDownload={(files) => void downloadGroup(entry.repo_id, files)} />
+                ))}
+              </div>
+              <p class="hub-rec__caveat">
+                <Tip label={t('hub.recCaveatHint')} /> {t('hub.recCaveat')}
+              </p>
+            </>
+          )}
+        </section>
       ) : null}
 
       {/* ── Latest GGUF feed (idle browse: newest models first) ── */}
@@ -857,6 +913,107 @@ function HubCard({
         <Button variant="soft" size="sm" onClick={onViewFiles}>
           <DownloadCloud size={13} aria-hidden="true" /> {t('hub.viewFiles')}
         </Button>
+      </div>
+    </Card>
+  )
+}
+
+/* ── Proven-on-this-rig recommendation card ──────────────────────────
+   Data is curated server-side with experiment evidence (ADR-003): every
+   number shown is a measured range, every download button fetches the
+   EXACT files that were measured, and the experiment link is the proof.
+   No ranking, no invention — a FAILED Thai tonal chip is shown red. */
+
+function roleMeta(role: HubRecommendedRole): { cls: string; labelKey: string } {
+  if (role === 'thai') return { cls: 'hr-role--thai', labelKey: 'hub.recRole_thai' }
+  if (role === 'balanced') return { cls: 'hr-role--balanced', labelKey: 'hub.recRole_balanced' }
+  return { cls: 'hr-role--speed', labelKey: 'hub.recRole_speed' }
+}
+
+function thaiChip(quant: HubRecommendedQuant): { tone: 'ok' | 'error' | 'neutral'; label: string } | null {
+  if (quant.thai_correct == null || quant.thai_total == null) return null
+  const tone = quant.thai_correct === quant.thai_total ? 'ok' : 'error'
+  let label = `${t('hub.recThai')} ${quant.thai_correct}/${quant.thai_total}`
+  if (quant.thai_tonal_correct != null && quant.thai_tonal_total != null) {
+    label += ` · ${t('hub.recTonal')} ${quant.thai_tonal_correct}/${quant.thai_tonal_total}`
+  }
+  return { tone, label }
+}
+
+function RecommendedCard({
+  entry,
+  onDownload,
+}: {
+  entry: HubRecommendedEntry
+  onDownload: (files: HubRecommendedQuant['files']) => void
+}) {
+  const role = roleMeta(entry.role)
+  const author = repoAuthor(entry.repo_id)
+  return (
+    <Card class="hub-card hr-card">
+      <div class="hub-card__head">
+        <div class="hr-card__titles">
+          <span class="hub-card__name hr-card__name">{entry.name}</span>
+          <span class={`hr-role ${role.cls}`}>
+            <span aria-hidden="true">{role.cls === 'hr-role--thai' ? '🏆' : role.cls === 'hr-role--balanced' ? '⚖️' : '⚡'}</span>{' '}
+            {t(role.labelKey)}
+          </span>
+        </div>
+        <a
+          class="hub-card__ext"
+          href={hfRepoUrl(entry.repo_id)}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`${entry.repo_id} — huggingface.co`}
+        >
+          <ExternalLink size={13} aria-hidden="true" />
+        </a>
+      </div>
+      <div class="hub-card__sub">
+        <span class="hub-card__author dialog-text--dim">{entry.arch}</span>
+        {author ? <span class="hub-card__author dialog-text--dim">{author}</span> : null}
+      </div>
+      <p class="hr-card__tagline">{entry.tagline}</p>
+      <div class="hr-card__quants">
+        {entry.quants.map((quant) => {
+          const chip = thaiChip(quant)
+          return (
+            <div key={quant.quant} class="hr-quant">
+              <div class="hr-quant__head">
+                <Badge tone="brand">{quant.quant}</Badge>
+                <span class="hr-quant__size tnum">{fmtBytes(quant.total_bytes)}</span>
+                {quant.tok_s_min != null && quant.tok_s_max != null ? (
+                  <span class="hr-quant__tok tnum" title={t('hub.recTokHint')}>
+                    ⚡ {quant.tok_s_min}–{quant.tok_s_max} tok/s
+                  </span>
+                ) : null}
+              </div>
+              <div class="hr-quant__chips">
+                {chip ? <Badge tone={chip.tone}>{chip.label}</Badge> : null}
+                {quant.flags ? (
+                  <span class="hr-quant__flags" title={t('hub.recFlagsHint')}>
+                    {quant.flags}
+                  </span>
+                ) : null}
+              </div>
+              {quant.notes ? <p class="hr-quant__notes">{quant.notes}</p> : null}
+              <div class="hr-quant__actions">
+                <a
+                  class="btn btn--ghost btn--sm"
+                  href={`${GITHUB_BLOB_BASE}/${quant.experiment}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={t('hub.recExpTitle')}
+                >
+                  <FileBox size={13} aria-hidden="true" /> {t('hub.recExp')}
+                </a>
+                <Button variant="soft" size="sm" onClick={() => onDownload(quant.files)}>
+                  <DownloadCloud size={13} aria-hidden="true" /> {t('hub.recDownload')}
+                </Button>
+              </div>
+            </div>
+          )
+        })}
       </div>
     </Card>
   )

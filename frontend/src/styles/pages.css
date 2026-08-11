@@ -1183,6 +1183,32 @@ select.md-input { cursor: pointer; }
 .hub-latest__pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 2px; }
 .hub-latest__page { font-size: var(--ws-text-xs); color: var(--ws-text-secondary); }
 
+/* Hub — "Proven on this rig" (curated, evidence-backed recommendations) */
+.hub-rec { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--ws-border-subtle); padding-top: 16px; margin-top: 4px; }
+.hub-rec__title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--ws-text-base); font-weight: 700; color: var(--ws-text-primary); }
+.hub-rec__loading { display: flex; align-items: center; gap: 9px; padding: 22px 8px; }
+.hub-rec__loading .btn__spinner { width: 16px; height: 16px; }
+.hub-rec__caveat { display: flex; align-items: flex-start; gap: 6px; margin: 2px 0 0; font-size: var(--ws-text-xs); color: var(--ws-text-tertiary); line-height: 1.5; }
+
+.hr-card { height: 100%; }
+.hr-card__titles { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+.hr-card__name { cursor: default; }
+.hr-card__name:hover { color: var(--ws-text-primary); }
+.hr-role { display: inline-flex; align-items: center; gap: 5px; padding: 2px 10px; border-radius: var(--ws-radius-full); font-size: var(--ws-text-xs); font-weight: 650; line-height: 1.5; white-space: nowrap; }
+.hr-role--thai { background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.40); color: var(--ws-text-primary); }
+.hr-role--balanced { background: rgba(59, 130, 246, 0.15); border: 1px solid rgba(59, 130, 246, 0.40); color: var(--ws-text-primary); }
+.hr-role--speed { background: rgba(245, 158, 11, 0.16); border: 1px solid rgba(245, 158, 11, 0.42); color: var(--ws-text-primary); }
+.hr-card__tagline { margin: 0; font-size: var(--ws-text-sm); color: var(--ws-text-secondary); line-height: 1.45; }
+.hr-card__quants { display: flex; flex-direction: column; gap: 8px; }
+.hr-quant { display: flex; flex-direction: column; gap: 7px; padding: 10px; border: 1px solid var(--ws-border-subtle); border-radius: var(--ws-radius-sm); background: var(--ws-surface-inset); }
+.hr-quant__head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.hr-quant__size { font-size: var(--ws-text-xs); color: var(--ws-text-tertiary); }
+.hr-quant__tok { display: inline-flex; align-items: center; gap: 4px; font-size: var(--ws-text-xs); font-weight: 650; color: var(--ws-text-primary); }
+.hr-quant__chips { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.hr-quant__flags { font-family: var(--ws-font-mono); font-size: var(--ws-text-xs); color: var(--ws-text-secondary); padding: 1px 7px; border-radius: var(--ws-radius-xs); border: 1px dashed var(--ws-border-default); word-break: break-all; }
+.hr-quant__notes { margin: 0; font-size: var(--ws-text-xs); color: var(--ws-text-secondary); line-height: 1.5; }
+.hr-quant__actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: auto; }
+
 .hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
 
 /* Feedback #1: the base .card has NO padding by design (cf. .iss-card) — the

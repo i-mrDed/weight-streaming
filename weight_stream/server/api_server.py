@@ -46,6 +46,7 @@ from .logs import (
     DEFAULT_TAIL_LINES,
 )
 from .hub import DownloadManager, HubUpstreamError, HubValidationError
+from .recommended import to_payload as recommended_payload
 from .openai_compat import handle_chat_completion
 from .anthropic_compat import handle_anthropic_messages
 from ..issues import (
@@ -990,6 +991,18 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             return {"results": results, "count": len(results), "next_cursor": None}
         except HubUpstreamError as e:
             raise HTTPException(status_code=502, detail=str(e))
+
+    @app.get("/v1/hub/recommended")
+    async def hub_recommended():
+        """Curated models proven on this reference rig (server/recommended.py).
+
+        Static data — no network call. Every entry is backed by a measured
+        experiment (``research/experiments/``) with the Thai quality gate, and
+        carries the EXACT download files that were measured so users fetch the
+        right quant. See the module docstring for the honest caveat (numbers
+        are from this machine; other hardware will differ).
+        """
+        return recommended_payload()
 
     @app.get("/v1/hub/model/{repo_id:path}")
     async def hub_model(repo_id: str):

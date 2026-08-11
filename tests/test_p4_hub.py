@@ -1595,3 +1595,58 @@ def test_download_of_garbage_is_rejected_and_part_removed(models_dir):
     assert "not a valid GGUF" in (task.error or "")
     assert not (models_dir / "garbage.gguf").exists()       # never renamed in
     assert not (models_dir / "garbage.gguf.part").exists()  # corrupt part dropped
+
+
+# ── Curated recommendations (P5.x) ────────────────────────────────────
+# Static, evidence-backed data served without network. The integrity test
+# guards what curation must never break: an experiment link that doesn't
+# exist, a file set whose sum lies, or a Thai score that exceeds its total.
+
+
+def test_recommended_data_integrity():
+    from weight_stream.server.recommended import RECOMMENDED
+
+    assert len(RECOMMENDED) >= 2  # Gemma 4 + Qwen3.6 family (the proven pair)
+    seen_repos = set()
+    for entry in RECOMMENDED:
+        assert entry["repo_id"] not in seen_repos
+        seen_repos.add(entry["repo_id"])
+        assert entry["repo_id"].count("/") == 1
+        assert entry["name"]
+        assert entry["role"] in ("thai", "speed", "balanced")
+        assert entry["quants"], "an entry must carry at least one quant"
+        for quant in entry["quants"]:
+            assert quant["quant"]
+            assert quant["files"], "download set must be exact, never empty"
+            # total must equal the real sum of its files — never a rounded lie
+            assert quant["total_bytes"] == sum(f["bytes"] for f in quant["files"])
+            assert quant["total_bytes"] > 0
+            for f in quant["files"]:
+                assert f["filename"].endswith(".gguf")
+                assert f["bytes"] > 0
+            if quant["tok_s_min"] is not None or quant["tok_s_max"] is not None:
+                assert quant["tok_s_min"] is not None and quant["tok_s_max"] is not None
+                assert 0 < quant["tok_s_min"] <= quant["tok_s_max"] <= 500
+            if quant["thai_correct"] is not None or quant["thai_total"] is not None:
+                assert quant["thai_correct"] is not None and quant["thai_total"] is not None
+                assert 0 <= quant["thai_correct"] <= quant["thai_total"]
+            if quant["thai_tonal_correct"] is not None or quant["thai_tonal_total"] is not None:
+                assert quant["thai_tonal_correct"] is not None and quant["thai_tonal_total"] is not None
+                assert 0 <= quant["thai_tonal_correct"] <= quant["thai_tonal_total"]
+            # the evidence must actually exist in the repo (no dead links)
+            assert os.path.isdir(quant["experiment"]), \
+                f"experiment path missing: {quant['experiment']}"
+
+
+def test_hub_recommended_endpoint_contract(models_dir, monkeypatch, tmp_path):
+    app, _ = _app(monkeypatch, tmp_path)
+    with TestClient(app) as c:
+        r = c.get("/v1/hub/recommended")
+        assert r.status_code == 200
+        body = r.json()
+        assert body["count"] == len(body["recommended"]) >= 2
+        entry = body["recommended"][0]
+        assert "repo_id" in entry and "name" in entry and "quants" in entry
+        # payload must match the module exactly (no server-side decoration)
+        from weight_stream.server.recommended import to_payload
+        assert body == to_payload()

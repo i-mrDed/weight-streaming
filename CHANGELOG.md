@@ -7,6 +7,28 @@
 
 ## [Unreleased]
 
+### 🌐 Hub — "Proven on this rig" recommendations (`/v1/hub/recommended`)
+- Curated list of models MEASURED on the reference machine (12 GB VRAM /
+  64 GB RAM), each backed by an experiment record under
+  `research/experiments/` — the honest-telemetry rule applied to curation:
+  no downloads/likes ranking, only measured evidence.
+- `GET /v1/hub/recommended` (static, no network): every entry carries the
+  EXACT download files that were tested (byte sizes verified against HF),
+  the measured tok/s range, Thai gate + tonal verdicts, and the experiment
+  path as proof.
+- Hub page renders the section before the latest feed: role badges
+  (Thai-safe daily driver / Thai-safe·slower / speed-first), per-quant
+  cards with green (pass) vs red (fail) Thai chips, llama-server flags
+  used in the measurement, Evidence link to the experiment record, and a
+  Download button that queues precisely the tested files.
+- Ships with the first two proven entries: Gemma 4 26B-A4B QAT+MTP
+  (EXP-019 — Thai 9/9 + tonal 6/6, 45–47 tok/s) and the Qwen3.6-35B-A3B
+  quant family (EXP-011/EXP-018) with the honest speed/quality trade-off
+  spelled out per quant.
+- Integrity tests: the curated data is validated offline (experiment paths
+  must exist, totals must equal the real file sums, Thai scores can never
+  exceed their totals) + an endpoint contract test.
+
 ### ⚡ Bench harness — honest-measurement core (`weight_stream/bench/`)
 - New package packaging the project's measurement discipline so ANY model
   can be measured reproducibly through the REAL engine (llama-server via

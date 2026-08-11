@@ -140,5 +140,22 @@
   "latestLoading": "กำลังโหลดโมเดลล่าสุด…",
   "pagePrev": "ก่อนหน้า",
   "pageNext": "ถัดไป",
-  "pageCounter": "หน้า {{page}}"
+  "pageCounter": "หน้า {{page}}",
+
+  "recTitle": "พิสูจน์แล้วบนเครื่องนี้",
+  "recHint": "โมเดลที่เราวัดจริงบนเครื่องอ้างอิง (VRAM 12 GB / RAM 64 GB) พร้อม Thai quality gate — ทุกตัวเลขเชื่อมโยงถึงหลักฐานการทดสอบ ปุ่มดาวน์โหลดจะโหลด quant ที่เราวัดจริงตัวนั้น",
+  "recLoading": "กำลังโหลดคำแนะนำ…",
+  "recLoadFailed": "โหลดคำแนะนำไม่ได้",
+  "recCaveat": "ตัวเลขวัดบนเครื่องอ้างอิงของโปรเจค (i9-9900KF · RTX 3060 12 GB · 64 GB RAM) ฮาร์ดแวร์ของคุณอาจต่าง — ส่วนที่ใช้ได้คือผลภาษาไทยและการจัดลำดับระหว่าง quant",
+  "recCaveatHint": "กฎ honest telemetry: เฉพาะช่วงที่วัดได้จริง ไม่เคยประมาณ",
+  "recRole_thai": "ตัวหลักใช้ภาษาไทย",
+  "recRole_balanced": "ไทยผ่าน · ช้ากว่า",
+  "recRole_speed": "เร็วสุด · ไทยไม่ปลอดภัย",
+  "recTokHint": "ความเร็วที่วัดจริงบนเครื่องอ้างอิง (clean room, llama-server build เดียวกัน)",
+  "recThai": "ไทย",
+  "recTonal": "วรรณยุกต์",
+  "recExp": "หลักฐาน",
+  "recExpTitle": "บันทึกการทดลองพร้อมการวัดเต็มรูปแบบ",
+  "recFlagsHint": "llama-server flags ที่ใช้ในการวัด",
+  "recDownload": "ดาวน์โหลด"
 }

@@ -82,6 +82,65 @@ export interface HubModelDetail {
   quants: HubQuantGroup[]
 }
 
+/* ── Curated "proven on this rig" recommendations ───────────────────
+   Served from weight_stream/server/recommended.py — every entry is backed
+   by a measured experiment (research/experiments/) incl. the Thai quality
+   gate, and carries the EXACT files that were measured (byte sizes verified
+   against HF at curation time). Numbers are from THIS machine — honest
+   caveat rendered alongside (ADR-003). */
+
+export interface HubRecommendedFile {
+  filename: string
+  /** real byte size of this file (verified against HF at curation time) */
+  bytes: number
+}
+
+export interface HubRecommendedQuant {
+  quant: string
+  /** the exact download set — the Hub downloads precisely these */
+  files: HubRecommendedFile[]
+  total_bytes: number
+  /** measured tok/s range on the reference rig; null = not measured */
+  tok_s_min: number | null
+  tok_s_max: number | null
+  /** Thai quality gate: correct/total (9 fixed questions, EXP-009 set) */
+  thai_correct: number | null
+  thai_total: number | null
+  /** Thai tonal discriminator: correct/total (the project's quality floor) */
+  thai_tonal_correct: number | null
+  thai_tonal_total: number | null
+  /** repo-relative path to the evidence (research/experiments/EXP-*) */
+  experiment: string
+  /** free-form measurement/usage note (already localised server-side) */
+  notes: string | null
+  /** llama-server flags the measurement used (e.g. MTP); null = none */
+  flags: string | null
+}
+
+export type HubRecommendedRole = 'thai' | 'speed' | 'balanced'
+
+export interface HubRecommendedEntry {
+  repo_id: string
+  name: string
+  arch: string
+  /** drives the badge colour/icon in the UI */
+  role: HubRecommendedRole
+  tagline: string
+  quants: HubRecommendedQuant[]
+}
+
+export interface HubRecommendedResponse {
+  recommended: HubRecommendedEntry[]
+  count: number
+}
+
+/** GitHub blob base for experiment links (repo-relative ``experiment`` paths). */
+export const GITHUB_BLOB_BASE = 'https://github.com/i-mrDed/weight-streaming/blob/main'
+
+export function hubRecommended(): Promise<HubRecommendedResponse> {
+  return apiJSON<HubRecommendedResponse>('/v1/hub/recommended', undefined, { timeoutMs: 10_000 })
+}
+
 export function hubModel(repoId: string): Promise<HubModelDetail> {
   // repo_id is server-sourced → encode each path segment, never interpolate raw
   const enc = repoId.split('/').map(encodeURIComponent).join('/')
