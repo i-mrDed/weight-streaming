@@ -8,6 +8,13 @@
 ## [Unreleased]
 
 ### ⚡ Auto-tiering — route requests to the right model (user-configurable)
+- **Pin from the Models page**: every scan result now has a "Tier" menu —
+  pick ⚡ fast or 🎯 quality and the scanned model becomes that tier
+  (fetch-merge-save, other tier untouched). Pinning a Gemma QAT model
+  auto-wires its MTP draft flags from the sibling `MTP/` file (EXP-022
+  measured +20% with draft-mtp); pinning a DIFFERENT model clears the
+  previous model's extra args so a stale draft path can never leak into
+  the new model's llama-server cmdline.
 - **Any two models, not hardcoded**: Settings → Auto-tiering lets the user
   pick a fast/quality pair from a model scan (or type paths); the router
   itself is model-agnostic. Shipped default = the Gemma 4 12B/26B QAT+MTP

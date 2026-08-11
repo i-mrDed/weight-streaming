@@ -475,6 +475,7 @@ select.md-input { cursor: pointer; }
   white-space: nowrap;
 }
 .md-result__badges { display: flex; gap: 5px; flex-wrap: wrap; }
+.md-result__actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .md-result__warn { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--ws-status-warn); }
 .md-result__warn code { font-family: var(--ws-font-mono); background: var(--ws-status-warn-soft); padding: 1px 5px; border-radius: 4px; }
 

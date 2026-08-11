@@ -48,7 +48,10 @@ import {
   type HardwareInfo,
   type ScanModel,
 } from '@/core/models'
+import { setTier } from '@/core/tiering'
 import { fmtDateTime, fmtNumber, locale, relativeDay, t } from '@/i18n'
+import { Menu } from '@/components/Menu'
+import { Zap } from 'lucide-preact'
 
 const LS_UNLOAD_REMEMBER = 'ws-unload-remember-session'
 
@@ -176,6 +179,39 @@ export function ModelsPage() {
   const pickScanResult = (m: ScanModel) => {
     loadPath.value = m.path
     loadId.value = suggestModelId(m.path)
+  }
+
+  /** Auto-wire MTP draft flags when the scanned model has a sibling draft
+      (Gemma QAT family — EXP-019/022 measured +20% with draft-mtp). Honest
+      best effort: no draft found → plain config, no fabricated flags. */
+  const draftArgsFor = (m: ScanModel): string => {
+    const dir = m.path.replace(/[\\/]+[^\\/]+\.gguf$/i, '')
+    const draft = (scanResults.value ?? []).find((x) =>
+      x.directory.replace(/\\/g, '/').startsWith(
+        dir.replace(/\\/g, '/') + '/MTP') &&
+      /^(mtp|draft)-/i.test(x.name) &&
+      /Q(4|8)_0/i.test(x.name || ''))
+    if (!draft) return ''
+    return `--spec-type draft-mtp --spec-draft-model ${draft.path.replace(/\\/g, '/')} --spec-draft-n-max 2`
+  }
+
+  /** Pin a scanned model as the fast/quality tier (fetch → merge → save). */
+  const setAsTier = async (m: ScanModel, tier: 'fast' | 'quality') => {
+    try {
+      await setTier(tier, {
+        model_id: suggestModelId(m.path),
+        model_path: m.path,
+        extra_args: draftArgsFor(m),
+      })
+      toast('success', t(
+        tier === 'fast' ? 'models.scan.tierFastSet' : 'models.scan.tierQualitySet',
+        { name: m.name },
+      ))
+    } catch (e) {
+      toast('error', t('models.scan.tierSetFailed'), {
+        body: e instanceof ApiError && e.detail ? e.detail : String(e),
+      })
+    }
   }
 
   const doUnload = async (id: string) => {
@@ -438,9 +474,34 @@ export function ModelsPage() {
                         ⚠️ {t('models.scan.needUpgrade')} <code>pip install -U llama-cpp-python</code>
                       </p>
                     ) : null}
-                    <Button variant="soft" size="sm" onClick={() => pickScanResult(m)}>
-                      <HardDriveDownload size={13} aria-hidden="true" /> {t('models.scan.use')}
-                    </Button>
+                    <div class="md-result__actions">
+                      <Button variant="soft" size="sm" onClick={() => pickScanResult(m)}>
+                        <HardDriveDownload size={13} aria-hidden="true" /> {t('models.scan.use')}
+                      </Button>
+                      <Menu
+                        ariaLabel={t('models.scan.tierMenu')}
+                        trigger={
+                          <Button variant="ghost" size="sm">
+                            <Zap size={13} aria-hidden="true" /> {t('models.scan.tier')}
+                          </Button>
+                        }
+                        header={t('models.scan.tierMenu')}
+                        items={[
+                          {
+                            key: '__fast',
+                            label: `⚡ ${t('models.scan.tierFast')}`,
+                            hint: t('settings.tiering.fastTier'),
+                            onSelect: () => setAsTier(m, 'fast'),
+                          },
+                          {
+                            key: '__quality',
+                            label: `🎯 ${t('models.scan.tierQuality')}`,
+                            hint: t('settings.tiering.qualityTier'),
+                            onSelect: () => setAsTier(m, 'quality'),
+                          },
+                        ]}
+                      />
+                    </div>
                   </div>
                 ))}
               </div>
