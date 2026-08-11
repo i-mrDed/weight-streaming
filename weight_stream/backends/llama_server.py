@@ -52,6 +52,31 @@ _JAN_BACKENDS = os.path.join(
 DEFAULT_SERVER_PORT = 8805
 DEFAULT_HOST = "127.0.0.1"
 
+# Optional override so multiple weight-streaming servers can run side by
+# side without colliding on the llama-server port (e.g. E2 A/B bench while
+# another agent's server is live on 8805). Explicit `port=` arg still wins.
+BACKEND_PORT_ENV = "WS_LLAMA_BACKEND_PORT"
+
+
+def _backend_port() -> int:
+    """Resolve the llama-server backend port: env override, else default."""
+    raw = os.environ.get(BACKEND_PORT_ENV, "").strip()
+    if not raw:
+        return DEFAULT_SERVER_PORT
+    try:
+        p = int(raw)
+    except (TypeError, ValueError):
+        raise ModelError(
+            f"Invalid {BACKEND_PORT_ENV}={raw!r} (must be an integer port)",
+            details={"hint": f"e.g. set {BACKEND_PORT_ENV}=8806"},
+        )
+    if not (1024 <= p <= 65535):
+        raise ModelError(
+            f"Invalid {BACKEND_PORT_ENV}={p} (must be 1024..65535)",
+            details={"value": p},
+        )
+    return p
+
 # KV cache data types llama-server accepts (-ctk/-ctv). Keep it explicit so
 # the backend never forwards garbage to the binary — unknown types are
 # refused with a clear error instead of silently passing through.
@@ -313,7 +338,7 @@ class LlamaServerBackend(WeightStreamBackend):
         gpu_layers: int = -1,  # -1 = auto (use all available)
         server_binary: Optional[str] = None,
         host: str = DEFAULT_HOST,
-        port: int = DEFAULT_SERVER_PORT,
+        port: Optional[int] = None,  # explicit port wins; else env/WS_LLAMA_BACKEND_PORT/8805
         kv_cache_type: Optional[str] = None,
         extra_args: Optional[str] = None,
         **kwargs,
@@ -334,7 +359,7 @@ class LlamaServerBackend(WeightStreamBackend):
             )
         self._server_binary = server_binary or _find_llama_server()
         self._host = host
-        self._port = port
+        self._port = port if port is not None else _backend_port()
         self._proc: Optional[subprocess.Popen] = None
         # Windows orphan guard (EXP-009): handle of the KILL_ON_JOB_CLOSE
         # Job Object the spawned llama-server is assigned to. While this
@@ -343,7 +368,7 @@ class LlamaServerBackend(WeightStreamBackend):
         # None on POSIX or when job creation failed (graceful close() still
         # terminates the child normally).
         self._job_handle: Optional[int] = None
-        self._base_url = f"http://{host}:{port}"
+        self._base_url = f"http://{self._host}:{self._port}"
         self._last_gen_stats: Dict[str, Any] = {}
         self._metadata: Dict[str, Any] = {}
         self._ready = False
