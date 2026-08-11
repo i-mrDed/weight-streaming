@@ -8,7 +8,7 @@
 | **Machine** | i9-9900KF · 64GB DDR4-3200 (dual-channel) · RTX 3060 12GB · NVMe |
 | **Backend** | LlamaServerBackend (llama-server b9967, CUDA 13 build) |
 | **Extra args** | `WS_LLAMA_EXTRA_ARGS="--cpu-moe -fa on"` (new injection point) |
-| **Model** | Qwen3.6-35B-A3B-UD-IQ2_M (11.5 GB GGUF, D:/models/) |
+| **Model** | Qwen3.6-35B-A3B-UD-IQ2_M (11.5 GB GGUF, ~/models/) |
 | **Architecture** | qwen35moe · **256 experts/layer · 8 active · 40 layers (10,240 experts total)** |
 | **Quantization** | UD-IQ2_M |
 | **Context** | 2048 |

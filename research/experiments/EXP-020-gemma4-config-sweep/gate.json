@@ -1,9 +1,9 @@
 {
-  "model": "C:\\Users\\dedch\\models\\Gemma4-26B-A4B-QAT\\gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+  "model": "~/models/Gemma4-26B-A4B-QAT/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
   "configs": [
     {
-      "config": "-fa on -t 12 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
-      "extra_args": "-fa on -t 12 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "config": "-fa on -t 12 --spec-draft-model ~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "extra_args": "-fa on -t 12 --spec-draft-model ~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
       "flag_in_cmdline": true,
       "cold": {
         "tok_s": 38.015391931863846,

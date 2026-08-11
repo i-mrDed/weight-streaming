@@ -72,6 +72,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install
         run: npm ci
+      - name: Security audit (npm audit)
+        # Fails when a moderate-or-higher vulnerability is present in the
+        # dependency tree (including transitive), so new advisories break
+        # CI instead of being noticed later via GitHub dependabot alerts.
+        run: npm audit --audit-level=moderate
       - name: Typecheck
         run: npm run typecheck
       - name: Unit tests (vitest)

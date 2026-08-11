@@ -3,7 +3,7 @@
 ## Environment
 - **Server:** `python -m weight_stream.server --port 8766` + `WS_LLAMA_BACKEND_PORT=8806`
   (พอร์ตแยกจากระบบอื่นที่ใช้ 8765/8805 — PR #1 `31c099f`)
-- **Model:** `C:\Users\dedch\models\UD-IQ3_XXS\DeepSeek-V4-Flash-0731-UD-IQ3_XXS-0000N-of-00004.gguf` (97.05GB)
+- **Model:** `~/models/UD-IQ3_XXS\DeepSeek-V4-Flash-0731-UD-IQ3_XXS-0000N-of-00004.gguf` (97.05GB)
 - **Load:** shard1 path (split-aware) · n_ctx 2048/1024 · threads 8/6 · t 100/80 tokens · reasoning off
 
 ## Protocol (E2b-v2 — แก้จาก E2 ที่ bias)

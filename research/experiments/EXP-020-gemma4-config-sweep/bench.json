@@ -1,9 +1,9 @@
 {
-  "model": "C:\\Users\\dedch\\models\\Gemma4-26B-A4B-QAT\\gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+  "model": "~/models/Gemma4-26B-A4B-QAT/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
   "configs": [
     {
       "config": "t4",
-      "extra_args": "-fa on -t 4 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "extra_args": "-fa on -t 4 --spec-draft-model ~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
       "flag_in_cmdline": true,
       "cold": {
         "tok_s": 31.003360836128024,
@@ -30,7 +30,7 @@
     },
     {
       "config": "t6",
-      "extra_args": "-fa on -t 6 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "extra_args": "-fa on -t 6 --spec-draft-model ~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
       "flag_in_cmdline": true,
       "cold": {
         "tok_s": 38.58682298828253,
@@ -57,7 +57,7 @@
     },
     {
       "config": "t8",
-      "extra_args": "-fa on -t 8 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "extra_args": "-fa on -t 8 --spec-draft-model ~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
       "flag_in_cmdline": true,
       "cold": {
         "tok_s": 35.901768034963645,
@@ -84,7 +84,7 @@
     },
     {
       "config": "t12",
-      "extra_args": "-fa on -t 12 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "extra_args": "-fa on -t 12 --spec-draft-model ~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
       "flag_in_cmdline": true,
       "cold": {
         "tok_s": 41.783857547737256,
@@ -111,7 +111,7 @@
     },
     {
       "config": "t16",
-      "extra_args": "-fa on -t 16 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "extra_args": "-fa on -t 16 --spec-draft-model ~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
       "flag_in_cmdline": true,
       "cold": {
         "tok_s": 35.27291414964041,
@@ -138,7 +138,7 @@
     },
     {
       "config": "fa off t8",
-      "extra_args": "-t 8 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "extra_args": "-t 8 --spec-draft-model ~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
       "flag_in_cmdline": true,
       "cold": {
         "tok_s": 41.30054922076914,
@@ -165,7 +165,7 @@
     },
     {
       "config": "kv q8 t8",
-      "extra_args": "-fa on -t 8 -ctk q8_0 -ctv q8_0 --spec-draft-model C:/Users/dedch/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
+      "extra_args": "-fa on -t 8 -ctk q8_0 -ctv q8_0 --spec-draft-model ~/models/Gemma4-26B-A4B-QAT/MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf --spec-type draft-mtp --spec-draft-n-max 2",
       "flag_in_cmdline": true,
       "cold": {
         "tok_s": 37.24283465445878,

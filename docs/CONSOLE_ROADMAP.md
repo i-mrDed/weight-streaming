@@ -56,7 +56,7 @@ pytest เขียว · ไม่มี console error · honest-telemetry audi
 - `registry.ts` static-import token CSS vs spec §4.2 css-path drop-in (ยอมรับ/bundled)
 - `/health` hardcode `0.11.0` vs package `0.13.0` → Settings/About ชดเชยโดยดึงจาก `/v1/debug/context` แล้ว แต่ navbar dot/splash ยังตาม `/health` (แก้ server ด้วย `__version__` เฟสหลัง)
 - EN copy `faults/token` (overview) vs `faults/tok` (stats) — cosmetic
-- recursive scan โฟลเดอร์โมเดลใหญ่มาก (เช่น `D:/models` 11.5GB GGUF) ค้าง/serialize `/v1/models/scan` → ควรมีตั๋ว scan timeout/cancel (pre-existing)
+- recursive scan โฟลเดอร์โมเดลใหญ่มาก (เช่น `~/models` 11.5GB GGUF) ค้าง/serialize `/v1/models/scan` → ควรมีตั๋ว scan timeout/cancel (pre-existing)
 - mobile shell buttons 34–37px (<44px) — ยอมรับตอน P1 sign-off
 - bundle โตเป็น ~112.5 kB gzip หลัง P3 (ยังใต้งบ) — ติดตามใน P5
 

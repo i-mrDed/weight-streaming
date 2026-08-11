@@ -29,18 +29,20 @@
 
 ### 2. `tests/test_split_parser.py:15` — hardcoded path เครื่อง dev ✅ แก้แล้ว (2026-08-11)
 
-- ~~`DEFAULT_DIR = Path(r"C:\Users\dedch\models\UD-IQ3_XXS")`~~ → default เป็น
+- ~~`DEFAULT_DIR = Path(r"C:\Users\<user>\models\UD-IQ3_XXS")`~~ → default เป็น
   `~/models/UD-IQ3_XXS` + `os.path.expanduser()` ตอนอ่านค่า — ไม่รั่ว username, ขยายเป็น home
   ของเครื่องตัวเอง; empty-HOME → skip (ยืนยันแล้ว: 9 ตัว skip)
 
-### 3. `tests/test_gguf.py:8` + `tests/test_split_parser.py` — เทสต์ที่พึ่งไฟล์โมเดลจริง
+### 3. `tests/test_gguf.py:8` + `tests/test_split_parser.py` — เทสต์ที่พึ่งไฟล์โมเดลจริง ✅ แก้แล้ว (2026-08-11)
 
-- ทั้งคู่ชี้ไปที่โมเดลจริง (gitignored, มีแค่เครื่อง dev) แม้ skip-protected แต่บนเครื่อง dev
-  **รันจริง** (0 skipped ในการรันเมื่อกี้) เพราะ path ไม่ได้อยู่ใต้ `~`
-- บน CI (fresh checkout) จะ skip เสมอ → coverage ของ parser ไม่มีอยู่จริงใน CI และ
-  assertions (411 tensors, offset 42496 …) อาจเน่าเงียบๆ ได้
-- **แก้:** commit fixture GGUF ขนาดจิ๋ว (synthetic) ให้รันใน CI ได้จริง หรือยอมรับสถานะ
-  skip-gated ต่อไป (แต่ควรรู้ข้อจำกัด)
+- ~~ทั้งคู่ชี้ไปที่โมเดลจริง (gitignored, มีแค่เครื่อง dev)~~ → `tests/fixtures/synthetic_gguf.py`
+  สร้าง GGUF สังเคราะห์จิ๋วตอน test: `build_qwen2moe()` (10 tensors, 6 expert tensors
+  Q4_K, mirror Qwen1.5-MoE) + `build_dsv4_shards()` (4 shards จิ๋ว mirror DS V4 Flash) —
+  ใช้ `gguf`/`numpy` ซึ่งเป็น runtime dep อยู่แล้ว ไม่ต้องเพิ่ม dependency, ไม่ต้องใช้โมเดลจริง
+- parser test ทั้ง 20 ตัว (test_gguf 10 + test_split_parser 10) รันจริงใน CI แล้ว —
+  suite hermetic สุดท้าย: **382 passed, 7 skipped, 0 failed** (skip = test_server opt-in เท่านั้น)
+- หมายเหตุ: `GGUFWriter` เก็บ dims reversed + byte-shape → ส่ง data shape `(n_experts, cols_bytes, rows)`
+  เพื่อให้ reader คืน `(rows, cols_bytes, n_experts)` — อธิบายไว้ใน docstring ของ builder
 
 ---
 
@@ -64,10 +66,10 @@
 ## 🟢 ระดับ 3 — เลือกทำ (historical artifacts, ไม่กระทบ CI)
 
 - **`research/experiments/EXP-0*/bench.json | gate.json | *.md`** (~85 ไฟล์) — บันทึก benchmark
-  ที่ฝัง `C:\Users\dedch\...`, `D:\models\...` — เป็นหลักฐานการวัดของเครื่องอ้างอิง เก็บไว้ได้
+  ที่ฝัง `C:\Users\<user>\...`, `D:\models\...` — เป็นหลักฐานการวัดของเครื่องอ้างอิง เก็บไว้ได้
   แต่รั่ว username → พิจารณาเปลี่ยนเป็น `~/models/...` (มี checklist อยู่แล้วใน
   `docs/GO_PUBLIC_CHECKLIST.md:32`)
-- **`docs/MODEL_INVENTORY.md`, `ISSUES.md`** — เอกสารอ้าง `D:\models\...`, `C:\Users\dedch\...`
+- **`docs/MODEL_INVENTORY.md`, `ISSUES.md`** — เอกสารอ้าง `D:\models\...`, `C:\Users\<user>\...`
 - **`Qwen3.6-35B-A3B-UD-IQ2_M.gguf.part` (7.9 GB ใน repo root)** — gitignored (`*.gguf.part`)
   จะไม่ถูก push แต่ควรลบออกจาก working tree
 
@@ -85,6 +87,6 @@
   เป็น string สำหรับเทสต์ path-matching เท่านั้น ไม่ได้อ่านไฟล์
 - **`tests/test_server_config_and_chat.py`, `test_p4_tiering.py`, `test_p4_security_hardening.py`** — fake engine + tmp_path
 - **CI guard job** (empty HOME/USERPROFILE) — อยู่ใน `.github/workflows/ci.yml`
-- **Gitignored แล้ว:** `.agents/mcp_config.json` (`C:\Users\dedch\...`), `.mcp.json`, `.p2.json`,
+- **Gitignored แล้ว:** `.agents/mcp_config.json` (`C:\Users\<user>\...`), `.mcp.json`, `.p2.json`,
   `.proof2.json`, `opencode.jsonc`, `research/models/*.gguf`, `*.gguf.part`, `data/*.log`,
   `data/tiering.json`, `data/usage_history.jsonl`, `data/mcp/`

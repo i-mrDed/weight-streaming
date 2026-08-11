@@ -9,22 +9,22 @@
 
 | โมเดล | quant | ขนาด | ที่อยู่ (เครื่องนี้) | แหล่ง | บทบาท | สถานะ |
 |---|---|---|---|---|---|---|
-| DeepSeek-V4-Flash-0731 | UD-IQ3_XXS | 98 GB | `C:\Users\dedch\models\UD-IQ3_XXS\` | unsloth (HF) | **โมเดลหลักของ EXP-012** — พิสูจน์รัน 104 GB บน 64 GB RAM | ✅ วัดเสร็จ (EXP-012: 1.5–1.9 tok/s, disk-bound) · ⏸ รอตัดสินใจลบเพื่อคืนที่ให้ IQ2_M |
-| Qwen3.6-35B-A3B | UD-IQ2_M | 10.7 GB | `D:\models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ2_M.gguf` | unsloth (HF) | **Thai-safe benchmark บน 12 GB** (43–56 tok/s) — ก่อน EXP-019 เป็น daily driver ไทย | ✅ ใช้ประจำ |
-| Qwen3.6-35B-A3B | UD-IQ2_XXS | 10.0 GB | `D:\models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf` | unsloth (HF) | non-Thai speed king (61–66 tok/s) — Thai tonal FAIL (EXP-018) | ✅ วัดเสร็จ (EXP-018) |
-| Qwen3.6-35B-A3B | UD-IQ1_M | 9.4 GB | `D:\models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ1_M.gguf` | unsloth (HF) | speed-first (74.7 tok/s) — Thai tonal FAIL | ✅ วัดเสร็จ (EXP-011) |
-| **Gemma 4 12B** | QAT UD-Q4_K_XL + MTP draft Q8_0 | 6.72 + 0.47 GB | `C:\Users\dedch\models\Gemma4-12B-QAT\` (+ `MTP\`) | unsloth (HF) | **NEW daily driver เร็วสุด (ไทย): Thai 9/9 + tonal 6/6, 75.7 tok/s sustained — พอดี VRAM 12 GB (EXP-022)** | ✅ วัดเสร็จ (EXP-022) — ใช้กับ `--spec-type draft-mtp -t 8` |
-| **Gemma 4 26B-A4B** | QAT UD-Q4_K_XL + MTP draft Q8_0 | 14.25 + 0.46 GB | `C:\Users\dedch\models\Gemma4-26B-A4B-QAT\` (+ `MTP\`) | unsloth (HF) | **quality-first daily driver (ไทย): Thai 9/9 + tonal 6/6 PERFECT, 49–51 tok/s ด้วย MTP+t12 (EXP-019/020)** | ✅ วัดเสร็จ (EXP-019+EXP-020) — ใช้กับ `-t 12 --spec-type draft-mtp` |
-| Qwen3-0.6B-Q8_0 | Q8_0 | 0.6 GB | `C:\Users\dedch\models\Qwen3-0.6B-Q8_0.gguf` | — | draft/helper ขนาดเล็ก | ✅ |
+| DeepSeek-V4-Flash-0731 | UD-IQ3_XXS | 98 GB | `~/models/UD-IQ3_XXS\` | unsloth (HF) | **โมเดลหลักของ EXP-012** — พิสูจน์รัน 104 GB บน 64 GB RAM | ✅ วัดเสร็จ (EXP-012: 1.5–1.9 tok/s, disk-bound) · ⏸ รอตัดสินใจลบเพื่อคืนที่ให้ IQ2_M |
+| Qwen3.6-35B-A3B | UD-IQ2_M | 10.7 GB | `~/models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ2_M.gguf` | unsloth (HF) | **Thai-safe benchmark บน 12 GB** (43–56 tok/s) — ก่อน EXP-019 เป็น daily driver ไทย | ✅ ใช้ประจำ |
+| Qwen3.6-35B-A3B | UD-IQ2_XXS | 10.0 GB | `~/models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf` | unsloth (HF) | non-Thai speed king (61–66 tok/s) — Thai tonal FAIL (EXP-018) | ✅ วัดเสร็จ (EXP-018) |
+| Qwen3.6-35B-A3B | UD-IQ1_M | 9.4 GB | `~/models\Qwen3.6-35B-A3B-GGUF\Qwen3.6-35B-A3B-UD-IQ1_M.gguf` | unsloth (HF) | speed-first (74.7 tok/s) — Thai tonal FAIL | ✅ วัดเสร็จ (EXP-011) |
+| **Gemma 4 12B** | QAT UD-Q4_K_XL + MTP draft Q8_0 | 6.72 + 0.47 GB | `~/models/Gemma4-12B-QAT\` (+ `MTP\`) | unsloth (HF) | **NEW daily driver เร็วสุด (ไทย): Thai 9/9 + tonal 6/6, 75.7 tok/s sustained — พอดี VRAM 12 GB (EXP-022)** | ✅ วัดเสร็จ (EXP-022) — ใช้กับ `--spec-type draft-mtp -t 8` |
+| **Gemma 4 26B-A4B** | QAT UD-Q4_K_XL + MTP draft Q8_0 | 14.25 + 0.46 GB | `~/models/Gemma4-26B-A4B-QAT\` (+ `MTP\`) | unsloth (HF) | **quality-first daily driver (ไทย): Thai 9/9 + tonal 6/6 PERFECT, 49–51 tok/s ด้วย MTP+t12 (EXP-019/020)** | ✅ วัดเสร็จ (EXP-019+EXP-020) — ใช้กับ `-t 12 --spec-type draft-mtp` |
+| Qwen3-0.6B-Q8_0 | Q8_0 | 0.6 GB | `~/models/Qwen3-0.6B-Q8_0.gguf` | — | draft/helper ขนาดเล็ก | ✅ |
 
 ## 🧠 Embedding models
 
 | โมเดล | quant | ขนาด | ที่อยู่ | บทบาท |
 |---|---|---|---|---|
-| Qwen3-Embedding-4B | Q4_K_M | 2.3 GB | `D:\models\Qwen3-Embedding-4B-GGUF\` | embedding หลัก |
-| bge-m3 | f32 | 2.1 GB | `D:\models\bge-m3-f32-gguf\` | embedding |
-| bge-m3 | q8_0 | 0.6 GB | `D:\models\bge-m3-q8_0-gguf\` | embedding |
-| embeddinggemma-300m | q8_0 | 0.3 GB | `D:\models\embeddinggemma-gguf\` | embedding เล็ก |
+| Qwen3-Embedding-4B | Q4_K_M | 2.3 GB | `~/models\Qwen3-Embedding-4B-GGUF\` | embedding หลัก |
+| bge-m3 | f32 | 2.1 GB | `~/models\bge-m3-f32-gguf\` | embedding |
+| bge-m3 | q8_0 | 0.6 GB | `~/models\bge-m3-q8_0-gguf\` | embedding |
+| embeddinggemma-300m | q8_0 | 0.3 GB | `~/models\embeddinggemma-gguf\` | embedding เล็ก |
 
 ## 🧪 โมเดลทดสอบ (research/models — ใน repo)
 

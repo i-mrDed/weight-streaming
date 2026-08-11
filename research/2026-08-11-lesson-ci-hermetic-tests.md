@@ -56,7 +56,7 @@ again.
 ### Layer 2 — the defaults were baked at import time
 
 `DEFAULT_FAST` / `DEFAULT_QUALITY` called `os.path.expanduser("~/models/...")`
-**at module import**, freezing `C:\Users\dedch\models\...` into the module
+**at module import**, freezing `~/models/...` into the module
 constants. Consequences:
 
 - The "shipped default" pair was tied to the developer's home directory —

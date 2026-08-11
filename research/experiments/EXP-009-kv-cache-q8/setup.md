@@ -17,7 +17,7 @@ real numbers.
 
 ## Setup
 
-- **Model:** Qwen3.6-35B-A3B UD-IQ2_M (D:/models)
+- **Model:** Qwen3.6-35B-A3B UD-IQ2_M (~/models)
 - **Backend:** llama-server (Jan b9967) via API server, `--n-cpu-moe 10 -fa on`
 - **Method:** measure_ncmoe_matrix.py with WS_MATRIX_CONFIGS override
   (same-session apples-to-apples, token-exact flag verification, clean-room gate)

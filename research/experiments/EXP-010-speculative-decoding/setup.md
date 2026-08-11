@@ -15,7 +15,7 @@ token read from RAM.
 
 ## Setup
 
-- **Target:** Qwen3.6-35B-A3B UD-IQ2_M (D:/models)
+- **Target:** Qwen3.6-35B-A3B UD-IQ2_M (~/models)
 - **Draft candidates:**
   1. Qwen3-0.6B-Q8_0 (639 MB, `~/models/`) — official Qwen,
      Qwen3 tokenizer (151,936 tokens)

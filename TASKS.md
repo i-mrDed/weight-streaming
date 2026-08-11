@@ -23,11 +23,23 @@
 |-------|------|----------|-------|
 | ✅ | `tests/test_server.py` — opt-in (`WS_E2E=1`) ไม่ auto-run ต่อ live server | 🔴 | 2026-08-11: gate เป็น WS_E2E; เพิ่ม WS_TEST_SERVER_URL/WS_TEST_MODEL; แก้พอร์ต 8383 vs 8765 ใน standalone runner |
 | ✅ | `tests/test_split_parser.py` — default path แข็ง → `~/models/...` (expand ตอนเรียก) | 🔴 | 2026-08-11: ไม่รั่ว username แล้ว; empty-HOME → skip 9 ตัว |
-| ⬜ | Fixture GGUF สังเคราะห์สำหรับ `test_gguf.py` + `test_split_parser.py` | 🔴 | ตอนนี้เทสต์ parser รันกับโมเดลจริงบนเครื่อง dev / skip บน CI → coverage ไม่มีใน CI, assertions อาจเน่าเงียบ |
+| ✅ | Fixture GGUF สังเคราะห์สำหรับ `test_gguf.py` + `test_split_parser.py` | 🔴 | 2026-08-11: `tests/fixtures/synthetic_gguf.py` สร้าง qwen2moe + DSV4 4-shard จิ๋วตอน test (gguf+numpy เป็น runtime dep อยู่แล้ว); parser test 20 ตัวรันจริงใน CI — hermetic suite 382 passed / 7 skipped (skip = test_server opt-in เท่านั้น) |
 | ✅ | Smoke scripts (`test_llama_server.py`, `test_tools.py`, `test_mcp.py`, `test_assistants.py`) — path เป็น env-driven | 🟡 | 2026-08-11: `WS_TEST_MODEL` + `WS_DATA_DIR` fallback เป็น temp dir |
 | ✅ | `scripts/measure_*.py` — default `WS_TEST_MODEL` จาก `D:/models/...` → `~/models/...` | 🟡 | 2026-08-11: 6 scripts; `os.path.expanduser` ตอนอ่านค่า (convention เดียวกับ tiering.py) |
-| ⬜ | Experiment artifacts (`research/experiments/EXP-0*/`) + `docs/MODEL_INVENTORY.md` — ～-ize paths | 🟢 | historical records; รั่ว username; มี checklist ใน docs/GO_PUBLIC_CHECKLIST.md:32 |
-| ⬜ | ลบ `Qwen3.6-35B-A3B-UD-IQ2_M.gguf.part` (7.9 GB) ออกจาก working tree | 🟢 | gitignored ไม่ถูก push แต่กินพื้นที่ repo root |
+| ✅ | Experiment artifacts (`research/experiments/EXP-0*/`) + `docs/MODEL_INVENTORY.md` — ～-ize paths | 🟢 | 2026-08-11: 20 ไฟล์ (`C:/Users/dedch/...`, `C:\Users\dedch\...`, `D:/models`, `D:\models`) → `~/models/...`; audit doc ใช้ `<user>` placeholder; JSON ตรวจ parse ผ่าน; `git grep dedch` ใน research+docs สะอาด |
+| ⬜ | ลบ `Qwen3.6-35B-A3B-UD-IQ2_M.gguf.part` (7.9 GB) ออกจาก working tree | 🟢 | gitignored ไม่ถูก push แต่กินพื้นที่ repo root (user: ยังไม่ให้ลบ) |
+
+---
+
+## ✅ Dependabot vulnerabilities (2026-08-11)
+
+| สถานะ | Task | Priority | Notes |
+|-------|------|----------|-------|
+| ✅ | dompurify ≤3.4.12 (moderate XSS) → 3.4.13 | 🟡 | `^3.4.13`; API เดิม (sanitize + addHook) ไม่เปลี่ยน |
+| ✅ | nanoid <3.3.17 (high) → 3.3.18 | 🟡 | transitive ผ่าน vite→postcss; `npm audit fix` ภายใน range เดิม |
+| ✅ | sharp <0.35.0 (high libvips CVEs) → 0.35.3 | 🟡 | dev-only (gen-icons.mjs); API ใช้เหมือนเดิม; favicon.ico re-encode ด้วย libvips ใหม่ |
+| ✅ | `npm audit` 0 vulnerabilities | 🟡 | ตรวจแล้ว 2026-08-11 |
+| ✅ | CI guard: `npm audit --audit-level=moderate` ใน frontend job | 🟡 | 2026-08-11: เพิ่ม step หลัง `npm ci` — vulnerability ระดับ moderate+ ใหม่ทำ CI แดงทันที |
 
 ---
 

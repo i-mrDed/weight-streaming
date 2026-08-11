@@ -32,6 +32,6 @@ same quality).
 - `results.md` — numbers + quality answers
 - `analysis.md` — verdict
 - `bench-iq2xxs.json / .md / .quality.md` — raw harness export
-- Model: `D:/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf`
+- Model: `~/models/Qwen3.6-35B-A3B-GGUF/Qwen3.6-35B-A3B-UD-IQ2_XXS.gguf`
   (10,756,586,464 bytes, verified byte-exact against HF after a stalled
   download was resumed with `scripts/resume_download.py`)

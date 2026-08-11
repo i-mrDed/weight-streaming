@@ -9,7 +9,7 @@
 
 ## 🏆 Tier 1 — ตัวหลัก (วัดแล้วทุกตัว — EXP-011/018/019)
 
-### 1. Qwen3.6-35B-A3B (มีอยู่แล้ว — D:\models\Qwen3.6-35B-A3B-GGUF\)
+### 1. Qwen3.6-35B-A3B (มีอยู่แล้ว — ~/models\Qwen3.6-35B-A3B-GGUF\)
 Community verdict 2026: *"INSANE even for VRAM-constrained systems"* — เป็นตัวชูโรงของคลาส 12 GB
 
 | quant | ขนาด | สถานะ | วัดจริงบนเครื่องเรา |
@@ -18,7 +18,7 @@ Community verdict 2026: *"INSANE even for VRAM-constrained systems"* — เป�
 | UD-IQ2_M | 10.73 GB | ✅ วัดแล้ว | 43–56 tok/s, ไทยผ่าน (EXP-011) — VRAM เต็ม (10.9 GB) |
 | UD-IQ2_XXS | 10.02 GB | ✅ วัดแล้ว | **61–66 tok/s** แต่ **Thai tones ล้ม 1/6** (EXP-018) — ใช้ได้สำหรับ non-Thai |
 
-### 2. Gemma 4 26B-A4B QAT + MTP (ดาวน์โหลดแล้ว — C:\Users\dedch\models\Gemma4-26B-A4B-QAT\)
+### 2. Gemma 4 26B-A4B QAT + MTP (ดาวน์โหลดแล้ว — ~/models/Gemma4-26B-A4B-QAT\)
 - ไฟล์: `gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf` 14.25 GB + `MTP/mtp-gemma-4-26B-A4B-it-Q8_0.gguf` 0.46 GB
 - Benchmark 2026-07 (RTX 4070 12 GB): QAT+MTP **100.6 tok/s**; บน 3060 เรา: **45–47 tok/s** (EXP-019)
 - **✅ วัดแล้ว (EXP-019): Thai gate 9/9 + Thai tonal 6/6 PERFECT — คำแรกบนเครื่องนี้ที่ผ่านครบที่ความเร็วใช้ได้**

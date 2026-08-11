@@ -1,39 +1,18 @@
 """Tests for GGUFSplitParser (split-shard GGUF support).
 
-Uses the real DS V4 Flash head files (metadata shard + partial weight
-shard head) so the test runs fast without requiring the full 97GB model.
-Path is configurable via env WS_TEST_MODELS_DIR; skips if absent.
+Runs hermetically in CI against four tiny synthetic shards (built at test
+time) that mirror the DS V4 Flash multi-shard layout: metadata + tensors
+split across 4 files, expert tensors named `blk.N.ffn_*_exps.weight`.
 """
-import os
-from pathlib import Path
-
 import pytest
 
+from tests.fixtures.synthetic_gguf import build_dsv4_shards
 from weight_stream.gguf.parser import GGUFSplitParser
-
-# No machine-specific default (hermetic): `~` expands to THIS machine's
-# home at load time; on a fresh box the shards are absent → tests skip
-# honestly instead of depending on a dev-machine path.
-MODELS_DIR = Path(os.path.expanduser(os.environ.get(
-    "WS_TEST_MODELS_DIR", "~/models/UD-IQ3_XXS")))
-
-SHARD_NAMES = [
-    "DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00001-of-00004.gguf",
-    "DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00002-of-00004.gguf",
-    "DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00003-of-00004.gguf",
-    "DeepSeek-V4-Flash-0731-UD-IQ3_XXS-00004-of-00004.gguf",
-]
-
-
-def _shards() -> list[Path]:
-    return [MODELS_DIR / n for n in SHARD_NAMES]
 
 
 @pytest.fixture(scope="module")
-def split_parser():
-    shards = _shards()
-    if not all(p.exists() for p in shards):
-        pytest.skip("DS V4 Flash shards not available")
+def split_parser(tmp_path_factory):
+    shards = build_dsv4_shards(tmp_path_factory.mktemp("shards"))
     p = GGUFSplitParser([str(x) for x in shards])
     yield p
     p.close()
@@ -44,34 +23,34 @@ class TestGGUFSplitParser:
         assert split_parser.shard_count == 4
 
     def test_total_tensors(self, split_parser):
-        # shard1=0 (metadata), shard2=660, shard3=620, shard4=48 == 1328
-        assert split_parser.n_tensors == 1328
+        # shard1=1, shard2=2, shard3=2, shard4=3 == 8
+        assert split_parser.n_tensors == 8
 
     def test_metadata(self, split_parser):
         assert split_parser.metadata.get("general.architecture") == "deepseek4"
-        assert split_parser.metadata.get("deepseek4.expert_count") == 256
-        assert split_parser.metadata.get("deepseek4.expert_used_count") == 6
-        assert split_parser.metadata.get("deepseek4.block_count") == 43
+        assert split_parser.metadata.get("deepseek4.expert_count") == 4
+        assert split_parser.metadata.get("deepseek4.expert_used_count") == 2
+        assert split_parser.metadata.get("deepseek4.block_count") == 2
 
     def test_tensor_location(self, split_parser):
         t = split_parser.get_tensor("output.weight")
         assert t is not None
         assert t.shard_index == 1
-        assert t.offset_in_shard == 42496          # verified from real model
-        assert t.size_bytes == 434380800           # 434.4 MB
+        assert t.offset_in_shard > 0          # after shard1's header + TI
+        assert t.size_bytes == 4096           # 32*64 F16, pad32 already aligned
 
     def test_expert_tensor_offsets(self, split_parser):
         t = split_parser.get_tensor("blk.0.ffn_gate_exps.weight")
         assert t is not None
         assert t.shard_index == 1
-        assert t.shape == (4096, 2048, 256)
-        assert t.size_bytes == 620756992           # 620.8 MB, pad32 applied
+        assert t.shape == (512, 144, 4)
+        assert t.size_bytes == 165888         # Q4_K byte size, pad32 aligned
 
     def test_expert_map_global_shape(self, split_parser):
         em = split_parser.get_expert_map_global()
-        assert len(em) == 43                       # 43 layers
-        assert len(em[0]) == 256                   # 256 experts per layer
-        assert len(em[0][0]) == 3                  # gate/up/down projections
+        assert len(em) == 2                   # 2 layers
+        assert len(em[0]) == 4                # 4 experts per layer
+        assert len(em[0][0]) == 3             # gate/up/down projections
 
     def test_expert_map_global_offsets_within_file(self, split_parser):
         em = split_parser.get_expert_map_global()
@@ -92,9 +71,9 @@ class TestGGUFSplitParser:
         arch = split_parser.detect_architecture()
         assert arch["arch_name"] == "deepseek4"
         assert arch["is_moe"] is True
-        assert arch["total_experts"] == 256
-        assert arch["active_experts"] == 6
-        assert arch["num_layers"] == 43
+        assert arch["total_experts"] == 4
+        assert arch["active_experts"] == 2
+        assert arch["num_layers"] == 2
         assert arch["shard_count"] == 4
 
 
