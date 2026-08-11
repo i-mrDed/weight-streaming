@@ -28,6 +28,35 @@ jobs:
       - name: Run tests
         run: python -m pytest -q
 
+  hermetic-tests:
+    # Lesson (2026-08-11): tiering pin/unpin tests passed locally for 6
+    # pushes while CI was red, because they depended on real model files
+    # in ~/models that only exist on the dev machine. This pass runs the
+    # full suite with an empty HOME/USERPROFILE so any test that quietly
+    # reads files outside the repo fails here instead of silently passing
+    # on dev machines. See research/2026-08-11-lesson-ci-hermetic-tests.md
+    name: Python tests — empty HOME (hermetic guard)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[server,test]"
+      - name: Run tests (no files outside the repo exist)
+        env:
+          # A path that cannot exist → any test touching machine-local
+          # files (real models, dev home) fails exactly like on a fresh box.
+          # Single quotes: `\e` would be a YAML escape in double quotes.
+          HOME: '${{ runner.temp }}\empty-home'
+          USERPROFILE: '${{ runner.temp }}\empty-home'
+        run: python -m pytest -q
+
   frontend:
     name: Frontend typecheck + build
     runs-on: ubuntu-latest

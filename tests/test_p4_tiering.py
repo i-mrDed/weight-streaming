@@ -206,6 +206,26 @@ def real_gguf(tmp_path):
 
 
 @pytest.fixture
+def fake_default_models(tmp_path, monkeypatch):
+    """Hermetic ~/models: stub the shipped default Gemma pair under a temp
+    HOME so pin/unpin (which restore + validate the default tier paths)
+    never depend on real model files on the dev machine — CI has none, and
+    the defaults are expanded lazily from the literal ~ path at load time."""
+    home = tmp_path / "home"
+    for rel in (
+        "Gemma4-12B-QAT/gemma-4-12B-it-qat-UD-Q4_K_XL.gguf",
+        "Gemma4-26B-A4B-QAT/gemma-4-26B-A4B-it-qat-UD-Q4_K_XL.gguf",
+    ):
+        f = home / "models" / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"GGUF")
+    # Windows expanduser uses USERPROFILE, POSIX uses HOME — set both.
+    monkeypatch.setenv("USERPROFILE", str(home))
+    monkeypatch.setenv("HOME", str(home))
+    return home
+
+
+@pytest.fixture
 def isolated_history(tmp_path, monkeypatch):
     """Point the usage recorder's JSONL at a temp file so tier_route events
     written by endpoint tests never touch the real data/usage_history.jsonl."""
@@ -345,7 +365,7 @@ def test_route_reports_tier_max_tokens(tmp_path, monkeypatch, real_gguf):
     assert r.json()["max_tokens"] == 2048
 
 
-def test_pin_sets_per_tier_max_tokens(tmp_path, monkeypatch, real_gguf):
+def test_pin_sets_per_tier_max_tokens(tmp_path, monkeypatch, real_gguf, fake_default_models):
     """Pinning a model from the Hub/scan must set the same per-tier
     max_tokens contract as the shipped defaults."""
     monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
@@ -405,7 +425,7 @@ def test_route_long_prompt_uses_quality_tier(tmp_path, monkeypatch, real_gguf):
 # ── pin endpoint (Hub recommended → disk) ─────────────────────────────
 
 
-def test_pin_finds_files_and_wires_draft(tmp_path, monkeypatch):
+def test_pin_finds_files_and_wires_draft(tmp_path, monkeypatch, fake_default_models):
     monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
     # Model dir with main + MTP draft (the Gemma layout).
     model_dir = tmp_path / "models"
@@ -470,7 +490,7 @@ def test_route_disabled_returns_409(tmp_path, monkeypatch, real_gguf):
 # ── unpin endpoint (Hub/Settings → restore shipped default) ───────────
 
 
-def test_unpin_restores_default_tier(tmp_path, monkeypatch, real_gguf):
+def test_unpin_restores_default_tier(tmp_path, monkeypatch, real_gguf, fake_default_models):
     monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
     app, _ = create_app(ServerConfig())
     client = TestClient(app)
@@ -502,7 +522,7 @@ def test_unpin_invalid_tier_returns_400(tmp_path, monkeypatch):
     assert "'fast' or 'quality'" in r.json()["detail"]
 
 
-def test_unpin_persists_to_disk(tmp_path, monkeypatch, real_gguf):
+def test_unpin_persists_to_disk(tmp_path, monkeypatch, real_gguf, fake_default_models):
     monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
     app, _ = create_app(ServerConfig())
     client = TestClient(app)

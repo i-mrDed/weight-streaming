@@ -60,9 +60,16 @@ research/
 │   └── README.md
 ├── near-storage-compute/               ← Computational storage
 │   └── README.md
-└── kimi-k3/                            ← Kimi K3 architecture
-    └── README.md
+├── kimi-k3/                            ← Kimi K3 architecture
+│   └── README.md
+└── writeups/                           ← บทเรียน + writeups (ดูด้านล่าง)
 ```
+
+---
+
+## 📌 บทเรียน (Lessons)
+
+- [2026-08-11 — Tests ที่ผ่าน local แต่แดงบน CI (machine-dependent test)](./2026-08-11-lesson-ci-hermetic-tests.md)
 
 ---
 
