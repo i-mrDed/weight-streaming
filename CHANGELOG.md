@@ -7,6 +7,26 @@
 
 ## [Unreleased]
 
+### ⚡ Auto-tiering round 6 — bound the fast tier's output budget (EXP-023 loop)
+- **Per-tier `max_tokens`**: the tier config now carries an output budget
+  per tier — fast **2048** (quick answers; a degenerate repetition loop —
+  Gemma 4's temp-0 "let me re-verify…" — burns at most ~30 s instead of
+  the full 8192) and quality **8192** (the 26B answers the same hard
+  questions cleanly). `POST /v1/tiering/route` returns the tier's
+  `max_tokens`; the ⚡ Auto chat clamps its request to it (`min(user
+  setting, tier cap)`); the Thai-gate runner uses the route's budget per
+  tier. Pinning a model from Hub/scan sets the same per-tier cap.
+- **`/v1/models/load` now accepts `extra_args`**: the field was missing
+  from `ModelLoadRequest`, so manual loads silently DROPPED llama-server
+  flags (caught live in EXP-023 — a whole penalty matrix ran without its
+  flags). The schema field forwards to the backend (same path the tiering
+  route uses), so manual loads can carry e.g. MTP draft flags.
+- **EXP-023 findings documented**: the 12B repetition loop was tested with
+  repeat/presence/DRY penalties (all verified in the live cmdline) — none
+  escape the temp-0 attractor; the loop is a benchmarking-path artifact
+  (product chat is temp 0.7 + max_tokens 1024 and does not loop). See
+  `research/experiments/EXP-023-reverify-thai-gate/results.md`.
+
 ### ⚡ Auto-tiering round 5 — live stats card, history export, gate re-verify
 - **Auto-tiering card in Live Stats**: the Stats page now shows the tier
   split (big fast/quality numbers), total routes and the newest events

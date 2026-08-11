@@ -44,15 +44,16 @@ def _req(method: str, path: str, body: dict | None = None, timeout: int = 1800):
         return json.loads(resp.read().decode("utf-8"))
 
 
-def load_tier(tier: str) -> str:
+def load_tier(tier: str) -> tuple[str, int | None]:
     """Route a deterministic request to the tier and return the effective
-    model_id (production path: config extra_args + n_threads + evict/reuse)."""
+    model_id + the tier's own max_tokens budget (production path: config
+    extra_args + n_threads + evict/reuse)."""
     content = "สวัสดี" if tier == "fast" else "x" * 3001
     r = _req("POST", "/v1/tiering/route", {
         "messages": [{"role": "user", "content": content}],
     })
     assert r.get("tier") == tier, f"route returned {r.get('tier')} != {tier}"
-    return r["model_id"]
+    return r["model_id"], r.get("max_tokens")
 
 
 def main() -> int:
@@ -60,11 +61,12 @@ def main() -> int:
     ap.add_argument("--out", default="research/experiments/EXP-023-reverify-thai-gate")
     ap.add_argument("--tiers", default="fast,quality",
                     help="comma list of tiers to re-verify")
-    ap.add_argument("--max-tokens", type=int, default=8192,
-                    help="max output tokens per question (schema cap 8192; "
-                         "EXP-022 used 4096 but a 4096 cap still truncated a "
-                         "Gemma-4 MTP run mid-think — 8192 gives the model "
-                         "room to stop at its own EOS)")
+    ap.add_argument("--max-tokens", type=int, default=0,
+                    help="max output tokens per question; 0 (default) = use "
+                         "each tier's OWN budget from the route response "
+                         "(fast 2048 / quality 8192 — EXP-023: the fast tier "
+                         "burns its budget on a temp-0 repetition loop, so "
+                         "never give it the full 8192)")
     args = ap.parse_args()
 
     out_dir = Path(args.out)
@@ -74,12 +76,13 @@ def main() -> int:
     for tier in args.tiers.split(","):
         tier = tier.strip()
         print(f"\n=== loading tier {tier} via production route ===", flush=True)
-        model_id = load_tier(tier)
-        print(f"    loaded model_id={model_id}", flush=True)
+        model_id, tier_max_tokens = load_tier(tier)
+        max_tokens = args.max_tokens or tier_max_tokens or 4096
+        print(f"    loaded model_id={model_id} max_tokens={max_tokens}", flush=True)
         print(f"=== running Thai quality gate (9 fixed questions) ===", flush=True)
         t0 = time.monotonic()
         gate = thai.run_quality_gate(BASE, model_id,
-                                     max_tokens=args.max_tokens)
+                                     max_tokens=max_tokens)
         gate["tier"] = tier
         gate["load_path"] = "route"
         results[tier] = gate

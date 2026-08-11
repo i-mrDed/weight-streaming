@@ -723,6 +723,11 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
                 n_threads=request.n_threads,
                 gpu_layers=request.gpu_layers,
                 kv_cache_type=request.kv_cache_type,
+                # llama-server extra args (e.g. MTP draft flags). The schema
+                # field was missing until now — the endpoint silently
+                # dropped it, which wasted a whole EXP-023 penalty matrix on
+                # flags that never reached the subprocess.
+                extra_args=request.extra_args,
             )
             return ModelActionResponse(
                 status="loaded",
@@ -1484,6 +1489,10 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             "model_path": entry["model_path"],
             "reason": reason,
             "reused": reused_id is not None,
+            # Per-tier output budget (EXP-023): callers clamp their request's
+            # max_tokens to this — the fast tier is for quick answers and
+            # must not burn the full budget on a degenerate loop.
+            "max_tokens": entry.get("max_tokens"),
         }
 
     @app.post("/v1/tiering/preview")

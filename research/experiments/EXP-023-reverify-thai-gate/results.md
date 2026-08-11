@@ -90,10 +90,49 @@ today, not to EXP-020.
   long answers (the two defects above are fixed with tests).
 - 12B stays the speed tier (~71 tok/s), 26B the quality tier (~42–49
   tok/s depending on machine load).
-- Open follow-up: the 12B's unclosed-think repetition loop on hard
-  questions is a real UX wart (burns the whole token budget) — candidates:
-  a per-tier `max_tokens` cap so the fast tier stops sooner, or
-  `reasoning_format` handling that closes Gemma 4's channel block.
+
+## Follow-up: the 12B repetition loop — investigated, bounded, not cured
+
+### Symptom
+On the hardest gate question (`thai_tonal`) at temperature 0 the 12B
+opens `<|channel>thought` and then loops "Wait, let me re-verify 'X'
+again…" until the token cap — the correct categorization is present in
+the loop text but a clean final answer never closes the block.
+
+### What was tested (all flags verified in the live llama-server cmdline)
+| lever | result |
+|---|---|---|
+| `--repeat-penalty 1.1` | loop persists to the cap (byte-identical output) |
+| `--presence-penalty 0.3` | same |
+| `--dry-multiplier 1.0 --dry-base 1.75 --dry-allowed-length 2` | output changes (loop text morphs to "Wait, I'll…") but still loops to the cap |
+| temperature 0.7 (real chat default) | **no loop** — completes with a summary table (~2047 tokens), one tonal slip (ไหม labeled เอก instead of จัตวา) |
+
+### Conclusions
+1. At temp 0 the loop is a deterministic attractor of the model itself —
+   no sampler flag escapes it (this is why the gate at temp 0 must treat
+   the 12B's tonal answer as "content-correct, delivery degenerate").
+2. **In the product the loop cannot burn the budget**: chat defaults are
+   temp 0.7 + max_tokens 1024 (no loop + bounded), and the ⚡ Auto path
+   now clamps to the tier's own budget.
+3. The 8K-token burn only happened in the GATE (temp 0 + max_tokens
+   8192) — a benchmarking path, not the product.
+
+### Fix shipped (the per-tier cap, as proposed)
+- Tier config gains `max_tokens` per tier: **fast 2048** (bounds any
+  degenerate burn to ~30 s; every normal answer still fits), **quality
+  8192** (the 26B answers these questions cleanly in ~1800 tokens).
+- `POST /v1/tiering/route` returns the tier's `max_tokens`; the ⚡ Auto
+  chat clamps its request to it (`min(user setting, tier cap)`); the gate
+  runner uses the route's budget per tier instead of a flat 8192.
+- Pinning a model from Hub/scan sets the same per-tier cap.
+
+### Side finding: /v1/models/load silently dropped `extra_args`
+The `extra_args` field did NOT exist on `ModelLoadRequest` — every manual
+load that passed it (including the first penalty attempts here) ran
+WITHOUT it, and the API never complained. The schema now accepts and
+forwards `extra_args` to the backend (same path the tiering route uses),
+so a manual load can carry llama-server flags (e.g. MTP draft) and the
+API is honest about what it accepts.
 
 ## Files
 - `gate.json` — full answers for both tiers (post-fix run, fast 8192 /

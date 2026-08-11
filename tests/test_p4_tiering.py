@@ -12,6 +12,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from weight_stream.server import tiering
+from weight_stream.server.model_manager import ModelManager
 from weight_stream.server.api_server import create_app
 from weight_stream.server.config import ServerConfig
 
@@ -212,6 +213,30 @@ def isolated_history(tmp_path, monkeypatch):
     return str(tmp_path / "usage.jsonl")
 
 
+def test_load_endpoint_forwards_extra_args(tmp_path, monkeypatch, real_gguf):
+    """EXP-023: /v1/models/load must accept and forward extra_args (the
+    schema field was missing until now — the endpoint silently dropped it,
+    wasting a whole penalty matrix on flags that never reached llama-server)."""
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    monkeypatch.setenv("WS_USAGE_HISTORY_FILE", str(tmp_path / "usage.jsonl"))
+    captured = {}
+
+    async def fake_load(self, model_id, model_path, **kwargs):
+        captured.update(kwargs)
+        return {"status": "loaded", "model_id": model_id}
+
+    monkeypatch.setattr(ModelManager, "load", fake_load)
+    app, _ = create_app(ServerConfig())
+    client = TestClient(app)
+    r = client.post("/v1/models/load", json={
+        "model_id": "m", "model_path": real_gguf,
+        "extra_args": "--spec-type draft-mtp --spec-draft-model C:/x.gguf",
+    })
+    assert r.status_code == 200, r.text
+    assert captured.get("extra_args") == (
+        "--spec-type draft-mtp --spec-draft-model C:/x.gguf")
+
+
 def test_get_tiering_config_returns_defaults(tmp_path, monkeypatch):
     monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
     app, _ = create_app(ServerConfig())
@@ -300,6 +325,36 @@ def test_default_pair_carries_exp022_recipe():
         assert "-fa on" in entry["extra_args"], f"{tier} missing -fa on"
     assert tiering.default_config()["fast"]["n_ctx"] == 8192
     assert tiering.default_config()["quality"]["n_ctx"] == 4096
+    # EXP-023: per-tier output budgets — the fast tier is for quick answers
+    # and must not burn the full 8192 on a degenerate repetition loop.
+    assert tiering.default_config()["fast"]["max_tokens"] == 2048
+    assert tiering.default_config()["quality"]["max_tokens"] == 8192
+
+
+def test_route_reports_tier_max_tokens(tmp_path, monkeypatch, real_gguf):
+    """EXP-023: the route response carries the tier's max_tokens so the
+    caller (⚡ Auto chat / gate) can clamp its request budget."""
+    payload = {
+        "fast": {"model_id": "fast-m", "model_path": real_gguf, "max_tokens": 2048},
+        "quality": {"model_id": "qual-m", "model_path": real_gguf},
+    }
+    client, stub = _stub_app(tmp_path, monkeypatch, real_gguf, payload)
+    r = client.post("/v1/tiering/route",
+                    json={"messages": [{"role": "user", "content": "hi"}]})
+    assert r.status_code == 200
+    assert r.json()["max_tokens"] == 2048
+
+
+def test_pin_sets_per_tier_max_tokens(tmp_path, monkeypatch, real_gguf):
+    """Pinning a model from the Hub/scan must set the same per-tier
+    max_tokens contract as the shipped defaults."""
+    monkeypatch.setenv("WS_TIERING_FILE", str(tmp_path / "t.json"))
+    main = tmp_path / "m.gguf"; main.write_bytes(b"GGUF")
+    tiering.pin_tier("fast", ["m.gguf"], [str(tmp_path)])
+    tiering.pin_tier("quality", ["m.gguf"], [str(tmp_path)])
+    cfg = tiering.load_config()
+    assert cfg["fast"]["max_tokens"] == 2048
+    assert cfg["quality"]["max_tokens"] == 8192
 
 
 def test_route_forwards_n_ctx_from_config(tmp_path, monkeypatch, real_gguf):

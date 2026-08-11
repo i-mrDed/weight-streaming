@@ -50,6 +50,15 @@ class ModelLoadRequest(BaseModel):
             "None = server default (default_kv_cache_type)."
         ),
     )
+    extra_args: Optional[str] = Field(
+        default=None,
+        description=(
+            "Extra llama-server flags for THIS model (e.g. MTP draft flags "
+            "`--spec-type draft-mtp --spec-draft-model …`). GPU-backend "
+            "only; takes precedence over WS_LLAMA_EXTRA_ARGS. Split on "
+            "whitespace (shlex)."
+        ),
+    )
     force: bool = Field(default=False, description="Force reload if already loaded")
 
 

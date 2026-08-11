@@ -73,6 +73,14 @@ DEFAULT_FAST = {
                    "--spec-draft-n-max 2"),
     "n_threads": 8,
     "n_ctx": 8192,
+    # Output budget cap: the fast tier is for QUICK answers. Gemma 4 can
+    # fall into a deterministic repetition loop on hard questions at
+    # temperature 0 (EXP-023: "let me re-verify…" until the token cap —
+    # repeat/presence/DRY penalties all verified-in-cmdline and none
+    # escape it); 2048 bounds the burn to ~30 s while leaving room for
+    # every normal answer. The client (⚡ Auto chat + the gate) clamps to
+    # this.
+    "max_tokens": 2048,
 }
 DEFAULT_QUALITY = {
     "model_id": "gemma-4-26b-qat-mtp",
@@ -83,6 +91,10 @@ DEFAULT_QUALITY = {
                    "--spec-draft-n-max 2"),
     "n_threads": 12,  # EXP-020: -t 12 is the measured optimum for the 26B
     "n_ctx": 4096,
+    # 8192 = schema cap: the quality tier answers the same hard questions
+    # cleanly (EXP-023 tonal 6/6 with a summary table in ~1800 tokens), so
+    # it gets the full budget for genuinely long reasoning.
+    "max_tokens": 8192,
 }
 
 REASONING_LEVELS = {"off": 0, "low": 1, "medium": 2, "high": 3}
@@ -330,6 +342,7 @@ def pin_tier(
         # Same split as the shipped defaults: the fast tier (VRAM-resident)
         # can afford 8192; the quality tier pays real decode for KV size.
         "n_ctx": 8192 if tier == "fast" else 4096,
+        "max_tokens": 2048 if tier == "fast" else 8192,
     }
     return save_config(cfg)
 

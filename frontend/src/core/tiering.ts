@@ -7,6 +7,9 @@ export interface TierEntry {
   model_path: string
   extra_args: string
   n_threads?: number | null
+  n_ctx?: number | null
+  /** Per-tier output budget (EXP-023) — callers clamp max_tokens to this. */
+  max_tokens?: number | null
   /** Server-attached: whether the configured file resolves on disk. */
   file_resolved?: boolean
   /** Server-attached: basename of the configured model file (Hub badge match). */
@@ -40,6 +43,8 @@ export interface TieringRouteResponse {
   reason: string
   /** True when the tier's file was already loaded (reused, not reloaded). */
   reused?: boolean
+  /** Per-tier output budget (EXP-023) — clamp your request's max_tokens. */
+  max_tokens?: number | null
 }
 
 export interface TieringPreviewResponse {
