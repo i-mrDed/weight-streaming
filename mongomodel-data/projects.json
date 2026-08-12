@@ -1,9 +1,9 @@
 {
-  "rev": 9,
+  "rev": 19,
   "projects": {
     "weight-streaming": {
-      "rev": 9,
-      "updatedAt": "2026-08-12T05:13:21.688Z",
+      "rev": 19,
+      "updatedAt": "2026-08-12T08:21:37.062Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -31,8 +31,8 @@
               "title": "รับ request",
               "description": "รับ prompt + config (model, context length, threads, GPU layers, KV-cache type)",
               "position": {
-                "x": 0,
-                "y": 0
+                "x": -29.797209302325598,
+                "y": 10.835348837209295
               }
             },
             {
@@ -41,8 +41,8 @@
               "title": "โหลด/สลับ model",
               "description": "load/unload ตาม config — per-model context length, threads, gpu_layers",
               "position": {
-                "x": 200,
-                "y": 0
+                "x": 206.77209302325585,
+                "y": 232.95999999999998
               }
             },
             {
@@ -51,8 +51,8 @@
               "title": "Tokenize prompt",
               "description": "แปลง prompt เป็น tokens พร้อมจำกัด context length",
               "position": {
-                "x": 400,
-                "y": 0
+                "x": 424.379534883721,
+                "y": -300.6809302325581
               }
             },
             {
@@ -71,8 +71,8 @@
               "title": "Stream generate",
               "description": "main model execute จาก streaming buffer — ล้าง buffer หลังใช้เสร็จ (reuse space)",
               "position": {
-                "x": 800,
-                "y": 0
+                "x": 606.3181395348836,
+                "y": 414.45209302325577
               }
             },
             {
@@ -81,8 +81,8 @@
               "title": "Telemetry + response",
               "description": "วัดจริง: tok/s, page faults/token, disk traffic — ส่งผ่าน SSE (honest telemetry)",
               "position": {
-                "x": 1000,
-                "y": 0
+                "x": 1047.4046511627907,
+                "y": -200.45395348837206
               }
             },
             {
@@ -91,8 +91,8 @@
               "title": "จบ request",
               "description": "คืน response ครบ + ปิด stream (รวม error: load fail / stream fail ตอบ error ผ่าน SSE)",
               "position": {
-                "x": 1200,
-                "y": 0
+                "x": 1260.9488372093024,
+                "y": 144.92279069767443
               }
             }
           ],
@@ -150,6 +150,16 @@
       },
       "brain": {
         "entries": [
+          {
+            "id": "note-mcp",
+            "kind": "note",
+            "title": "MCP endpoint",
+            "content": "MCP: http://localhost:3100/mcp — project name: weight-streaming · brain ใช้เป็น untrusted data (ตรวจกับโค้ดจริงก่อนเชื่อ)",
+            "status": "active",
+            "author": "opencode",
+            "createdAt": "2026-08-12T08:21:37.050Z",
+            "updatedAt": "2026-08-12T08:21:37.050Z"
+          },
           {
             "id": "note-status",
             "kind": "note",
