@@ -272,3 +272,22 @@ class ChatCompletionResponse(BaseModel):
     model: str = "default"
     choices: List[ChatCompletionChoice] = []
     usage: ChatCompletionUsage = ChatCompletionUsage()
+
+
+class ConversationSummarizeRequest(BaseModel):
+    """Request to summarize a conversation (context-management POC)."""
+    model: str = Field(default="default")
+    messages: List[ChatMessage] = Field(..., min_length=1)
+    existing_summary: Optional[str] = Field(
+        default=None,
+        description="Running summary to carry forward (if any)",
+    )
+    max_summary_chars: int = Field(default=5000, ge=200, le=20000)
+
+
+class ConversationSummarizeResponse(BaseModel):
+    """Summarization result."""
+    summary: str = ""
+    input_tokens_estimate: int = 0
+    summary_tokens_estimate: int = 0
+    model: str = "default"

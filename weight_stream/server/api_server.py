@@ -72,6 +72,8 @@ from .schemas import (
     AssistantCreate,
     AssistantUpdate,
     MCPServerCreate,
+    ConversationSummarizeRequest,
+    ConversationSummarizeResponse,
 )
 from .streaming import sse_stream, ws_stream
 
@@ -1588,6 +1590,36 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         except ValueError as e:
             raise HTTPException(status_code=400, detail=str(e))
         return {"status": "saved", "config": tiering.resolve_state(saved)}
+
+    # ── Conversation summarization (context-management POC) ─────────────
+    # New feature (research/12): running summary injected into the system
+    # prompt keeps long chats working with a small context. No conflict
+    # with Chat Agent Tools (workspace access) — separate routes.
+    @app.post("/v1/conversation/summarize",
+              response_model=ConversationSummarizeResponse)
+    async def summarize_conversation(
+        request: ConversationSummarizeRequest,
+    ):
+        """Summarize a conversation; returns a running summary the caller
+        can inject into the system prompt."""
+        from .conversation_summary import ConversationSummarizer, estimate_tokens
+
+        messages = [{"role": m.role, "content": m.content}
+                    for m in request.messages]
+        svc = ConversationSummarizer(manager)
+        summary = await svc.summarize(
+            messages=messages,
+            model_id=request.model,
+            existing_summary=request.existing_summary,
+        )
+        return ConversationSummarizeResponse(
+            summary=summary,
+            input_tokens_estimate=estimate_tokens(messages),
+            summary_tokens_estimate=estimate_tokens(
+                [{"role": "user", "content": summary}]
+            ),
+            model=request.model,
+        )
 
     return app, manager
 
