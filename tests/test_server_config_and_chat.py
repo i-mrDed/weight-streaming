@@ -234,6 +234,28 @@ def test_chat_completion_uses_the_model_public_wrapper():
     assert result["tokens_generated"] == 2  # from the wrapper's real stats
 
 
+def test_chat_completion_forwards_chat_template_kwargs_to_wrapper():
+    """Agent tool turns send chat_template_kwargs (e.g.
+    {"enable_thinking": false}) — the manager must pass them through the
+    public wrapper untouched so Qwen3-family models stop thinking and emit
+    tool_calls instead."""
+    manager = ModelManager(ServerConfig())
+    model = _FakeStreamModel()
+    _register(manager, "test", model)
+
+    asyncio.run(
+        manager.chat_completion(
+            "test",
+            [{"role": "user", "content": "Use a tool"}],
+            max_tokens=128,
+            chat_template_kwargs={"enable_thinking": False},
+        )
+    )
+
+    request = model.stream_requests[0]
+    assert request["extra"].get("chat_template_kwargs") == {"enable_thinking": False}
+
+
 def test_streaming_chat_reads_wrapper_chunks_and_marks_done():
     manager = ModelManager(ServerConfig())
     model = _FakeStreamModel()

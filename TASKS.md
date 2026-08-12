@@ -6,6 +6,17 @@
 
 ---
 
+## 🔄 Chat Agent Tools — filesystem access สำหรับแชท (2026-08-11) — แผน: docs/AGENT_TOOLS_PLAN.md
+
+| สถานะ | Task | Priority | Notes |
+|-------|------|----------|-------|
+| ✅ | Phase 1: Agent loop ใน ChatPage — ส่ง tools (MCP ∪ built-in) + execute tool_calls + loop (cap 10 รอบ) + tool card UI | 🔴 | 2026-08-11: `core/chat.ts` (buildWireMessages/formatToolResult/truncateToolResult) + vitest 14; agent mode ใช้ non-stream tool turns (ได้ tool_calls ครบจาก P7.3 path เดิม) + tool cards; toolState running/done/error |
+| ✅ | Phase 2: Built-in workspace tools ฝั่ง server — `workspace_tools.py` (list_directory/read_file/workspace_info) + path guard (commonpath+realpath, symlink, size cap 256KB) + routes `/v1/agent/*` + state `data/agent.json` | 🔴 | 2026-08-11: 16 hermetic tests ผ่าน (escape ../ / abs นอก root / symlink → 403; too-large → 400; config round-trip) |
+| ✅ | Phase 3: Settings → Agent & Workspace section — workspace root + enabled toggle + รายการ tools | 🟡 | 2026-08-11: `AgentSection.tsx` + locale en/th + CSS |
+| ✅ | Phase 4: E2E สด — restart server → ทดสอบแชท agent (MCP filesystem + built-in) + injection probe | 🔴 | 2026-08-12: server :8765 โค้ดใหม่ + Qwen3-0.6B — agent loop ครบวงจร (workspace_info ✓ / list_directory("/") → 403 ✓ / read_file ✓ → ตอบสรุป) · MCP filesystem จริง (npx) 14 tools + read_file/list_directory ผ่าน · injection probe PASS (payload ถูก treat เป็น data, ไม่มีไฟล์หลุด/รัน) · fixes จาก E2E: chat_template_kwargs forward + mcp_host stdio/sse 1.27 + .gitignore data/agent.json — pytest hermetic **401/7/0** · vitest 51/51 ✓ · typecheck ✓ · i18n ✓ · build ✓ |
+
+---
+
 ## ✅ Console: per-tier n_ctx/max_tokens + Models load extra_args (2026-08-11)
 
 | สถานะ | Task | Priority | Notes |

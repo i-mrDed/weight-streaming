@@ -4,10 +4,11 @@
    desktop notification on long background generations, parameter drawer,
    system-prompt presets, export .md.
 
-   Honest capability labels: agent mode + reasoning effort are accepted by
-   the server but NOT executed (tooltips say so — honest telemetry covers
-   capabilities too). Per-message tok/s + tokens come from /v1/stats AFTER
-   the run (the stream carries no usage field). */
+   Agent mode (AGENT_TOOLS_PLAN.md): real tool loop — sends tools (MCP ∪
+   built-in workspace tools) as non-streaming turns, executes tool_calls,
+   feeds results back as `tool` role messages, capped at MAX_AGENT_ITERS.
+   Per-message tok/s + tokens come from /v1/stats AFTER the run (the stream
+   carries no usage field). */
 import { useEffect, useRef } from 'preact/hooks'
 import { useSignal } from '@preact/signals'
 import {
@@ -23,7 +24,16 @@ import {
   Send,
   Settings2,
 } from 'lucide-preact'
-import { sseRequest } from '@/core/api'
+import { callAgentTool, callMCPTool, listAgentTools, listMCPTools, sseRequest } from '@/core/api'
+import {
+  MAX_AGENT_ITERS,
+  buildWireMessages,
+  formatToolResult,
+  toolWireName,
+  truncateToolResult,
+  type WireMsg,
+  type WireToolDef,
+} from '@/core/chat'
 import { Badge } from '@/components/Badge'
 import { Button } from '@/components/Button'
 import { Drawer } from '@/components/Drawer'
@@ -262,72 +272,20 @@ export function ChatPage() {
     msgTick.value += 1
   }
 
-  const stop = () => abortRef.current?.()
-
-  const send = async () => {
-    const text = draft.value.trim()
-    let c = activeConv.value
-    if (!c) {
-      if (loaded.length === 0) return
-      c = createConversation(loaded[0].id)
-    }
-    if (!text || generating.value || !c.model) return
-
-    maybeAskNotificationPermission()
-    const startedAt = Date.now()
-
-    autoTitle(c, text)
-    const userMsg: ChatMsg = { role: 'user', content: text, ts: Date.now() }
-    const botMsg: ChatMsg = { role: 'assistant', content: '', ts: Date.now() }
-    c.messages.push(userMsg, botMsg)
-    persist(c)
-    draft.value = ''
-    if (taRef.current) taRef.current.style.height = 'auto'
-    generating.value = true
-    stickRef.current = true
-
-    const sys = [
-      c.systemPrompt.trim(),
-      agentMode.value === 'agent' ? t('chat.agent.suffix') : '',
-    ]
-      .filter(Boolean)
-      .join('\n\n')
-    const history = c.messages
-      .slice(0, -1) // drop the empty assistant placeholder
-      .filter((m) => m.content.trim())
-      .map((m) => ({ role: m.role, content: m.content }))
-    const messages = [...(sys ? [{ role: 'system', content: sys }] : []), ...history]
-
-    // Auto-tiering: when the conversation is on ⚡ Auto, ask the server to
-    // route this request to fast or quality and use the resolved model.
-    let modelId = c.model
-    // The tier's own output budget (EXP-023): the fast tier is for quick
-    // answers — clamp max_tokens so a degenerate long generation (Gemma 4
-    // repetition loop) burns at most the tier's budget, never the user's
-    // 8K setting.
-    let tierMaxTokens: number | null = null
-    if (c.model === AUTO_MODEL) {
-      try {
-        const routed = await routeTiering({ messages, options: {
-          reasoning_mode: reasoningCapable ? reasoningMode.value : undefined,
-        } })
-        modelId = routed.model_id
-        tierMaxTokens = routed.max_tokens ?? null
-        toast('info', `${t('chat.model.auto')} → ${routed.tier === 'fast' ? '⚡' : '🎯'} ${routed.model_id}`)
-      } catch (e) {
-        toast('error', String(e))
-        generating.value = false
-        return
-      }
-    }
-
+  const stop = () => abortRef.current?.()  /** SSE streaming chat turn (default mode + final fallback when no tools). */
+  const streamChat = async (
+    c: Conversation,
+    botMsg: ChatMsg,
+    messages: WireMsg[],
+    opts: { modelId: string; tierMaxTokens: number | null; startedAt: number },
+  ) => {
     const { response, abort } = sseRequest('/v1/chat/completions', {
-      model: modelId,
+      model: opts.modelId,
       messages,
       stream: true,
       temperature: c.params.temperature,
       top_p: c.params.top_p,
-      max_tokens: tierMaxTokens ? Math.min(c.params.max_tokens, tierMaxTokens) : c.params.max_tokens,
+      max_tokens: opts.tierMaxTokens ? Math.min(c.params.max_tokens, opts.tierMaxTokens) : c.params.max_tokens,
       reasoning_effort: effort.value,
       reasoning_mode: reasoningCapable ? reasoningMode.value : undefined,
       thinking_budget: reasoningCapable ? thinkingBudget.value : undefined,
@@ -402,7 +360,7 @@ export function ChatPage() {
       // can be indexed by our model id.
       try {
         const s = await fetchStats(undefined, 5000)
-        const g = s.models[c!.model]?.generation
+        const g = s.models[c.model]?.generation
         if (g && typeof g.tokens_per_sec === 'number' && g.tokens_per_sec > 0) {
           botMsg.stats = {
             tokS: g.tokens_per_sec,
@@ -411,17 +369,271 @@ export function ChatPage() {
         }
       } catch { /* footer simply stays empty — honest */ }
 
-      persist(c!)
+      persist(c)
       msgTick.value += 1
 
       if (errMsg) toast('error', t('chat.genFailed'), { body: errMsg })
-      if (!errMsg && notificationsEnabled.value && Date.now() - startedAt > NOTIFY_AFTER_MS && document.hidden) {
+      if (!errMsg && notificationsEnabled.value && Date.now() - opts.startedAt > NOTIFY_AFTER_MS && document.hidden) {
         try {
           if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
             new Notification(t('chat.notif.title'), { body: t('chat.notif.body') })
           }
         } catch { /* non-fatal */ }
       }
+    }
+  }
+
+  /** Non-streaming single agent turn (model decides: content or tool_calls). */
+  const chatOnce = async (
+    c: Conversation,
+    msgs: WireMsg[],
+    toolDefs: WireToolDef[],
+    opts: { modelId: string; tierMaxTokens: number | null },
+  ): Promise<unknown | null> => {
+    const { response, abort } = sseRequest('/v1/chat/completions', {
+      model: opts.modelId,
+      messages: msgs,
+      stream: false,
+      tools: toolDefs,
+      // Tool-calling turns need the model to emit tool_calls JSON, not a
+      // chain of thought. Qwen3-family templates default thinking ON;
+      // llama-server reads this via chat_template_kwargs (P7.x E2E fix).
+      chat_template_kwargs: { enable_thinking: false },
+      temperature: c.params.temperature,
+      top_p: c.params.top_p,
+      max_tokens: opts.tierMaxTokens ? Math.min(c.params.max_tokens, opts.tierMaxTokens) : c.params.max_tokens,
+      reasoning_effort: effort.value,
+      reasoning_mode: reasoningCapable ? reasoningMode.value : undefined,
+      thinking_budget: reasoningCapable ? thinkingBudget.value : undefined,
+    })
+    abortRef.current = abort
+    try {
+      const res = await response
+      if (!res.ok) {
+        let detail = `HTTP ${res.status}`
+        try {
+          const body = await res.json()
+          if (body?.detail) detail = String(body.detail)
+        } catch { /* non-JSON */ }
+        throw new Error(detail)
+      }
+      return (await res.json()) as unknown
+    } catch (e) {
+      if (e instanceof DOMException && e.name === 'AbortError') return null
+      toast('error', t('chat.genFailed'), { body: e instanceof Error ? e.message : String(e) })
+      return null
+    } finally {
+      abortRef.current = null
+    }
+  }
+
+  /** Agent loop (AGENT_TOOLS_PLAN.md): tools → tool_calls → execute → loop. */
+  const runAgent = async (
+    c: Conversation,
+    initial: WireMsg[],
+    opts: { modelId: string; tierMaxTokens: number | null; startedAt: number },
+  ) => {
+    // Gather tools: MCP servers (P7.4) + built-in workspace tools.
+    const toolDefs: WireToolDef[] = []
+    const toolMap = new Map<
+      string,
+      { kind: 'mcp'; serverId: string; tool: string } | { kind: 'builtin'; tool: string }
+    >()
+    try {
+      const [mcpTools, agentTools] = await Promise.all([listMCPTools(), listAgentTools()])
+      for (const t of mcpTools) {
+        const n = toolWireName(t.server_name, t.name)
+        toolDefs.push({
+          type: 'function',
+          function: { name: n, description: t.description, parameters: (t.inputSchema ?? {}) as Record<string, unknown> },
+        })
+        toolMap.set(n, { kind: 'mcp', serverId: t.server_id, tool: t.name })
+      }
+      for (const t of agentTools) {
+        toolDefs.push({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })
+        toolMap.set(t.name, { kind: 'builtin', tool: t.name })
+      }
+    } catch {
+      /* server unreachable / endpoints missing → no tools, degrade to plain chat */
+    }
+    if (toolDefs.length === 0) {
+      toast('info', t('chat.agent.noTools'))
+      const botMsg: ChatMsg = { role: 'assistant', content: '', ts: Date.now() }
+      c.messages.push(botMsg)
+      persist(c)
+      await streamChat(c, botMsg, initial, opts)
+      return
+    }
+
+    let msgs = initial
+    let iters = 0
+    let finalText = ''
+
+    while (iters < MAX_AGENT_ITERS) {
+      iters += 1
+      const data = await chatOnce(c, msgs, toolDefs, opts)
+      if (!data) {
+        finalText = ''
+        break // aborted or failed — keep partial, mark stopped below
+      }
+      const choice = (data as { choices?: Array<{ message?: { content?: unknown; tool_calls?: unknown } }> })?.choices?.[0]
+      const content = typeof choice?.message?.content === 'string' ? choice.message.content : ''
+      const rawCalls: unknown[] = Array.isArray(choice?.message?.tool_calls) ? choice.message.tool_calls : []
+      if (rawCalls.length === 0) {
+        finalText = content
+        break
+      }
+
+      // Assistant message with the requested tool calls.
+      const asst: ChatMsg = {
+        role: 'assistant',
+        content: content || '',
+        ts: Date.now(),
+        tool_calls: rawCalls.map((rc, i) => {
+          const r = rc as { id?: string; function?: { name?: string; arguments?: string } }
+          return {
+            id: r.id || `tc-${iters}-${i}`,
+            name: r.function?.name || 'unknown',
+            arguments: typeof r.function?.arguments === 'string' ? r.function.arguments : '{}',
+          }
+        }),
+      }
+      c.messages.push(asst)
+      persist(c)
+      msgTick.value += 1
+      scrollToBottom()
+
+      // Execute each call, feed the result back as a `tool` message.
+      for (const tc of asst.tool_calls ?? []) {
+        const toolMsg: ChatMsg = {
+          role: 'tool',
+          content: '',
+          ts: Date.now(),
+          tool_call_id: tc.id,
+          name: tc.name,
+          toolState: 'running',
+        }
+        c.messages.push(toolMsg)
+        persist(c)
+        msgTick.value += 1
+        scrollToBottom()
+        try {
+          let args: unknown = {}
+          try {
+            args = tc.arguments ? JSON.parse(tc.arguments) : {}
+          } catch {
+            args = { raw: tc.arguments }
+          }
+          const ref = toolMap.get(tc.name)
+          if (!ref) throw new Error(t('chat.tool.unknown', { name: tc.name }))
+          const out =
+            ref.kind === 'mcp'
+              ? (await callMCPTool(ref.serverId, ref.tool, args)).result
+              : (await callAgentTool(ref.tool, args)).result
+          toolMsg.content = truncateToolResult(formatToolResult(out))
+          toolMsg.toolState = 'done'
+        } catch (e) {
+          toolMsg.content = `⚠️ ${e instanceof Error ? e.message : String(e)}`
+          toolMsg.toolState = 'error'
+        }
+        persist(c)
+        msgTick.value += 1
+        scrollToBottom()
+      }
+      msgs = buildWireMessages(c.messages)
+    }
+
+    const stopped = !finalText
+    const botMsg: ChatMsg = {
+      role: 'assistant',
+      content: finalText || t('chat.agent.maxIters'),
+      ts: Date.now(),
+      stopped: stopped ? true : undefined,
+    }
+    c.messages.push(botMsg)
+    persist(c)
+    generating.value = false
+    abortRef.current = null
+    msgTick.value += 1
+    scrollToBottom()
+
+    if (notificationsEnabled.value && Date.now() - opts.startedAt > NOTIFY_AFTER_MS && document.hidden) {
+      try {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+          new Notification(t('chat.notif.title'), { body: t('chat.notif.body') })
+        }
+      } catch { /* non-fatal */ }
+    }
+  }
+
+  const send = async () => {
+    const text = draft.value.trim()
+    let c = activeConv.value
+    if (!c) {
+      if (loaded.length === 0) return
+      c = createConversation(loaded[0].id)
+    }
+    if (!text || generating.value || !c.model) return
+
+    maybeAskNotificationPermission()
+    const startedAt = Date.now()
+
+    autoTitle(c, text)
+
+    const userMsg: ChatMsg = { role: 'user', content: text, ts: Date.now() }
+    c.messages.push(userMsg)
+    persist(c)
+    draft.value = ''
+    if (taRef.current) taRef.current.style.height = 'auto'
+    generating.value = true
+    stickRef.current = true
+
+    const sys = [
+      c.systemPrompt.trim(),
+      agentMode.value === 'agent' ? t('chat.agent.suffix') : '',
+    ]
+      .filter(Boolean)
+      .join('\n\n')
+    const messages: WireMsg[] = [
+      ...(sys ? [{ role: 'system' as const, content: sys }] : []),
+      ...buildWireMessages(c.messages),
+    ]
+
+    // Auto-tiering: when the conversation is on ⚡ Auto, ask the server to
+    // route this request to fast or quality and use the resolved model.
+    let modelId = c.model
+    // The tier's own output budget (EXP-023): the fast tier is for quick
+    // answers — clamp max_tokens so a degenerate long generation (Gemma 4
+    // repetition loop) burns at most the tier's budget, never the user's
+    // 8K setting.
+    let tierMaxTokens: number | null = null
+    if (c.model === AUTO_MODEL) {
+      try {
+        const routed = await routeTiering({
+          messages: messages.map((m) => ({ role: m.role, content: m.content ?? '' })),
+          options: {
+            reasoning_mode: reasoningCapable ? reasoningMode.value : undefined,
+          },
+        })
+        modelId = routed.model_id
+        tierMaxTokens = routed.max_tokens ?? null
+        toast('info', `${t('chat.model.auto')} → ${routed.tier === 'fast' ? '⚡' : '🎯'} ${routed.model_id}`)
+      } catch (e) {
+        toast('error', String(e))
+        generating.value = false
+        return
+      }
+    }
+
+    const opts = { modelId, tierMaxTokens, startedAt }
+
+    if (agentMode.value === 'agent') {
+      await runAgent(c, messages, opts)
+    } else {
+      const botMsg: ChatMsg = { role: 'assistant', content: '', ts: Date.now() }
+      c.messages.push(botMsg)
+      persist(c)
+      await streamChat(c, botMsg, messages, opts)
     }
   }
 
@@ -679,6 +891,7 @@ export function ChatPage() {
             <div class="chat__msgs">
               {msgs.map((m, i) => {
                 const streaming = generating.value && m.role === 'assistant' && i === msgs.length - 1
+                const toolCalls = m.role === 'assistant' ? m.tool_calls : undefined
                 return (
                   <article key={i} class={`msg msg--${m.role}`}>
                     {m.role === 'assistant' ? (
@@ -687,37 +900,81 @@ export function ChatPage() {
                       </div>
                     ) : null}
                     <div class="msg__bubble">
-                      {m.role === 'user' ? (
-                        <div class="msg__md" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />
-                      ) : (
-                        <RichText text={m.content} streaming={streaming} showThinking={showThinking.value} />
-                      )}
-                      {m.error ? <p class="msg__error">⚠️ {m.error}</p> : null}
-                      {streaming && !m.content ? <span class="msg__dots" aria-hidden="true" /> : null}
-                      {!streaming && (m.stats || m.stopped) ? (
-                        <footer class="msg__foot tnum">
-                          {m.stats?.tokS != null ? (
-                            <span>▲ {fmtNumber(m.stats.tokS, { maximumFractionDigits: 1 })} tok/s</span>
-                          ) : null}
-                          {m.stats?.tokens != null ? <span>· {fmtNumber(m.stats.tokens)} tokens</span> : null}
-                          {m.stopped ? <Badge tone="warn">{t('chat.stopped')}</Badge> : null}
-                        </footer>
-                      ) : null}
-                      {m.role === 'assistant' && !streaming && m.content ? (
-                        <button
-                          class="msg__copy"
-                          aria-label={t('common.copy')}
-                          title={t('common.copy')}
-                          onClick={() => {
-                            navigator.clipboard
-                              ?.writeText(m.content)
-                              .then(() => toast('success', t('common.copied')))
-                              .catch(() => toast('error', t('chat.copyFailed')))
-                          }}
+                      {m.role === 'tool' ? (
+                        <div
+                          class={`tool-card${m.toolState === 'error' ? ' tool-card--error' : ''}${m.toolState === 'running' ? ' tool-card--running' : ''}`}
                         >
-                          <Copy size={12} /> {t('common.copy')}
-                        </button>
-                      ) : null}
+                          <div class="tool-card__head">
+                            <span class="tool-card__icon" aria-hidden="true">🛠️</span>
+                            <span class="tool-card__name">{m.name || t('chat.tool.label')}</span>
+                            <span class="tool-card__state">
+                              {m.toolState === 'running'
+                                ? t('chat.tool.running')
+                                : m.toolState === 'error'
+                                  ? t('chat.tool.error')
+                                  : t('chat.tool.done')}
+                            </span>
+                          </div>
+                          {m.toolState === 'running' ? (
+                            <span class="msg__dots" aria-hidden="true" />
+                          ) : m.toolState === 'error' ? (
+                            <p class="tool-card__err">{m.content}</p>
+                          ) : m.content ? (
+                            <details class="tool-card__result">
+                              <summary>{t('chat.tool.result')}</summary>
+                              <pre class="tool-card__pre">{m.content}</pre>
+                            </details>
+                          ) : null}
+                        </div>
+                      ) : (
+                        <>
+                          {toolCalls?.length ? (
+                            <div class="tool-card">
+                              {toolCalls.map((tc, j) => (
+                                <div key={j} class="tool-card__call">
+                                  <span class="tool-card__icon" aria-hidden="true">🔧</span>
+                                  <span class="tool-card__name">{tc.name}</span>
+                                  <details class="tool-card__args">
+                                    <summary>{t('chat.tool.args')}</summary>
+                                    <pre class="tool-card__pre">{tc.arguments}</pre>
+                                  </details>
+                                </div>
+                              ))}
+                            </div>
+                          ) : null}
+                          {m.role === 'user' ? (
+                            <div class="msg__md" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.content) }} />
+                          ) : (
+                            <RichText text={m.content} streaming={streaming} showThinking={showThinking.value} />
+                          )}
+                          {m.error ? <p class="msg__error">⚠️ {m.error}</p> : null}
+                          {streaming && !m.content && !toolCalls?.length ? <span class="msg__dots" aria-hidden="true" /> : null}
+                          {!streaming && (m.stats || m.stopped) ? (
+                            <footer class="msg__foot tnum">
+                              {m.stats?.tokS != null ? (
+                                <span>▲ {fmtNumber(m.stats.tokS, { maximumFractionDigits: 1 })} tok/s</span>
+                              ) : null}
+                              {m.stats?.tokens != null ? <span>· {fmtNumber(m.stats.tokens)} tokens</span> : null}
+                              {m.stopped ? <Badge tone="warn">{t('chat.stopped')}</Badge> : null}
+                            </footer>
+                          ) : null}
+                          {m.role === 'assistant' && !streaming && m.content ? (
+                            <button
+                              class="msg__copy"
+                              aria-label={t('common.copy')}
+                              title={t('common.copy')}
+                              onClick={() => {
+                                navigator.clipboard
+                                  ?.writeText(m.content)
+                                  .then(() => toast('success', t('common.copied')))
+                                  .catch(() => toast('error', t('chat.copyFailed')))
+                              }}
+                            >
+                              <Copy size={12} /> {t('common.copy')}
+                            </button>
+                          ) : null}
+                        </>
+                      )}
                     </div>
                   </article>
                 )

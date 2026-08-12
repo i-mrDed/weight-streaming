@@ -721,6 +721,71 @@ select.md-input { cursor: pointer; }
 .msg__bubble:hover .msg__copy, .msg__copy:focus-visible { opacity: 1; }
 .msg__copy:hover { color: var(--ws-accent-brand); }
 
+/* Agent tool cards (AGENT_TOOLS_PLAN.md) */
+.tool-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 11px;
+  border: 1px solid var(--ws-border-default);
+  border-radius: var(--ws-radius-sm);
+  background: var(--ws-surface-inset);
+  font-size: var(--ws-text-xs);
+}
+.tool-card + * { margin-top: 8px; }
+.tool-card__head, .tool-card__call {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.tool-card__icon { flex-shrink: 0; font-size: 13px; line-height: 1; }
+.tool-card__name {
+  font-family: var(--ws-font-mono);
+  font-weight: 600;
+  color: var(--ws-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-card__state {
+  margin-left: auto;
+  flex-shrink: 0;
+  color: var(--ws-text-tertiary);
+  font-size: 10.5px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+.tool-card--running .tool-card__state { color: var(--ws-status-info); }
+.tool-card--error .tool-card__state { color: var(--ws-status-error); }
+.tool-card--error { border-color: var(--ws-status-error); }
+.tool-card__args, .tool-card__result {
+  margin: 0;
+  padding: 4px 6px;
+  border-radius: var(--ws-radius-xs);
+  background: var(--ws-surface-raised);
+}
+.tool-card__args summary, .tool-card__result summary {
+  cursor: pointer;
+  color: var(--ws-text-tertiary);
+  font-weight: 600;
+  user-select: none;
+}
+.tool-card__pre {
+  margin: 6px 0 2px;
+  max-height: 180px;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: var(--ws-font-mono);
+  font-size: 11.5px;
+  color: var(--ws-text-secondary);
+}
+.tool-card__err { margin: 2px 0 0; color: var(--ws-status-error); word-break: break-word; }
+.msg--tool { justify-content: flex-start; }
+.msg--tool .msg__bubble { max-width: min(78ch, 92%); background: transparent; border-color: transparent; padding: 0; }
+
 /* Markdown content */
 .msg__md { min-width: 0; }
 .msg__md > :first-child { margin-top: 0; }

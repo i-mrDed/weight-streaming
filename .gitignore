@@ -67,6 +67,7 @@ secrets*
 *.sublime-workspace
 data/usage_history.jsonl
 data/tiering.json
+data/agent.json
 # MCP server config (user data, local-first) — recreated on demand
 data/mcp/
 

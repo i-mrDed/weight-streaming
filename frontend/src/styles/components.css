@@ -169,6 +169,8 @@
 .mcp-item__info { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .mcp-item__name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
 .mcp-item__cmd { font-size: 11px; color: var(--ws-text-tertiary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-tools { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.agent-tools code { padding: 3px 8px; border-radius: var(--ws-radius-xs); background: var(--ws-surface-inset); border: 1px solid var(--ws-border-subtle); font-size: 11px; }
 /* Assistants grid (P7.2) */
 .assistants-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
 .assistant-card { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }

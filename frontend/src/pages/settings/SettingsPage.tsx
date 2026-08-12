@@ -29,6 +29,7 @@ import {
 } from '@/theme/manager'
 import { THEMES } from '@/theme/registry'
 import { MCPSection } from './MCPSection'
+import { AgentSection } from './AgentSection'
 import { TieringSection } from './TieringSection'
 import {
   availableLocales,
@@ -979,6 +980,12 @@ export function SettingsPage() {
       <section id="settings-tiering" class="md-section">
         <h2 class="md-section__title">{t('settings.tiering.title')}</h2>
         <TieringSection />
+      </section>
+
+      {/* Agent & Workspace (AGENT_TOOLS_PLAN.md) */}
+      <section id="settings-agent" class="md-section">
+        <h2 class="md-section__title">{t('settings.agent.title')}</h2>
+        <AgentSection />
       </section>
 
       {/* MCP (P7.4) */}
