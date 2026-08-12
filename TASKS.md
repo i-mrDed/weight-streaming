@@ -148,7 +148,7 @@
 | ✅ | Public streaming wrapper สำหรับ plain-prompt path | 🟡 | `WeightStreamModel.stream_prompt()` — server code ไม่มี `_llm` เหลือเลย (chat + completions ผ่าน wrapper หมด); ยืนยัน live กับ Llama-3.2-1B |
 | ✅ | MyPy type check pass | 🟡 | non-strict clean 0 errors / 43 files + `[tool.mypy]` ใน pyproject; strict baseline 225 (legacy annotations) → งาน gradual |
 | ✅ | Validate: real throughput matches simulator | 🟡 | EXP-025: Qwen1.5-MoE-A2.7B Q2_K จริง (CPU pure, ผ่าน server) วัด warm เฉลี่ย 20.76 tok/s vs physics prediction 22.73 → **−8.7% (ใน tolerance ±15%)**; implied BW 17.51 GB/s; รายละเอียดใน EXP-025 results.md |
-| ⬜ | Phase 3b: Test with real MoE model on consumer HW | 🔴 | Measure actual compute vs I/O ratio |
+| ✅ | Phase 3b: Test with real MoE model on consumer HW | 🔴 | EXP-027: Qwen1.5-MoE-A2.7B Q2_K CPU pure วัดจริง — compute 43.8–44.0 ms/token คงที่ (ตรง physics 0.844GB/19.18GB/s), I/O stall แค่ 1.9–9.7 ms warm (ratio 13:1+) = **compute-bound** เมื่อพอดี RAM; K3 (>RAM) = **I/O-bound** ที่ 5% miss (stall 2056ms > compute 774ms) ยืนยัน EXP-004; 6 hermetic tests |
 
 ---
 

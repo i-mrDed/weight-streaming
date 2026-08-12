@@ -1,9 +1,9 @@
 {
-  "rev": 37,
+  "rev": 42,
   "projects": {
     "weight-streaming": {
-      "rev": 37,
-      "updatedAt": "2026-08-12T17:18:38.294Z",
+      "rev": 42,
+      "updatedAt": "2026-08-12T17:40:42.985Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -442,10 +442,165 @@
               "label": "บันทึกครบ"
             }
           ]
+        },
+        "phase3b-real-moe-io-ratio": {
+          "id": "phase3b-real-moe-io-ratio",
+          "name": "Phase 3b: วัด actual compute vs I/O ratio บน real MoE",
+          "description": "วัดจริงบน Qwen1.5-MoE-A2.7B Q2_K (CPU pure) ว่า per-token time แบ่งเป็น compute vs I/O เท่าไหร่ — ใช้ telemetry จริง (generation.paging) + physics model (EXP-025) + buffer abstraction (EXP-026) แยกส่วน (TASKS.md #151)",
+          "status": "approved",
+          "trigger": "TASKS.md #151 — EXP-004 เคยคาดการณ์ว่า K3 จะ I/O-bound (NVMe 1786ms > compute 815ms) แต่ยังไม่เคยวัดจริงบน consumer HW",
+          "preconditions": [
+            "Qwen1.5-MoE-A2.7B_Q2_k.gguf (5.88 GB) มีในเครื่อง (research/models/)",
+            "server :8765 รัน + telemetry generation.paging ship แล้ว",
+            "EXP-025 calibrated BW: cpu-ram 19.18, disk-mmap 0.38 GB/s",
+            "EXP-026 buffer abstraction: แปลง OS signals เป็น stall/compute ms/token"
+          ],
+          "successOutcome": "ตัวเลขจริง: compute ms/token vs I/O stall ms/token (และ ratio) บน Qwen CPU — ตอบว่าโมเดลที่พอดี RAM เป็น compute-bound จริงหรือไม่; พร้อมการคาดการณ์ว่า K3 (>RAM) จะ I/O-bound ตาม EXP-004",
+          "acceptanceCriteria": [
+            "วัดจริง ≥3 runs warm (100 tokens) ได้ tok/s + faults + disk_mb_per_token จาก /v1/stats",
+            "แยก compute vs I/O stall per token ด้วย physics + buffer abstraction (ไม่ใช่ตัวเลขพลิกแพลง) — ratio รายงานชัดเจน",
+            "เปรียบเทียบกับ EXP-004 scaling: Qwen CPU 22.7 tok/s; ระบุว่า compute-bound หรือ I/O-bound พร้อมหลักฐานตัวเลข",
+            "มี hermetic test พิสูจน์การแยกส่วน (compute/I/O จาก telemetry ที่รู้ค่า)",
+            "บันทึก EXP-NNN + brain + TASKS.md #151"
+          ],
+          "steps": [
+            {
+              "id": "start",
+              "kind": "start",
+              "title": "ตรวจบริบท",
+              "description": "ตรวจงาน TASKS.md #151, เอกสาร EXP-004 (คาดการณ์ว่า K3 จะ I/O-bound), เครื่องมือจาก EXP-025/026 พร้อมใช้แล้ว และไฟล์โมเดล Qwen มีอยู่ในเครื่อง",
+              "position": {
+                "x": 0,
+                "y": 0
+              }
+            },
+            {
+              "id": "load",
+              "kind": "action",
+              "title": "โหลด Qwen CPU pure",
+              "description": "โหลดโมเดล Qwen1.5-MoE-A2.7B Q2_K แบบใช้ CPU ล้วน (ngl=0, ใช้จำนวน threads เริ่มต้น) ผ่าน API /v1/models/load แทนโมเดล Qwythos ที่โหลดค้างอยู่",
+              "position": {
+                "x": 240,
+                "y": 100
+              }
+            },
+            {
+              "id": "measure",
+              "kind": "action",
+              "title": "วัดจริง warm runs",
+              "description": "อุ่นเครื่องก่อนวัด แล้วรันวัดจริงอย่างน้อย 3 รอบ (ครั้งละ 100 tokens) เก็บค่า tok/s และข้อมูล paging จาก /v1/stats เช่น faults ต่อ token และปริมาณข้อมูลที่อ่านจากดิสก์ต่อ token",
+              "position": {
+                "x": 480,
+                "y": 100
+              }
+            },
+            {
+              "id": "split",
+              "kind": "action",
+              "title": "แยก compute vs I/O",
+              "description": "แยกเวลาต่อ token ออกเป็นสองส่วน: ส่วนของการคำนวณ (compute) ใช้สูตรจาก EXP-025 (bytes คูณ hit rate หาร bandwidth ของแรม) และส่วนของการรอ I/O (stall) ใช้สูตรจาก EXP-026 (bytes ที่พลาด หาร bandwidth ของดิสก์) แล้วคำนวณอัตราส่วน",
+              "position": {
+                "x": 720,
+                "y": 100
+              }
+            },
+            {
+              "id": "compare",
+              "kind": "decision",
+              "title": "ตรวจข้อสรุป",
+              "description": "ตรวจสอบข้อสรุปว่าโมเดลที่พอดีกับแรมเป็นแบบที่ถูกจำกัดด้วยการคำนวณ (compute-bound) จริงหรือไม่ ตัวเลขสอดคล้องกับ EXP-025 และ EXP-004 หรือไม่ และเทสต์อัตโนมัติผ่านครบไหม",
+              "position": {
+                "x": 960,
+                "y": 100
+              }
+            },
+            {
+              "id": "doc",
+              "kind": "action",
+              "title": "บันทึกผล",
+              "description": "บันทึกผลลงเอกสารการทดลอง EXP-NNN พร้อมอัปเดตสมองกลาง (brain) และรายการงาน TASKS.md ข้อ 151",
+              "position": {
+                "x": 1200,
+                "y": 100
+              }
+            },
+            {
+              "id": "end",
+              "kind": "end",
+              "title": "จบ",
+              "description": "ได้อัตราส่วนที่ชัดเจนและมีหลักฐานครบถ้วน",
+              "position": {
+                "x": 1440,
+                "y": 100
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "id": "t1",
+              "source": "start",
+              "target": "load",
+              "label": "บริบทครบ"
+            },
+            {
+              "id": "t2",
+              "source": "load",
+              "target": "measure",
+              "label": "โหลดเสร็จ"
+            },
+            {
+              "id": "t3",
+              "source": "measure",
+              "target": "split",
+              "label": "มี data"
+            },
+            {
+              "id": "t4",
+              "source": "split",
+              "target": "compare",
+              "label": "แยกส่วนแล้ว"
+            },
+            {
+              "id": "t5",
+              "source": "compare",
+              "target": "doc",
+              "label": "ข้อสรุปชัด + tests ผ่าน"
+            },
+            {
+              "id": "t6",
+              "source": "compare",
+              "target": "measure",
+              "label": "data ไม่พอ -> วัดเพิ่ม"
+            },
+            {
+              "id": "t7",
+              "source": "doc",
+              "target": "end",
+              "label": "บันทึกครบ"
+            }
+          ]
         }
       },
       "brain": {
         "entries": [
+          {
+            "id": "handoff-phase3b-io-ratio-2026-08-13",
+            "kind": "handoff",
+            "title": "Handoff: Phase 3b compute vs I/O ratio (TASKS.md #151) เสร็จสมบูรณ์",
+            "content": "เสร็จตาม workflow phase3b-real-moe-io-ratio (rev 40): วัดจริง Qwen CPU pure warm 22.2 tok/s เฉลี่ย, compute 43.8-44.0 ms/token ครอบงำ stall 1.9-9.7 ms (ratio 4.5:1-23:1) = compute-bound สำหรับโมเดลพอดี RAM; K3 >RAM = I/O-bound ที่ 5% miss (ยืนยัน EXP-004). hermetic tests 6 ตัว. สิ่งที่ทำต่อ: (a) EXP-012 write-up เผยแพร่ (โจทย์ >RAM จริง); (b) ใช้ decision นี้ตัดสินงาน buffer — โฟกัสเฉพาะ >RAM path; (c) Phase 4 eval metrics ยังค้าง.",
+            "status": "done",
+            "createdAt": "2026-08-12T17:40:42.979Z",
+            "updatedAt": "2026-08-12T17:40:42.979Z"
+          },
+          {
+            "id": "decision-compute-io-ratio-phase3b",
+            "kind": "decision",
+            "title": "Compute vs I/O ratio วัดจริง: พอดี RAM = compute-bound, >RAM = I/O-bound",
+            "content": "EXP-027 (Qwen1.5-MoE-A2.7B Q2_K CPU pure): compute 43.8-44.0 ms/token คงที่ (ตรง physics 0.844 GB / 19.18 GB/s), I/O stall แค่ 1.9-9.7 ms warm (ratio 13:1+). K3 (15.6 GB/token) แค่ 5% miss = stall 2056 ms > compute 774 ms (I/O-bound) — ยืนยัน EXP-004 projection. บทสรุป: buffer/prefetch มีค่าจริงเฉพาะโมเดล >RAM (โจทย์หลัก K3 2.8T); โมเดลพอดี RAM ปรับ buffer ไม่ได้กำไร (ตรง ADR-003). ไฟล์: tests/test_io_ratio_split.py + EXP-027",
+            "status": "active",
+            "createdAt": "2026-08-12T17:40:40.880Z",
+            "updatedAt": "2026-08-12T17:40:40.880Z"
+          },
           {
             "id": "handoff-buffer-abstraction-2026-08-13",
             "kind": "handoff",
