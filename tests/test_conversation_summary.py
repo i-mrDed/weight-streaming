@@ -1,4 +1,6 @@
 """Tests for ConversationSummarizer (context-management POC)."""
+import asyncio
+
 import pytest
 
 from weight_stream.server.conversation_summary import (
@@ -111,23 +113,22 @@ class _FakeManager:
 
 
 class TestSummarizer:
-    @pytest.mark.asyncio
-    async def test_summarize_ok(self):
+    def test_summarize_ok(self):
         mgr = _FakeManager("SUMMARY: hello summary")
         svc = ConversationSummarizer(mgr)
-        out = await svc.summarize(
-            [{"role": "user", "content": "hi"}], model_id="m")
+        out = asyncio.run(svc.summarize(
+            [{"role": "user", "content": "hi"}], model_id="m"))
         assert "hello summary" in out
         assert mgr.calls[0]["reasoning_mode"] == "off"
 
-    @pytest.mark.asyncio
-    async def test_summarize_failure_returns_empty(self):
+    def test_summarize_failure_returns_empty(self):
         class Boom:
             async def chat_completion(self, **kwargs):
                 raise RuntimeError("boom")
 
         svc = ConversationSummarizer(Boom())
-        out = await svc.summarize([{"role": "user", "content": "x"}], model_id="m")
+        out = asyncio.run(svc.summarize(
+            [{"role": "user", "content": "x"}], model_id="m"))
         assert out == ""
 
     def test_compact(self):
