@@ -1,9 +1,9 @@
 {
-  "rev": 8,
+  "rev": 9,
   "projects": {
     "weight-streaming": {
-      "rev": 8,
-      "updatedAt": "2026-08-12T05:09:04.677Z",
+      "rev": 9,
+      "updatedAt": "2026-08-12T05:13:21.688Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -21,7 +21,7 @@
         "serve-request": {
           "id": "serve-request",
           "name": "Serve request (stream generate)",
-          "description": "Flow หลักของ API server: รับ request → load model → tokenize → predict + pre-fetch → stream generate → telemetry → response",
+          "description": "Flow หลักของ API server: รับ request → load model → tokenize → predict + pre-fetch → stream generate → telemetry → response (รวม error path)",
           "status": "approved",
           "trigger": "API request ถึง /v1/generate (SSE)",
           "steps": [
@@ -89,7 +89,7 @@
               "id": "end",
               "kind": "end",
               "title": "จบ request",
-              "description": "คืน response ครบ + ปิด stream",
+              "description": "คืน response ครบ + ปิด stream (รวม error: load fail / stream fail ตอบ error ผ่าน SSE)",
               "position": {
                 "x": 1200,
                 "y": 0
@@ -132,6 +132,18 @@
               "source": "telemetry",
               "target": "end",
               "label": "ส่ง response"
+            },
+            {
+              "id": "t7",
+              "source": "load",
+              "target": "end",
+              "label": "โหลด fail → error"
+            },
+            {
+              "id": "t8",
+              "source": "stream",
+              "target": "end",
+              "label": "stream error → error"
             }
           ]
         }

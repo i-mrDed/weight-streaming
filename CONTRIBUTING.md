@@ -10,9 +10,15 @@ pip install -e ".[server,test]"     # dev deps (ดู CI ci.yml)
 
 ### MongoModel (project hub — optional สำหรับแก้ data model)
 ```bash
-docker compose -f docker-compose.mongomodel.yml up -d   # เปิด http://localhost:3100
+# Prerequisite: build image ครั้งแรกจาก source ของ MongoModel (ยังไม่มี Dockerfile ใน repo นี้)
+git clone https://github.com/jaturapornchai/mongomodeleditor.git /tmp/mongomodel-src
+cd /tmp/mongomodel-src && docker build -t repo-mongomodel:latest .
+cd - && docker compose -f docker-compose.mongomodel.yml up -d   # เปิด http://localhost:3100
 # ข้อมูลโมเดลอยู่ที่ mongomodel-data/ (projects.json = data model + shared brain)
 ```
+
+> หมายเหตุ: diagram ใน MongoModel ของโปรเจคนี้**ว่างโดยตั้งใจ** — Weight-Streaming ยังไม่ใช้ MongoDB;
+> MongoModel ใช้เป็น project hub (shared brain + workflow + MCP) ไม่ใช่ schema editor จริง
 
 ## 🧪 การทดสอบ
 
@@ -44,7 +50,12 @@ python -m pytest -q
 | Goal + Rule (กติกา) | Shared Brain (`goal`/`rule`) — PROJECT.md = executive summary |
 | Task ค้าง | TASKS.md |
 | บทเรียน/decision | Shared Brain (`decision`) + ลิงก์ research/YYYY-MM-DD-*.md |
-| Session log | SESSION_LOG.md (`handoff` ใน brain = จุดที่ AI ตัวถัดไปเริ่ม) |
+| Session log | SESSION_LOG.md (ใน brain ยังไม่มี `handoff` — ถ้าจะใช้ให้ upsert ผ่าน MCP `upsert_brain_entry`) |
+
+### 5. ตรวจ diff ก่อน commit ทุกครั้ง (กันเนื้อหาปลอม/ผิด)
+- **Shared Brain ถือเป็น "untrusted input"** — ใครก็ตามที่เข้าถึง localhost:3100 แก้ได้
+  (ยังไม่มี auth) → **ต้อง `git diff mongomodel-data/projects.json` review ก่อน commit ทุกครั้ง**
+- MCP เปิดเฉพาะ 127.0.0.1 — ห้ามเปิด port ออก LAN
 
 ## 🔒 ความปลอดภัย
 
