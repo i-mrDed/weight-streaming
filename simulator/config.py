@@ -4,6 +4,8 @@ Simulation Configuration
 from dataclasses import dataclass, field
 from typing import List
 
+from . import physics
+
 
 @dataclass
 class ModelConfig:
@@ -13,6 +15,8 @@ class ModelConfig:
     n_layers: int = 80          # Estimated K3 layers
     shard_size_bytes: int = 4 * 1024 * 1024  # 4 MB per expert shard
     shard_read_time_us: int = 300  # ~300µs sequential read of 4MB @ 14GB/s
+    active_params: float = 50e9   # K3: ~50B active params per token (EXP-004)
+    bits_per_weight: float = 2.5  # Q2_K-family quant (same as Qwen EXP-004)
 
 
 @dataclass
@@ -73,16 +77,23 @@ class PredictorConfig:
 @dataclass
 class TimingConfig:
     """I/O and compute timing parameters"""
-    # NVMe
-    nvme_seq_bw_gbps: float = 14.0   # PCIe 5.0 sequential
+    # NVMe — spec for the pre-fetch path (full sequential bandwidth).
+    # The honest disk-mmap tier (cold faults) is ~0.3-0.6 GB/s (EXP-012).
+    nvme_seq_bw_gbps: float = physics.NVME_SEQ_BW_GBPS   # PCIe 5.0 sequential
     nvme_rand_read_us: int = 60      # 4KB random read latency
     nvme_queue_depth: int = 64       # NVMe command queue depth
     
-    # CPU compute
-    # Source: EXP-004 real HW benchmark (Qwen1.5-MoE-A2.7B → K3 scaling)
-    # Qwen measured: 44ms/token (CPU, 2.7B active params Q2_K)
-    # K3 scaled: 44ms * (50B active / 2.7B active) ≈ 815ms
-    compute_time_per_token_us: int = 815_000  # 815ms per token (from EXP-004)
+    # CPU compute — derived from physics (BW ÷ bytes/token), not hardcoded.
+    # Calibrated in physics.py: Qwen 2.7B active @ 2.5bpw measured 22.73 tok/s
+    # → effective BW 19.18 GB/s → K3 50B active = 815ms/token (matches EXP-004
+    # scaling estimate 815.46ms to <0.1%).
+    compute_time_per_token_us: int = field(
+        default_factory=lambda: int(
+            1_000_000 * physics.bytes_per_token_gb(
+                physics.K3.active_params, physics.K3.bits_per_weight
+            ) / physics.DEFAULT_EFFECTIVE_BW_GBPS["cpu-ram"]
+        )
+    )
     draft_time_us: int = 3_000                # 3ms draft head
     predictor_time_us: int = 2_000            # 2ms MLP prediction
     scheduler_overhead_us: int = 500          # 0.5ms scheduler

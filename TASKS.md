@@ -93,7 +93,7 @@
 | ✅ | แยก Thinking ออกจากคำตอบในแชท | 🟡 | ` think ` tags (streaming-safe) + verbal "Thinking Process:" heuristic; ยืนยันสดใน Chrome กับ Kimi R37 (screenshot ใน docs/verification/) |
 | ✅ | คู่มือเลือกโมเดล + เตือน F16 | 🟡 | `docs/MODEL_GUIDE.md` + scan `quant` field + SPA ⚠️ warning + README section |
 | ✅ | แก้ `/v1/models/scan` บล็อก event loop | 🔴 | pre-existing; พบตอนสแกน Jan folder — ย้ายเข้า executor; ระหว่างสแกน 113s health 45/45 OK; เพิ่ม Jan path ใน default scan |
-| ⬜ | Calibrate simulator ด้วย physics model (BW ÷ bytes/token) + multi-model data | 🟡 | ข้อมูลวัดพร้อมแล้วใน docs/verification/ |
+| ✅ | Calibrate simulator ด้วย physics model (BW ÷ bytes/token) + multi-model data | 🟡 | EXP-025: `simulator/physics.py` (BW = bytes/token × tok/s, calibrated ต่อ tier: cpu-ram 19.18 / gpu-vram 61.09 / disk-mmap 0.38 GB/s) + `calibrate.py` CLI; TimingConfig derive จาก physics (814.7ms ตรง EXP-004 0.08%); 10 hermetic tests; workflow `calibrate-simulator` ใน MongoModel |
 
 ---
 
@@ -147,7 +147,7 @@
 | ✅ | Ship paging-demand telemetry in `/v1/stats` | 🟡 | `weight_stream/io/page_faults.py` (Win psapi / POSIX rusage) + `generation.paging` ใน stats ของ `stream_chat()`/`generate()`; SPA card "PAGING DEMAND" + hard/soft split (`disk_demand_mb`) เสร็จวันเดียวกัน — cold 7.86 vs warm 0 MB/tok disk |
 | ✅ | Public streaming wrapper สำหรับ plain-prompt path | 🟡 | `WeightStreamModel.stream_prompt()` — server code ไม่มี `_llm` เหลือเลย (chat + completions ผ่าน wrapper หมด); ยืนยัน live กับ Llama-3.2-1B |
 | ✅ | MyPy type check pass | 🟡 | non-strict clean 0 errors / 43 files + `[tool.mypy]` ใน pyproject; strict baseline 225 (legacy annotations) → งาน gradual |
-| ⬜ | Validate: real throughput matches simulator | 🟡 | |
+| ✅ | Validate: real throughput matches simulator | 🟡 | EXP-025: Qwen1.5-MoE-A2.7B Q2_K จริง (CPU pure, ผ่าน server) วัด warm เฉลี่ย 20.76 tok/s vs physics prediction 22.73 → **−8.7% (ใน tolerance ±15%)**; implied BW 17.51 GB/s; รายละเอียดใน EXP-025 results.md |
 | ⬜ | Phase 3b: Test with real MoE model on consumer HW | 🔴 | Measure actual compute vs I/O ratio |
 
 ---

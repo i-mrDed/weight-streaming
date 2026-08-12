@@ -1,9 +1,9 @@
 {
-  "rev": 19,
+  "rev": 34,
   "projects": {
     "weight-streaming": {
-      "rev": 19,
-      "updatedAt": "2026-08-12T08:21:37.062Z",
+      "rev": 34,
+      "updatedAt": "2026-08-12T17:08:17.502Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -31,8 +31,8 @@
               "title": "รับ request",
               "description": "รับ prompt + config (model, context length, threads, GPU layers, KV-cache type)",
               "position": {
-                "x": -29.797209302325598,
-                "y": 10.835348837209295
+                "x": 52,
+                "y": 52
               }
             },
             {
@@ -41,8 +41,8 @@
               "title": "โหลด/สลับ model",
               "description": "load/unload ตาม config — per-model context length, threads, gpu_layers",
               "position": {
-                "x": 206.77209302325585,
-                "y": 232.95999999999998
+                "x": 52,
+                "y": 284
               }
             },
             {
@@ -51,8 +51,8 @@
               "title": "Tokenize prompt",
               "description": "แปลง prompt เป็น tokens พร้อมจำกัด context length",
               "position": {
-                "x": 424.379534883721,
-                "y": -300.6809302325581
+                "x": 295.0075430021544,
+                "y": 507.4748563261495
               }
             },
             {
@@ -61,8 +61,8 @@
               "title": "Draft predict + pre-fetch",
               "description": "draft model (3–7B) predict expert/layer ถัดไป → pre-fetch weights จาก NVMe ลง buffer 256MB–1GB",
               "position": {
-                "x": 600,
-                "y": 0
+                "x": 94.66666666666666,
+                "y": 748
               }
             },
             {
@@ -71,8 +71,8 @@
               "title": "Stream generate",
               "description": "main model execute จาก streaming buffer — ล้าง buffer หลังใช้เสร็จ (reuse space)",
               "position": {
-                "x": 606.3181395348836,
-                "y": 414.45209302325577
+                "x": 94.66666666666666,
+                "y": 980
               }
             },
             {
@@ -81,8 +81,8 @@
               "title": "Telemetry + response",
               "description": "วัดจริง: tok/s, page faults/token, disk traffic — ส่งผ่าน SSE (honest telemetry)",
               "position": {
-                "x": 1047.4046511627907,
-                "y": -200.45395348837206
+                "x": 137.33333333333331,
+                "y": 1212
               }
             },
             {
@@ -91,8 +91,8 @@
               "title": "จบ request",
               "description": "คืน response ครบ + ปิด stream (รวม error: load fail / stream fail ตอบ error ผ่าน SSE)",
               "position": {
-                "x": 1260.9488372093024,
-                "y": 144.92279069767443
+                "x": 73.33333333333331,
+                "y": 1444
               }
             }
           ],
@@ -146,10 +146,215 @@
               "label": "stream error → error"
             }
           ]
+        },
+        "calibrate-simulator": {
+          "id": "calibrate-simulator",
+          "name": "Calibrate simulator ด้วย physics model (BW ÷ bytes/token)",
+          "description": "เปรียบเทียบ physics model (bandwidth ÷ bytes-per-token) vs simulator timing model vs ข้อมูลวัดจริงหลายโมเดล แล้วปรับ calibration ให้ตรง (TASKS.md #96)",
+          "status": "approved",
+          "trigger": "ข้อมูลวัดจริงพร้อมใน docs/verification/ + research/experiments/EXP-00X",
+          "preconditions": [
+            "มีข้อมูลวัดจริงอย่างน้อย 2 โมเดล (Qwen CPU 22.7 tok/s, Qwen GPU 47-77, DSv4 104GB disk-bound 1.5-1.9 tok/s)",
+            "simulator/ รันได้ (python run.py ทำงาน)"
+          ],
+          "successOutcome": "TimingConfig ถูก derive จาก physics (BW ÷ bytes/token) ไม่ใช่ hardcode; predicted tok/s ตรง measured ภายใน tolerance; มี hermetic test + บันทึกลง shared brain",
+          "acceptanceCriteria": [
+            "physics model ทำนาย tok/s ของ Qwen1.5-MoE-A2.7B บน CPU ภายใน ±15% ของ 22.7 tok/s (EXP-004)",
+            "physics model ทำนาย DSv4 Flash 104GB disk-bound ภายใน ±25% ของ 1.5-1.9 tok/s (EXP-012)",
+            "simulator TimingConfig ถูก derive จาก physics (bytes/token ÷ effective BW) — ไม่มี hardcode ค่า ms/token",
+            "มี hermetic test พิสูจน์ calibration (input model spec → expected tok/s range ตรงข้อมูลจริง)",
+            "บันทึก decision/handoff ใน shared brain + อัปเดต TASKS.md #96"
+          ],
+          "steps": [
+            {
+              "id": "start",
+              "kind": "start",
+              "title": "รวบรวมข้อมูลวัดจริง",
+              "description": "รวบรวมข้อมูลวัดจริงจาก EXP-004/011/012: Qwen1.5-MoE-A2.7B Q2_K บน CPU วัด 22.73 tok/s, บน GPU 47-77 tok/s, DSv4 Flash 104GB แบบ disk-bound 1.5-1.9 tok/s, และ K3 50B active ที่ 25 GB/token",
+              "position": {
+                "x": 0,
+                "y": 0
+              }
+            },
+            {
+              "id": "physics",
+              "kind": "action",
+              "title": "คำนวณ physics model",
+              "description": "bytes/token = active_params × bits_per_weight ÷ 8; time_per_token = bytes/token ÷ effective_BW; fit effective_BW จากข้อมูลจริง",
+              "position": {
+                "x": 220,
+                "y": 120
+              }
+            },
+            {
+              "id": "sim",
+              "kind": "action",
+              "title": "รัน simulator ปัจจุบัน",
+              "description": "python run.py — บันทึก tok/s, stall, overlap จาก TimingConfig เดิม (hardcoded 815ms)",
+              "position": {
+                "x": 440,
+                "y": 120
+              }
+            },
+            {
+              "id": "compare",
+              "kind": "decision",
+              "title": "เปรียบเทียบ 3 ทาง",
+              "description": "physics vs simulator vs measured — หา discrepancy (เช่น scaling เชิงเส้น vs BW-bound)",
+              "position": {
+                "x": 660,
+                "y": 120
+              }
+            },
+            {
+              "id": "calibrate",
+              "kind": "action",
+              "title": "ปรับ calibration",
+              "description": "TimingConfig derive จาก physics — effective_BW = bytes/token ÷ measured_time ต่อโมเดล; ใช้ mean/median เป็นค่า default",
+              "position": {
+                "x": 880,
+                "y": 120
+              }
+            },
+            {
+              "id": "validate",
+              "kind": "action",
+              "title": "Validate กับข้อมูลจริง",
+              "description": "predicted tok/s vs measured ทุกโมเดล — ต้องใน tolerance (Qwen CPU ±15%, DSv4 ±25%); เขียน hermetic test",
+              "position": {
+                "x": 1100,
+                "y": 120
+              }
+            },
+            {
+              "id": "end",
+              "kind": "end",
+              "title": "บันทึกผล",
+              "description": "decision/handoff ใน shared brain + อัปเดต TASKS.md #96 + EXP-NNN docs",
+              "position": {
+                "x": 1320,
+                "y": 120
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "id": "t1",
+              "source": "start",
+              "target": "physics",
+              "label": "ข้อมูลพร้อม"
+            },
+            {
+              "id": "t2",
+              "source": "start",
+              "target": "sim",
+              "label": "พร้อมกัน"
+            },
+            {
+              "id": "t3",
+              "source": "physics",
+              "target": "compare",
+              "label": "มี physics"
+            },
+            {
+              "id": "t4",
+              "source": "sim",
+              "target": "compare",
+              "label": "มี sim result"
+            },
+            {
+              "id": "t5",
+              "source": "compare",
+              "target": "calibrate",
+              "label": "เจอ discrepancy"
+            },
+            {
+              "id": "t6",
+              "source": "calibrate",
+              "target": "validate",
+              "label": "ปรับแล้ว"
+            },
+            {
+              "id": "t7",
+              "source": "validate",
+              "target": "end",
+              "label": "ใน tolerance"
+            },
+            {
+              "id": "t8",
+              "source": "validate",
+              "target": "calibrate",
+              "label": "ไม่อยู่ใน tolerance → ปรับซ้ำ"
+            },
+            {
+              "id": "t9",
+              "source": "compare",
+              "target": "end",
+              "label": "ไม่เจอ discrepancy → บันทึกผลได้เลย"
+            }
+          ]
         }
       },
       "brain": {
         "entries": [
+          {
+            "id": "handoff-sim-calibration-2026-08-12",
+            "kind": "handoff",
+            "title": "Handoff: Simulator calibration + validation (TASKS.md #96 + #150) เสร็จสมบูรณ์",
+            "content": "เสร็จทั้ง 2 งาน: (1) calibrate — physics.py (BW = bytes/token x tok/s, calibrated ต่อ tier: cpu-ram 19.18 / gpu-vram 61.09 / disk-mmap 0.38 GB/s), config derive compute_time จาก physics, 10 hermetic tests. (2) validate (EXP-025) — Qwen1.5-MoE-A2.7B Q2_K จริงบนเครื่องนี้ (CPU pure ngl=0 ผ่าน server :8765): warm เฉลี่ย 20.76 tok/s vs physics prediction 22.73 = -8.7% (ใน tolerance ±15%) — PASS; implied BW 17.51 GB/s. ข้อควรรู้: วัดด้วย n_threads=16 ทำให้ backend ช้าผิดปกติ (0.11 tok/s, thrash) — ใช้ default threads เสมอ; ต้อง warmup ก่อนวัด. สิ่งที่ทำต่อ: (a) ใช้ calibrated BW สำหรับ streaming buffer prototype (TASKS.md 🔄); (b) disk-mmap 0.38 GB/s = I/O-bound จริงสำหรับ cold fault (ปิด paradigm เก่าเพิ่ม).",
+            "status": "done",
+            "createdAt": "2026-08-12T16:47:28.351Z",
+            "updatedAt": "2026-08-12T17:08:17.497Z"
+          },
+          {
+            "id": "decision-sim-calibration-physics",
+            "kind": "decision",
+            "title": "Simulator timing ต้อง derive จาก physics (BW = bytes/token x tok/s)",
+            "content": "EXP-025: compute_time_per_token_us ไม่ใช่ hardcode — derive จาก bytes_per_token / effective_BW ที่ fit จากข้อมูลวัดจริงต่อ tier (cpu-ram 19.18 GB/s, gpu-vram 61.09, disk-mmap 0.38, NVMe seq 14 สำหรับ pre-fetch เท่านั้น). K3 50B active @ 2.5bpw = 815 ms/token ตรง EXP-004 ถึง 0.08%. สำคัญ: disk-mmap (cold fault) 0.38 GB/s ต่ำกว่า NVMe spec 37 เท่า — ประโยค 'I/O ไม่ใช่ปัญหา' จริงเฉพาะ pre-fetch path. ไฟล์: simulator/physics.py + calibrate.py + tests/test_simulator_calibration.py",
+            "status": "active",
+            "createdAt": "2026-08-12T16:47:26.281Z",
+            "updatedAt": "2026-08-12T16:47:26.281Z"
+          },
+          {
+            "id": "task-brain-update",
+            "kind": "task",
+            "title": "อัปเดต brain ให้ทันสถานะ (2026-08-12)",
+            "content": "brain เดิมมีข้อมูลเก่า (paradigm shift ถูกปิดไปแล้ว EXP-010/015 + ADR-003) — สถานะจริง: mmap + OS page cache + honest telemetry; PR #1 GGUFSplitParser + WS_LLAMA_BACKEND_PORT, PR #2+#3 Summarization, EXP-024 negative result. ตรวจกับโค้ดจริงก่อนเชื่อเสมอ",
+            "status": "done",
+            "author": "opencode (Summarization/Context Mgmt work)",
+            "createdAt": "2026-08-12T16:28:02.867Z",
+            "updatedAt": "2026-08-12T16:28:08.634Z"
+          },
+          {
+            "id": "note-model-qwythos",
+            "kind": "note",
+            "title": "Qwythos บนระบบเรา — การตั้งค่าที่ถูกต้อง",
+            "content": "Qwythos-9B-Claude-Mythos-5-1M (qwen35 hybrid SSM): ต้อง --chat-template chatml (template ฝังใช้กับ llama-server ตรงๆ ไม่ได้), n_ctx >= 32768 (default 2048 = ตัดกลางคัน), max_tokens >= 2048, reasoning_mode off = ตอบตรง+ประหยัด token (memory ไม่ต่าง) — 35 tok/s",
+            "author": "opencode (Summarization/Context Mgmt work)",
+            "status": "active",
+            "createdAt": "2026-08-12T16:28:02.826Z",
+            "updatedAt": "2026-08-12T16:28:08.601Z"
+          },
+          {
+            "id": "decision-l1-prefetch-negative",
+            "kind": "decision",
+            "title": "L1 prefetch แบบไม่รู้ routing = negative (EXP-024)",
+            "content": "E2/E2b 3 รอบ (โมเดลจริง 97GB): prefetch อ่านตาม offset/rate-limit ลด faults ได้แค่ 7-20% แต่ tok/s ลด 10-42% (แย่ง disk) — ฟันธง: ต้องรู้ expert routing จริงก่อน (ปิด total_accesses=0 gap) → ทาง A: router-aware predictor (blueprint research/11)",
+            "author": "opencode (Summarization/Context Mgmt work)",
+            "status": "active",
+            "createdAt": "2026-08-12T16:28:02.793Z",
+            "updatedAt": "2026-08-12T16:28:08.568Z"
+          },
+          {
+            "id": "note-context-mgmt",
+            "kind": "note",
+            "title": "Context Management (chat-memory) — merged",
+            "content": "2026-08-12: ฟีเจอร์ 'คุยยาวได้แม้ context น้อย' เข้า main แล้ว (PR #2+#3):\n- POST /v1/conversation/summarize (server, conversation_summary.py) — สรุปบทสนทนาด้วยโมเดลที่โหลดอยู่ (reasoning off) + carry-forward summary เดิม\n- UI: ปุ่ม Summarize ใน sidebar (ต่อแชท) + collapsible banner เหนือ messages\n- พิสูจน์แล้ว (research/12): running summary ใน system prompt + compact ทุก 2 turns → memory 5/5 หลัง 8 turns ด้วย context ~2-4K est tokens (Qwythos, n_ctx 32K)\n- ยังไม่ต่อเข้า agent loop อัตโนมัติ (รอ user กด) — core พร้อม",
+            "author": "opencode (Summarization/Context Mgmt work)",
+            "status": "active",
+            "createdAt": "2026-08-12T16:28:02.755Z",
+            "updatedAt": "2026-08-12T16:28:08.534Z"
+          },
           {
             "id": "note-mcp",
             "kind": "note",
