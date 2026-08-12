@@ -123,6 +123,8 @@
     "add": "เพิ่มเซิร์ฟเวอร์",
     "name": "ชื่อ",
     "nameRequired": "กรุณากรอกชื่อ",
+    "commandRequired": "กรุณากรอกคำสั่งสำหรับเซิร์ฟเวอร์ stdio",
+    "urlRequired": "กรุณากรอก URL สำหรับเซิร์ฟเวอร์ SSE",
     "transport": "Transport",
     "command": "คำสั่ง",
     "args": "อาร์กิวเมนต์",

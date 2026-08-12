@@ -21,8 +21,12 @@ export function MCPSection() {
   const addOpen = useSignal(false)
   const name = useSignal('')
   const transport = useSignal<'stdio' | 'sse'>('stdio')
-  const command = useSignal('')
-  const args = useSignal('')
+  // Real defaults, not placeholders: the common case is the filesystem
+  // server via npx. A placeholder-only command silently saved `command:
+  // null` and the server refused to spawn (found in the 2026-08-12 browser
+  // E2E).
+  const command = useSignal('npx')
+  const args = useSignal('-y @modelcontextprotocol/server-filesystem')
   const url = useSignal('')
 
   async function load() {
@@ -39,6 +43,14 @@ export function MCPSection() {
 
   async function save() {
     if (!name.value.trim()) { toast('error', t('settings.mcp.nameRequired')); return }
+    if (transport.value === 'stdio' && !command.value.trim()) {
+      toast('error', t('settings.mcp.commandRequired'))
+      return
+    }
+    if (transport.value === 'sse' && !url.value.trim()) {
+      toast('error', t('settings.mcp.urlRequired'))
+      return
+    }
     try {
       await addMCPServer({
         name: name.value,
@@ -49,7 +61,10 @@ export function MCPSection() {
       })
       toast('success', t('settings.mcp.added'))
       addOpen.value = false
-      name.value = ''; command.value = ''; args.value = ''; url.value = ''
+      name.value = ''
+      command.value = 'npx'
+      args.value = '-y @modelcontextprotocol/server-filesystem'
+      url.value = ''
       await load()
     } catch (e) {
       toast('error', String(e))
