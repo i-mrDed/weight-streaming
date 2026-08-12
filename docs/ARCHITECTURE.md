@@ -77,7 +77,7 @@ Model: `Qwen1.5-MoE-A2.7B` Q2_K — 5.48 GB, `qwen2moe`, 60 experts; CPU inferen
 | Responsiveness during generation | `/health` avg 5.7 ms / max 23.3 ms, `/v1/stats` max 22.8 ms (58 polls each) |
 | OS page residency during generation | 4.6% of the model (0.25 / 5.48 GB) resident — throughput unaffected |
 | Cancellation | halted within 0.73 s (8 tokens), model lock released, regeneration immediate |
-| **Open gap** | `StreamingBuffer.total_accesses = 0` during real inference — the tracker observes nothing because llama.cpp reads the mmap opaquely (next: buffer-abstraction prototype, TASKS.md Phase 3) |
+| **Open gap** | ~~`StreamingBuffer.total_accesses = 0` during real inference~~ **CLOSED (EXP-026, 2026-08-13):** buffer-abstraction prototype (`simulator/buffer_abstraction.py`) — `SimulatorBufferAdapter` (wraps the existing buffer) + `TelemetryBufferObserver` (converts shipped OS signals `generation.paging` into buffer-equivalent stats). Both implement one `BufferBackend` protocol → `BufferStatsView` with predicted tok/s from EXP-025 calibrated BW. Validated: warm spike run predicted 22.02 vs measured 21.88 tok/s (Δ+0.6%) |
 
 ---
 

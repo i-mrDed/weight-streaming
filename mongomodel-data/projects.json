@@ -1,9 +1,9 @@
 {
-  "rev": 34,
+  "rev": 37,
   "projects": {
     "weight-streaming": {
-      "rev": 34,
-      "updatedAt": "2026-08-12T17:08:17.502Z",
+      "rev": 37,
+      "updatedAt": "2026-08-12T17:18:38.294Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -293,10 +293,177 @@
               "label": "ไม่เจอ discrepancy → บันทึกผลได้เลย"
             }
           ]
+        },
+        "streaming-buffer-prototype": {
+          "id": "streaming-buffer-prototype",
+          "name": "Streaming buffer abstraction prototype (ADR-003 tracker)",
+          "description": "สร้าง buffer abstraction ที่เชื่อมสองโลก: (1) simulator access patterns (simulator/buffer.py) และ (2) production OS telemetry (generation.paging ใน /v1/stats) — ใช้ calibrated BW จาก EXP-025 แปลง buffer stats เป็น tok/s (TASKS.md #145)",
+          "status": "approved",
+          "trigger": "TASKS.md #145 — open gap ใน ARCHITECTURE.md §0: StreamingBuffer.total_accesses = 0 ระหว่าง real inference",
+          "preconditions": [
+            "ADR-003 no-fork: ไม่ intercept การอ่านของ llama.cpp",
+            "EXP-025 calibrated BW: cpu-ram 19.18 GB/s, disk-mmap 0.38 GB/s, gpu-vram 61.09 GB/s",
+            "generation.paging telemetry ship แล้วใน /v1/stats (faults_per_token, fault_mb_per_token, disk_mb_per_token)",
+            "simulator/buffer.py มี StreamingBuffer (LRU/LFU/priority) อยู่แล้ว"
+          ],
+          "successOutcome": "Buffer abstraction ตัวเดียวที่รับ event จากได้ทั้ง simulator และ telemetry production → คืน stats ชุดเดียวกัน (hit rate, stall, predicted tok/s จาก calibrated BW); ปิด open gap ด้วย telemetry observer ที่แปลง OS signals เป็น buffer-equivalent stats",
+          "acceptanceCriteria": [
+            "มี abstraction interface กลาง (protocol) ที่ทั้ง simulator buffer และ telemetry observer implement — input ต่างกัน output ชุดเดียวกัน (hit/miss/evict/stall/tok/s)",
+            "telemetry observer แปลง generation.paging (faults_per_token + disk_mb_per_token) เป็น buffer-equivalent stats โดยใช้ calibrated disk-mmap BW (0.38 GB/s) — ทดสอบกับ spike_page_faults_2026-07-30.json จริง ได้ตัวเลขสมเหตุสมผล",
+            "predicted tok/s ใช้ calibrated BW จาก EXP-025 (cpu-ram hit path + disk-mmap miss path) ไม่ใช่ตัวเลขพลิกแพลง",
+            "มี hermetic tests พิสูจน์: simulator event → stats ตรงกับ StreamingBuffer เดิม; telemetry → stats สอดคล้องกับ spike data จริง",
+            "บันทึก decision/handoff ใน shared brain + อัปเดต TASKS.md #145 + ARCHITECTURE.md §0 (ปิด open gap)"
+          ],
+          "steps": [
+            {
+              "id": "start",
+              "kind": "start",
+              "title": "ตรวจบริบทที่มีอยู่",
+              "description": "ARCHITECTURE.md §0 open gap (total_accesses=0), simulator/buffer.py เดิม, telemetry generation.paging ที่ ship แล้ว, EXP-025 calibrated BW",
+              "position": {
+                "x": 0,
+                "y": 0
+              }
+            },
+            {
+              "id": "design",
+              "kind": "action",
+              "title": "ออกแบบ abstraction interface",
+              "description": "protocol กลาง: on_access(shard, bytes) -> hit/miss; stats() -> BufferStats (hit_rate, stall, evictions); predicted_tok_per_sec() ใช้ calibrated BW",
+              "position": {
+                "x": 240,
+                "y": 100
+              }
+            },
+            {
+              "id": "simimpl",
+              "kind": "action",
+              "title": "Implement simulator-backed",
+              "description": "adapter รอบ StreamingBuffer เดิม (LRU/LFU/priority) ให้ implement interface เดียวกัน — ไม่แตะพฤติกรรมเดิม",
+              "position": {
+                "x": 480,
+                "y": 100
+              }
+            },
+            {
+              "id": "teleimpl",
+              "kind": "action",
+              "title": "Implement telemetry observer",
+              "description": "แปลง generation.paging + spike data เป็น buffer-equivalent: miss bytes/token -> disk-mmap stall (0.38 GB/s), hit path -> cpu-ram",
+              "position": {
+                "x": 720,
+                "y": 100
+              }
+            },
+            {
+              "id": "bridge",
+              "kind": "decision",
+              "title": "ทดสอบสองทางเทียบกัน",
+              "description": "simulator event -> stats ตรงเดิม? telemetry -> stats สอดคล้อง spike จริง? hermetic tests ผ่าน?",
+              "position": {
+                "x": 960,
+                "y": 100
+              }
+            },
+            {
+              "id": "doc",
+              "kind": "action",
+              "title": "บันทึก + ปิด open gap",
+              "description": "brain decision/handoff + TASKS.md #145 -> ดำเนินการ + ARCHITECTURE.md §0 note ปิด gap + EXP-NNN docs",
+              "position": {
+                "x": 1200,
+                "y": 100
+              }
+            },
+            {
+              "id": "end",
+              "kind": "end",
+              "title": "จบงาน",
+              "description": "prototype พร้อมใช้ + acceptance criteria ครบ",
+              "position": {
+                "x": 1440,
+                "y": 100
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "id": "t1",
+              "source": "start",
+              "target": "design",
+              "label": "บริบทครบ"
+            },
+            {
+              "id": "t2",
+              "source": "design",
+              "target": "simimpl",
+              "label": "interface ตกลง"
+            },
+            {
+              "id": "t3",
+              "source": "design",
+              "target": "teleimpl",
+              "label": "interface ตกลง"
+            },
+            {
+              "id": "t4",
+              "source": "simimpl",
+              "target": "bridge",
+              "label": "adapter เสร็จ"
+            },
+            {
+              "id": "t5",
+              "source": "teleimpl",
+              "target": "bridge",
+              "label": "observer เสร็จ"
+            },
+            {
+              "id": "t6",
+              "source": "bridge",
+              "target": "doc",
+              "label": "tests ผ่าน"
+            },
+            {
+              "id": "t7",
+              "source": "bridge",
+              "target": "simimpl",
+              "label": "sim stats ไม่ตรง -> แก้"
+            },
+            {
+              "id": "t8",
+              "source": "bridge",
+              "target": "teleimpl",
+              "label": "telemetry ไม่สมเหตุสมผล -> แก้"
+            },
+            {
+              "id": "t9",
+              "source": "doc",
+              "target": "end",
+              "label": "บันทึกครบ"
+            }
+          ]
         }
       },
       "brain": {
         "entries": [
+          {
+            "id": "handoff-buffer-abstraction-2026-08-13",
+            "kind": "handoff",
+            "title": "Handoff: Streaming buffer abstraction prototype (TASKS.md #145) เสร็จสมบูรณ์",
+            "content": "เสร็จตาม workflow streaming-buffer-prototype (rev 35): buffer_abstraction.py (protocol BufferBackend + SimulatorBufferAdapter + TelemetryBufferObserver), buffer_demo.py, 9 hermetic tests, ทั้งชุด 437 passed / 7 skipped. ปิด open gap ARCHITECTURE.md §0 (total_accesses=0) แล้ว. สิ่งที่ทำต่อ: (a) core/native/ tracker อนาคต implement BufferBackend เดียวกันได้ทันที; (b) ใช้ observer กับ disk_mb_per_token (hard faults) แทน total faults เพื่อ cold prediction ที่แม่นกว่า; (c) งาน Phase 3b: Test real MoE (TASKS.md #151) ยังค้าง.",
+            "status": "done",
+            "createdAt": "2026-08-12T17:18:38.288Z",
+            "updatedAt": "2026-08-12T17:18:38.288Z"
+          },
+          {
+            "id": "decision-buffer-abstraction-protocol",
+            "kind": "decision",
+            "title": "Streaming buffer ต้องผ่าน abstraction กลาง (BufferBackend protocol)",
+            "content": "EXP-026: tracker ต้อง implement protocol เดียวกัน (on_access + stats) ไม่ว่า source จะเป็น simulator access patterns หรือ production OS telemetry. SimulatorBufferAdapter หุ้ม StreamingBuffer เดิม, TelemetryBufferObserver แปลง generation.paging/spike เป็น buffer-equivalent stats. predicted tok/s ใช้ calibrated BW จาก EXP-025 (cpu-ram 19.18 hit path / disk-mmap 0.38 miss path). ข้อค้นพบ: แม้ 4% miss ก็ครอง throughput (disk ช้ากว่า RAM ~50 เท่า) — buffer ต้อง hit ~99%+ ถึงจะใกล้ RAM ceiling; warm spike prediction 22.02 vs 21.88 tok/s ตรง 0.6%. ไฟล์: simulator/buffer_abstraction.py + buffer_demo.py",
+            "status": "active",
+            "createdAt": "2026-08-12T17:18:36.233Z",
+            "updatedAt": "2026-08-12T17:18:36.233Z"
+          },
           {
             "id": "handoff-sim-calibration-2026-08-12",
             "kind": "handoff",
