@@ -216,7 +216,12 @@ def test_mcp_stdio_connect_builds_parameters_object(monkeypatch, tmp_path):
     requires a StdioServerParameters object — the old command=/args= kwargs
     form raised ``TypeError: stdio_client() got an unexpected keyword
     argument 'command'`` and every MCP stdio server silently returned 0
-    tools. Verify _connect builds the object with command+args intact."""
+    tools. Verify _connect builds the object with command+args intact.
+
+    mcp is an optional extra (host degrades gracefully when absent) and CI
+    installs only [server,test] — skip honestly when the SDK is missing
+    (2026-08-12: unguarded import turned CI red)."""
+    pytest.importorskip("mcp", exc_type=ImportError)
     import mcp
     from mcp.client.stdio import StdioServerParameters
     from weight_stream.server.mcp_host import MCPHost, MCPServerStore
