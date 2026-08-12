@@ -233,6 +233,35 @@ export function callAgentTool(name: string, args: unknown): Promise<AgentToolRes
   })
 }
 
+export interface SummarizeResult {
+  summary: string
+  input_tokens_estimate: number
+  summary_tokens_estimate: number
+  model: string
+}
+
+/** Context-management: summarize a conversation (research/12). Uses the
+ *  server-side ConversationSummarizer via the loaded model. */
+export function summarizeConversation(
+  model: string,
+  messages: Array<{ role: string; content: string }>,
+  existingSummary?: string,
+  timeoutMs = 120_000,
+): Promise<SummarizeResult> {
+  return apiJSON<SummarizeResult>(
+    '/v1/conversation/summarize',
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        model,
+        messages,
+        existing_summary: existingSummary || undefined,
+      }),
+    },
+    { timeoutMs },
+  )
+}
+
 export interface ServerStatus {
   models_loaded: number
   max_models: number

@@ -54,6 +54,9 @@ export interface Conversation {
   /** use params/systemPrompt stored on THIS conversation vs global defaults */
   perConv: boolean
   messages: ChatMsg[]
+  /** running summary (context-management, research/12) — set via the
+   *  sidebar "Summarize" action; may be injected as context */
+  summary?: string
 }
 
 export interface ConvMeta {
