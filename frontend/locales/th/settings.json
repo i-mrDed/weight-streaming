@@ -103,7 +103,20 @@
     "tokenPlaceholder": "วางโทเค็น (เว้นว่างเพื่อล้าง)",
     "tokenSaved": "บันทึกโทเค็น API แล้ว"
   },
-  "mcp": {
+  "agent": {
+  "title": "🤖 Agent & Workspace",
+  "subtitle": "เครื่องมือ agent ในแชท",
+  "subtitleHint": "เปิดวงจร agent ในแชท: โมเดลสามารถเรียกใช้ tool และใช้ผลลัพธ์ตอบคำถามได้",
+  "note": "โมเดลอ่านไฟล์และรายชื่อโฟลเดอร์ได้เฉพาะใน workspace root เท่านั้น — ไม่เกินขอบเขตนี้ (บังคับที่ฝั่ง server)",
+  "enabled": "เปิดใช้งาน agent tools",
+  "root": "Workspace root",
+  "rootHint": "โฟลเดอร์ที่ built-in tools อ่านได้ ค่าเริ่มต้นคือโฟลเดอร์ทำงานของ server",
+  "rootPlaceholder": "C:/path/to/workspace",
+  "toolsTitle": "เครื่องมือที่ใช้งาน",
+  "toolsHint": "{{builtin}} built-in workspace tool(s) + {{mcp}} MCP tool(s) จากเซิร์ฟเวอร์ที่เชื่อมต่อ",
+  "saved": "บันทึกการตั้งค่า agent แล้ว"
+ },
+ "mcp": {
     "title": "🔌 เซิร์ฟเวอร์ MCP",
     "subtitle": "เซิร์ฟเวอร์ Model Context Protocol",
     "note": "เชื่อมต่อเซิร์ฟเวอร์ MCP (stdio/SSE) เพื่อให้โมเดลเรียกใช้เครื่องมือของมันได้ local-first ใช้ได้แบบ offline",

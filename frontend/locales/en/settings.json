@@ -103,7 +103,20 @@
     "tokenPlaceholder": "paste token (leave empty to clear)",
     "tokenSaved": "API token saved"
   },
-  "mcp": {
+  "agent": {
+  "title": "🤖 Agent & Workspace",
+  "subtitle": "Chat agent tools",
+  "subtitleHint": "Enables the agent loop in chat: the model can call tools and use the results to answer.",
+  "note": "The model can read files and list directories only inside the workspace root — never outside it (path guard is enforced server-side).",
+  "enabled": "Enable agent tools",
+  "root": "Workspace root",
+  "rootHint": "Absolute path the built-in tools may read. Defaults to the server's working directory.",
+  "rootPlaceholder": "C:/path/to/workspace",
+  "toolsTitle": "Active tools",
+  "toolsHint": "{{builtin}} built-in workspace tool(s) + {{mcp}} MCP tool(s) from connected servers.",
+  "saved": "Agent settings saved"
+ },
+ "mcp": {
     "title": "🔌 MCP Servers",
     "subtitle": "Model Context Protocol servers",
     "note": "Connect MCP servers (stdio/SSE) so the model can call their tools. Local-first, offline-friendly.",

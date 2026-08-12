@@ -4,12 +4,21 @@
 import { signal } from '@preact/signals'
 import { t } from '@/i18n'
 
-export type ChatRole = 'user' | 'assistant'
+export type ChatRole = 'user' | 'assistant' | 'tool'
 
 export interface MsgStats {
   tokS?: number
   tokens?: number
 }
+
+/** A tool call requested by the model (P7.3 wire shape, client copy). */
+export interface ChatToolCall {
+  id: string
+  name: string
+  arguments: string
+}
+
+export type ToolState = 'running' | 'done' | 'error'
 
 export interface ChatMsg {
   role: ChatRole
@@ -18,6 +27,14 @@ export interface ChatMsg {
   stopped?: boolean
   error?: string
   stats?: MsgStats
+  /** assistant only — tool calls the model requested (agent mode) */
+  tool_calls?: ChatToolCall[]
+  /** tool role only — id the model used in tool_calls */
+  tool_call_id?: string
+  /** tool role only — wire tool name (e.g. filesystem.read_file) */
+  name?: string
+  /** tool role only — running/done/error for the tool card */
+  toolState?: ToolState
 }
 
 export interface ChatParams {
@@ -211,7 +228,11 @@ export function exportMarkdown(conv: Conversation) {
     '',
   ].join('\n')
   const body = conv.messages
-    .map((m) => `## ${m.role === 'user' ? '🧑 User' : '🤖 Assistant'}\n\n${m.content}\n`)
+    .map((m) => {
+      const head =
+        m.role === 'user' ? '🧑 User' : m.role === 'tool' ? `🛠️ Tool${m.name ? `: ${m.name}` : ''}` : '🤖 Assistant'
+      return `## ${head}\n\n${m.content}\n`
+    })
     .join('\n')
   const blob = new Blob([`# ${conv.title}\n\n${fm}\n${body}`], { type: 'text/markdown;charset=utf-8' })
   const url = URL.createObjectURL(blob)

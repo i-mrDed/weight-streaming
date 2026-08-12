@@ -211,6 +211,63 @@ def test_mcp_validator_allowlist(tmp_path):
     assert host  # (host construction is fine; call-tool path is tested elsewhere)
 
 
+def test_mcp_stdio_connect_builds_parameters_object(monkeypatch, tmp_path):
+    """P7.4 E2E fix (2026-08-12): the installed mcp SDK's stdio_client
+    requires a StdioServerParameters object — the old command=/args= kwargs
+    form raised ``TypeError: stdio_client() got an unexpected keyword
+    argument 'command'`` and every MCP stdio server silently returned 0
+    tools. Verify _connect builds the object with command+args intact."""
+    import mcp
+    from mcp.client.stdio import StdioServerParameters
+    from weight_stream.server.mcp_host import MCPHost, MCPServerStore
+
+    captured = {}
+
+    class FakeCM:
+        """mcp >= 1.2 stdio_client returns an async context manager."""
+        def __init__(self, params):
+            captured["params"] = params
+
+        async def __aenter__(self):
+            return object(), object()
+
+        async def __aexit__(self, *exc):
+            pass
+
+    def fake_stdio_client(server, errlog=None):
+        return FakeCM(server)
+
+    class FakeSession:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *exc):
+            pass
+
+        async def initialize(self):
+            pass
+
+    import mcp.client.stdio as mcs
+
+    monkeypatch.setattr(mcs, "stdio_client", fake_stdio_client)
+    monkeypatch.setattr(mcp, "ClientSession", lambda *a, **k: FakeSession())
+
+    store = MCPServerStore(file_path=str(tmp_path / "mcp.json"))
+    host = MCPHost(store=store)
+    server = {
+        "id": "fs",
+        "name": "filesystem",
+        "transport": "stdio",
+        "command": "npx",
+        "args": ["-y", "@modelcontextprotocol/server-filesystem", "C:/tmp/ws"],
+        "enabled": True,
+    }
+    asyncio.run(host._connect(server))
+    assert isinstance(captured["params"], StdioServerParameters)
+    assert captured["params"].command == "npx"
+    assert captured["params"].args == ["-y", "@modelcontextprotocol/server-filesystem", "C:/tmp/ws"]
+
+
 # ── W4: GGUF parse failure must release mmap + fd ────────────────────
 
 

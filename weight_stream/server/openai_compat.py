@@ -81,6 +81,7 @@ async def _complete_response(
         top_p=request.top_p,
         reasoning_mode=request.reasoning_mode or "auto",
         tools=request.tools,
+        chat_template_kwargs=request.chat_template_kwargs,
     )
 
     completion_tokens = result.get("tokens_generated", 0)
@@ -130,6 +131,7 @@ async def _stream_response(
             temperature=request.temperature,
             top_p=request.top_p,
             reasoning_mode=request.reasoning_mode or "auto",
+            chat_template_kwargs=request.chat_template_kwargs,
         )
         
         async for event in gen:

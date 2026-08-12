@@ -246,6 +246,14 @@ class ChatCompletionRequest(BaseModel):
     reasoning_effort: Optional[str] = Field(default="medium", description="Reasoning effort level: low, medium, high (legacy)")
     reasoning_mode: Optional[str] = Field(default=None, description="Reasoning mode: auto, on, off (P7 — controls thinking)")
     tools: Optional[List[Dict[str, Any]]] = Field(default=None, description="Available agent tools")
+    chat_template_kwargs: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description=(
+            "Extra keyword arguments for the chat template (e.g. "
+            "{\"enable_thinking\": false} to disable Qwen3-family reasoning, "
+            "which otherwise swallows tool-calling turns)."
+        ),
+    )
 
     model_config = {"extra": "allow"}
 

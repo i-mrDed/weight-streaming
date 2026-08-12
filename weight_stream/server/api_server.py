@@ -1386,6 +1386,44 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
 
+    # ── Built-in agent tools (AGENT_TOOLS_PLAN.md) ────────────────────────
+    # Path-guarded workspace tools (read/list inside the configured root) —
+    # the second tool source for the console agent loop alongside MCP.
+    from . import workspace_tools
+
+    @app.get("/v1/agent/config")
+    async def get_agent_config():
+        return workspace_tools.load_config()
+
+    @app.put("/v1/agent/config")
+    async def put_agent_config(body: Dict[str, Any]):
+        """Validate + persist agent config (workspace root must exist)."""
+        cfg = workspace_tools.load_config()
+        if "enabled" in body:
+            cfg["enabled"] = bool(body["enabled"])
+        if "workspace_root" in body and body["workspace_root"]:
+            root = os.path.expanduser(str(body["workspace_root"]))
+            if not os.path.isdir(root):
+                raise HTTPException(status_code=400, detail=f"workspace root is not a directory: {root}")
+            cfg["workspace_root"] = root
+        return workspace_tools.save_config(cfg)
+
+    @app.get("/v1/agent/tools")
+    async def list_agent_tools():
+        """List built-in workspace tools ([] when disabled or root missing)."""
+        return workspace_tools.list_tools()
+
+    @app.post("/v1/agent/tools/{tool_name}/call")
+    async def call_agent_tool(tool_name: str, body: Dict[str, Any]):
+        """Call a built-in workspace tool (path-guarded server-side)."""
+        try:
+            result = workspace_tools.call_tool(tool_name, body)
+            return {"tool": tool_name, "result": result}
+        except workspace_tools.ToolError as e:
+            raise HTTPException(status_code=e.status, detail=str(e))
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=str(e))
+
     # ── Auto-tiering (P8): fast/quality pair + pure router ─────────────
     # User-configurable model pair (default = the Gemma pair proven on this
     # rig, EXP-022/019). The router itself is model-agnostic — any two GGUFs

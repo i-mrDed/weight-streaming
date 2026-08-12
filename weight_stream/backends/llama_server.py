@@ -732,6 +732,7 @@ class LlamaServerBackend(WeightStreamBackend):
         reasoning_mode: str = "auto",
         tools: Optional[List[dict]] = None,
         tool_choice: Optional[Any] = None,
+        chat_template_kwargs: Optional[dict] = None,
         **kwargs,
     ) -> Iterator[str]:
         """Stream chat via llama-server's OpenAI-compatible API.
@@ -771,6 +772,12 @@ class LlamaServerBackend(WeightStreamBackend):
             payload["tools"] = tools
         if tool_choice is not None:
             payload["tool_choice"] = tool_choice
+        if chat_template_kwargs:
+            # e.g. {"enable_thinking": false} — Qwen3-family templates default
+            # to thinking ON, which makes tool-calling turns degenerate (the
+            # model reasons forever and never emits tool_calls). The agent
+            # loop sends this explicitly for its tool turns.
+            payload["chat_template_kwargs"] = chat_template_kwargs
 
         # Reset accumulated tool_calls from any previous generation.
         self._tool_calls: List[dict] = []

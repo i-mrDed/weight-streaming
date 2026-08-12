@@ -92,6 +92,36 @@ class TestStreamChatPaging:
         finally:
             b.close()
 
+    def test_chat_template_kwargs_forwarded_to_payload(self, monkeypatch):
+        """Agent tool turns pass chat_template_kwargs (e.g.
+        {"enable_thinking": false}) through to llama-server. Qwen3-family
+        templates default thinking ON, which makes tool-calling degenerate;
+        the agent loop relies on this flag reaching the payload."""
+        import weight_stream.backends.llama_server as ls_mod
+
+        b = LlamaServerBackend(model_path="x.gguf", n_ctx=16, server_binary=None)
+        try:
+            monkeypatch.setattr(
+                ls_mod.LlamaServerBackend,
+                "is_loaded",
+                property(lambda self: True),
+            )
+            captured = {}
+
+            def fake_request(path, payload, timeout=300.0):
+                captured["payload"] = payload
+                yield {"choices": [{"delta": {"content": "Hi"}}]}
+
+            monkeypatch.setattr(b, "_request", fake_request)
+            list(b.stream_chat(
+                [{"role": "user", "content": "hi"}],
+                max_tokens=5,
+                chat_template_kwargs={"enable_thinking": False},
+            ))
+            assert captured["payload"]["chat_template_kwargs"] == {"enable_thinking": False}
+        finally:
+            b.close()
+
     def test_paging_absent_when_counters_unavailable(self, monkeypatch):
         """POSIX-style None counters → the paging key is simply absent
         (honest), never zeroed or fabricated."""

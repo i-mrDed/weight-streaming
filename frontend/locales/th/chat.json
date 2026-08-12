@@ -54,14 +54,24 @@
   "none": "โหลดโมเดลก่อน",
   "auto": "⚡ Auto",
   "autoHint": "แชทสั้นใช้โมเดลเร็ว ส่วนคำขอยาว/เน้นเหตุผลใช้โมเดลคุณภาพ (ตั้งค่าใน Settings → Auto-tiering)"
- },
- "agent": {
-  "label": "โหมด",
-  "default": "ค่าเริ่มต้น",
-  "agent": "Agent",
-  "tip": "หมายเหตุตรงๆ: โหมด agent แค่ตั้งค่า system prompt ที่เน้นการใช้ tool เซิร์ฟเวอร์ยังเรียกใช้ tool ไม่ได้ — ไม่มีการกระทำใดทำงานจริง",
-  "suffix": "คุณกำลังทำงานในโหมด agent: ให้ให้เหตุผลเป็นขั้นตอนและอธิบายการเรียกใช้ tool ใดๆ ที่จะทำเป็นข้อความธรรมดา หมายเหตุ: เซิร์ฟเวอร์นี้ยังเรียกใช้ tool ไม่ได้ จึงอธิบายเฉพาะการกระทำที่ตั้งใจ"
- },
+ },  "agent": {
+   "label": "โหมด",
+   "default": "ค่าเริ่มต้น",
+   "agent": "Agent",
+   "tip": "โหมด agent รันวงจร tool จริง: โมเดลเรียกใช้ MCP tools และ workspace tools (read_file / list_directory) ได้ — ตั้งค่า MCP servers และ workspace root ได้ใน Settings",
+   "suffix": "คุณกำลังทำงานในโหมด agent: คุณเรียกใช้ tool ได้เมื่อช่วยตอบคำถามผู้ใช้ — ใช้เพื่ออ่านไฟล์หรือรายชื่อโฟลเดอร์ใน workspace เมื่อจำเป็น แล้วใช้ผลลัพธ์ตอบคำถาม",
+   "noTools": "โหมด agent เปิดอยู่ แต่ไม่มี tool ให้ใช้ — เพิ่ม MCP server หรือตั้งค่า workspace root ใน Settings",
+   "maxIters": "วงจร agent หยุด: ถึงขีดจำกัดจำนวนรอบแล้ว"
+  },
+  "tool": {
+   "label": "Tool",
+   "running": "กำลังทำงาน…",
+   "done": "เสร็จ",
+   "error": "ผิดพลาด",
+   "args": "arguments",
+   "result": "ผลลัพธ์",
+   "unknown": "ไม่รู้จัก tool: {name}"
+  },
  "effort": {
   "label": "ระดับการให้เหตุผล",
   "low": "ต่ำ",

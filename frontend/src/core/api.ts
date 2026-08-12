@@ -184,6 +184,55 @@ export function listMCPTools(): Promise<MCPTool[]> {
   return apiJSON('/v1/mcp/tools')
 }
 
+export interface MCPToolResult {
+  server_id: string
+  tool: string
+  result: unknown
+}
+
+export function callMCPTool(serverId: string, toolName: string, args: unknown): Promise<MCPToolResult> {
+  return apiJSON(`/v1/mcp/tools/${encodeURIComponent(serverId)}/${encodeURIComponent(toolName)}/call`, {
+    method: 'POST',
+    body: JSON.stringify(args ?? {}),
+  })
+}
+
+/* ── Agent / built-in workspace tools (AGENT_TOOLS_PLAN.md) ── */
+
+export interface AgentConfig {
+  enabled: boolean
+  workspace_root: string
+}
+
+export interface AgentTool {
+  name: string
+  description: string
+  parameters: Record<string, unknown>
+}
+
+export interface AgentToolResult {
+  result: unknown
+}
+
+export function getAgentConfig(): Promise<AgentConfig> {
+  return apiJSON('/v1/agent/config')
+}
+
+export function putAgentConfig(cfg: Partial<AgentConfig>): Promise<AgentConfig> {
+  return apiJSON('/v1/agent/config', { method: 'PUT', body: JSON.stringify(cfg) })
+}
+
+export function listAgentTools(): Promise<AgentTool[]> {
+  return apiJSON('/v1/agent/tools')
+}
+
+export function callAgentTool(name: string, args: unknown): Promise<AgentToolResult> {
+  return apiJSON(`/v1/agent/tools/${encodeURIComponent(name)}/call`, {
+    method: 'POST',
+    body: JSON.stringify(args ?? {}),
+  })
+}
+
 export interface ServerStatus {
   models_loaded: number
   max_models: number

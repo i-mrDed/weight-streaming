@@ -54,14 +54,24 @@
   "none": "Load a model first",
   "auto": "⚡ Auto",
   "autoHint": "Short chats use the fast model; long or reasoning-heavy requests use the quality model (configured in Settings → Auto-tiering)"
- },
- "agent": {
-  "label": "Mode",
-  "default": "Default",
-  "agent": "Agent",
-  "tip": "Honest note: Agent mode only wires a tool-oriented system prompt. The server does not execute tools yet — no actions will actually run.",
-  "suffix": "You are operating in agent mode: reason step by step and describe any tool calls you would make as plain text. Note: this server cannot execute tools yet, so describe intended actions only."
- },
+ },  "agent": {
+   "label": "Mode",
+   "default": "Default",
+   "agent": "Agent",
+   "tip": "Agent mode runs a real tool loop: the model can call connected MCP tools and workspace tools (read_file / list_directory). Configure MCP servers + workspace root in Settings.",
+   "suffix": "You are operating in agent mode. You can call tools when they help answer the user — use them to read files or list directories inside the workspace. Call a tool when needed, then use the results to answer.",
+   "noTools": "Agent mode is on, but no tools are available — add an MCP server or workspace root in Settings.",
+   "maxIters": "Agent loop stopped: reached the iteration limit."
+  },
+  "tool": {
+   "label": "Tool",
+   "running": "running…",
+   "done": "done",
+   "error": "error",
+   "args": "args",
+   "result": "result",
+   "unknown": "Unknown tool: {name}"
+  },
  "effort": {
   "label": "Reasoning effort",
   "low": "Low",

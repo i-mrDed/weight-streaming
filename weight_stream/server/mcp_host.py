@@ -146,6 +146,11 @@ class MCPHost:
     def __init__(self, store: Optional[MCPServerStore] = None):
         self._store = store or MCPServerStore()
         self._sessions: Dict[str, Any] = {}  # server_id -> ClientSession
+        # stdio transport context managers entered without exit (same
+        # deliberate pattern as sse below) — keeps the subprocess alive for
+        # the lifetime of the session. GC'ing the CM would __aexit__ it and
+        # kill the spawned process.
+        self._contexts: Dict[str, Any] = {}  # server_id -> context manager
         self._lock = threading.Lock()
 
     def _mcp_available(self) -> bool:
@@ -158,8 +163,8 @@ class MCPHost:
     async def _connect(self, server: Dict[str, Any]) -> Any:
         """Open a ClientSession to a single MCP server."""
         from mcp import ClientSession
-        from mcp.client.stdio import stdio_client
         from mcp.client.sse import sse_client
+        from mcp.client.stdio import StdioServerParameters, stdio_client
 
         # Defense-in-depth (W3): even a hand-edited servers.json goes
         # through the same command/url validation as the API.
@@ -169,17 +174,30 @@ class MCPHost:
             url = server.get("url")
             if not url:
                 raise ValueError(f"server {server.get('id')} needs url for sse")
-            # Deliberate "enter without async-with": the session must
-            # outlive this frame, so the transport context is entered but
-            # never exited here (closed in close()). mypy types these as
-            # context managers; the await-enter pattern is intentional.
-            read, write = await sse_client(url)  # type: ignore[misc]
+            # Deliberate "enter without async-with": the transport context
+            # must outlive this frame, so the context is entered but never
+            # exited here (closed in close()). mcp >= 1.2 returns an async
+            # context manager (not an awaitable) — enter it explicitly and
+            # keep it alive in self._contexts.
+            sid = server.get("id")
+            cm = sse_client(url)
+            read, write = await cm.__aenter__()
+            self._contexts[sid] = cm
         else:
             cmd = server.get("command")
             args = server.get("args", [])
             if not cmd:
                 raise ValueError(f"server {server.get('id')} needs command for stdio")
-            read, write = await stdio_client(command=cmd, args=args)  # type: ignore[misc, call-arg]
+            # mcp >= 1.2 stdio_client is @asynccontextmanager: it returns an
+            # async context manager, not an awaitable. We enter it WITHOUT
+            # async-with (deliberate, like sse below) and keep the CM alive
+            # in self._contexts so the spawned process outlives this frame.
+            # P7.4 was never E2E'd until 2026-08-12 — the command=/args=
+            # kwargs form AND the bare-await form both failed on mcp 1.27.
+            sid = server.get("id")
+            cm = stdio_client(StdioServerParameters(command=cmd, args=args))
+            read, write = await cm.__aenter__()
+            self._contexts[sid] = cm
         session = await ClientSession(read, write).__aenter__()
         await session.initialize()
         return session
@@ -234,6 +252,12 @@ class MCPHost:
             except Exception:
                 pass
         self._sessions.clear()
+        for sid, cm in self._contexts.items():
+            try:
+                await cm.__aexit__(None, None, None)
+            except Exception:
+                pass
+        self._contexts.clear()
 
 
 _store: Optional[MCPServerStore] = None
