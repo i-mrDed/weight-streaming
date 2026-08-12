@@ -1,0 +1,20 @@
+# MongoModel — ตัวรัน MongoModel สำหรับโปรเจค Weight-Streaming
+# ใช้ image ที่ build ไว้แล้ว (repo-mongomodel:latest) — ข้อมูล mount จาก ./mongomodel-data
+#
+# ขึ้นระบบ:  docker compose -f docker-compose.mongomodel.yml up -d
+# หยุด:      docker compose -f docker-compose.mongomodel.yml stop   (ข้อมูลไม่หาย)
+# ดู log:    docker logs -f mongomodel
+#
+# UI  → http://localhost:3100
+# MCP → http://localhost:3100/mcp
+# ⚠️ bind 127.0.0.1 เท่านั้น — ไม่มี auth ห้ามเปิดออก LAN/อินเทอร์เน็ต
+
+services:
+  mongomodel:
+    image: repo-mongomodel:latest
+    container_name: mongomodel
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - ./mongomodel-data:/app/data
+    restart: unless-stopped

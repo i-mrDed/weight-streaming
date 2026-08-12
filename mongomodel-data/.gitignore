@@ -1,0 +1,6 @@
+# ============================================================
+# MongoModel data (Weight-Streaming)
+# - projects.json = data model + shared brain (COMMIT ขึ้น git ได้ — ใช้เก็บ "บริบทงาน" เท่านั้น)
+# - history/ = snapshots อัตโนมัติ 20 รุ่น เปลี่ยนทุกการแก้ — อย่า commit
+# ============================================================
+history/

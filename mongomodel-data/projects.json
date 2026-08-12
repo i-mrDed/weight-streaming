@@ -1,0 +1,199 @@
+{
+  "rev": 8,
+  "projects": {
+    "weight-streaming": {
+      "rev": 8,
+      "updatedAt": "2026-08-12T05:09:04.677Z",
+      "tabs": [
+        {
+          "id": "13c76ddc",
+          "name": "Main Diagram"
+        }
+      ],
+      "cur": "13c76ddc",
+      "diagrams": {
+        "13c76ddc": {
+          "nodes": [],
+          "edges": []
+        }
+      },
+      "workflows": {
+        "serve-request": {
+          "id": "serve-request",
+          "name": "Serve request (stream generate)",
+          "description": "Flow หลักของ API server: รับ request → load model → tokenize → predict + pre-fetch → stream generate → telemetry → response",
+          "status": "approved",
+          "trigger": "API request ถึง /v1/generate (SSE)",
+          "steps": [
+            {
+              "id": "start",
+              "kind": "start",
+              "title": "รับ request",
+              "description": "รับ prompt + config (model, context length, threads, GPU layers, KV-cache type)",
+              "position": {
+                "x": 0,
+                "y": 0
+              }
+            },
+            {
+              "id": "load",
+              "kind": "action",
+              "title": "โหลด/สลับ model",
+              "description": "load/unload ตาม config — per-model context length, threads, gpu_layers",
+              "position": {
+                "x": 200,
+                "y": 0
+              }
+            },
+            {
+              "id": "tokenize",
+              "kind": "action",
+              "title": "Tokenize prompt",
+              "description": "แปลง prompt เป็น tokens พร้อมจำกัด context length",
+              "position": {
+                "x": 400,
+                "y": 0
+              }
+            },
+            {
+              "id": "predict",
+              "kind": "action",
+              "title": "Draft predict + pre-fetch",
+              "description": "draft model (3–7B) predict expert/layer ถัดไป → pre-fetch weights จาก NVMe ลง buffer 256MB–1GB",
+              "position": {
+                "x": 600,
+                "y": 0
+              }
+            },
+            {
+              "id": "stream",
+              "kind": "action",
+              "title": "Stream generate",
+              "description": "main model execute จาก streaming buffer — ล้าง buffer หลังใช้เสร็จ (reuse space)",
+              "position": {
+                "x": 800,
+                "y": 0
+              }
+            },
+            {
+              "id": "telemetry",
+              "kind": "action",
+              "title": "Telemetry + response",
+              "description": "วัดจริง: tok/s, page faults/token, disk traffic — ส่งผ่าน SSE (honest telemetry)",
+              "position": {
+                "x": 1000,
+                "y": 0
+              }
+            },
+            {
+              "id": "end",
+              "kind": "end",
+              "title": "จบ request",
+              "description": "คืน response ครบ + ปิด stream",
+              "position": {
+                "x": 1200,
+                "y": 0
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "id": "t1",
+              "source": "start",
+              "target": "load",
+              "label": "มี request"
+            },
+            {
+              "id": "t2",
+              "source": "load",
+              "target": "tokenize",
+              "label": "model พร้อม"
+            },
+            {
+              "id": "t3",
+              "source": "tokenize",
+              "target": "predict",
+              "label": "มี tokens"
+            },
+            {
+              "id": "t4",
+              "source": "predict",
+              "target": "stream",
+              "label": "buffer พร้อม"
+            },
+            {
+              "id": "t5",
+              "source": "stream",
+              "target": "telemetry",
+              "label": "generate เสร็จ"
+            },
+            {
+              "id": "t6",
+              "source": "telemetry",
+              "target": "end",
+              "label": "ส่ง response"
+            }
+          ]
+        }
+      },
+      "brain": {
+        "entries": [
+          {
+            "id": "note-status",
+            "kind": "note",
+            "title": "สถานะปัจจุบัน",
+            "content": "2026-08-10: จากแนวคิดสู่แพลตฟอร์มจริง — อ่าน README (ภาพรวม + ผลวัดจริง EXP-012) และ research/HARDWARE_100TPS_PLAN.md (แผน hardware)",
+            "status": "active",
+            "createdAt": "2026-08-12T05:09:04.641Z",
+            "updatedAt": "2026-08-12T05:09:04.641Z"
+          },
+          {
+            "id": "decision-paradigm",
+            "kind": "decision",
+            "title": "Paradigm shift: Predict → Pre-fetch → Stream → Execute",
+            "content": "mmap (reactive page fault) = I/O-bound ช้า → เปลี่ยนเป็น speculative weight streaming: draft model (3–7B ใน RAM) predict weights ถัดไป → pre-fetch ลง buffer 256MB–1GB → main model execute จาก buffer แล้วล้างทันที",
+            "status": "active",
+            "createdAt": "2026-08-12T05:09:04.612Z",
+            "updatedAt": "2026-08-12T05:09:04.612Z"
+          },
+          {
+            "id": "rule-both-arch",
+            "kind": "rule",
+            "title": "รองรับทุกสถาปัตยกรรม",
+            "content": "ออกแบบให้ใช้ได้กับทั้ง MoE และ Dense — MoE: predict expert routing (เช่น K3 16/896) · Dense: predict layer activation / shard access pattern",
+            "status": "active",
+            "createdAt": "2026-08-12T05:09:04.577Z",
+            "updatedAt": "2026-08-12T05:09:04.577Z"
+          },
+          {
+            "id": "rule-honest-telemetry",
+            "kind": "rule",
+            "title": "Honest telemetry (กฎเหล็ก)",
+            "content": "ทุกตัวเลขต้องมาจากการวัดจริง หรือแสดง n/a — ห้ามตัวเลขแต่งเด็ดขาด (ground rule ของโปรเจค: \"measured honestly\")",
+            "status": "active",
+            "createdAt": "2026-08-12T05:09:04.546Z",
+            "updatedAt": "2026-08-12T05:09:04.546Z"
+          },
+          {
+            "id": "goal-k3",
+            "kind": "goal",
+            "title": "เป้าหมายระยะสั้น (K3)",
+            "content": "Inference บน Kimi K3 (2.8T params, MoE, open weights July 2026) ด้วย RAM 32–64GB + NVMe — ความเร็วพอใช้งาน (< 5–10 วินาทีต่อ token ชุดแรก)",
+            "status": "active",
+            "createdAt": "2026-08-12T05:09:04.511Z",
+            "updatedAt": "2026-08-12T05:09:04.511Z"
+          },
+          {
+            "id": "goal-core",
+            "kind": "goal",
+            "title": "เป้าหมายหลัก",
+            "content": "รันโมเดลภาษาขนาดใหญ่ (100B–3T+ params, dense/MoE/hybrid) บนเครื่องทั่วไป RAM 32–64GB โดยไม่ต้องโหลด weights ทั้งหมดเข้า RAM — ใช้ predictive streaming จาก NVMe แทน",
+            "status": "active",
+            "createdAt": "2026-08-12T05:09:04.477Z",
+            "updatedAt": "2026-08-12T05:09:04.477Z"
+          }
+        ]
+      }
+    }
+  }
+}
