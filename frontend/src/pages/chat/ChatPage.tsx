@@ -889,6 +889,15 @@ export function ChatPage() {
             </div>
           ) : (
             <div class="chat__msgs">
+              {msgs.length > 0 && conv?.summary ? (
+                <details class="chat__summary" open={false}>
+                  <summary>
+                    <span aria-hidden="true">📝</span>
+                    {t('chat.summary.banner')}
+                  </summary>
+                  <div class="chat__summary-body">{conv.summary}</div>
+                </details>
+              ) : null}
               {msgs.map((m, i) => {
                 const streaming = generating.value && m.role === 'assistant' && i === msgs.length - 1
                 const toolCalls = m.role === 'assistant' ? m.tool_calls : undefined

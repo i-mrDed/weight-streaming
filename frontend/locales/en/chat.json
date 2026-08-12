@@ -23,6 +23,13 @@
  },
  "genFailed": "Generation failed",
  "copyFailed": "Copy failed",
+ "summary": {
+  "label": "Summarize conversation",
+  "banner": "Conversation summary",
+  "empty": "No messages to summarize yet",
+  "done": "Summary saved",
+  "failed": "Summarize failed"
+ },
  "notif": {
   "title": "Response finished",
   "body": "The model finished while this tab was in the background."

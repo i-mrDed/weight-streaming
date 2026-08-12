@@ -2,7 +2,7 @@
    Today / Yesterday / Older, rename / delete(confirm) / export .md, model
    tag per conversation. */
 import { useState } from 'preact/hooks'
-import { Download, MessageSquarePlus, Pencil, Plus, Trash2 } from 'lucide-preact'
+import { Download, MessageSquarePlus, NotebookPen, Pencil, Plus, Trash2 } from 'lucide-preact'
 import { Button } from '@/components/Button'
 import { Dialog } from '@/components/Dialog'
 import { Badge } from '@/components/Badge'
@@ -17,6 +17,7 @@ import {
   selectConversation,
   type ConvMeta,
 } from './store'
+import { summarizeConversation } from '@/core/api'
 import { t, fmtTime, locale } from '@/i18n'
 
 function dayBucket(ts: number, now: number): 0 | 1 | 2 {
@@ -40,6 +41,7 @@ export function ConversationSidebar({ onNew }: Props) {
   const [renaming, setRenaming] = useState<ConvMeta | null>(null)
   const [renameText, setRenameText] = useState('')
   const [deleting, setDeleting] = useState<ConvMeta | null>(null)
+  const [summarizing, setSummarizing] = useState<string | null>(null)
   const now = Date.now()
 
   const groups: [string, ConvMeta[]][] = [
@@ -59,6 +61,34 @@ export function ConversationSidebar({ onNew }: Props) {
       persist(conv)
     }
     setRenaming(null)
+  }
+
+  const doSummarize = async (meta: ConvMeta) => {
+    const conv = loadConversation(meta.id)
+    if (!conv) return
+    if (conv.messages.length === 0) {
+      toast('info', t('chat.summary.empty'))
+      return
+    }
+    setSummarizing(meta.id)
+    try {
+      const wire = conv.messages
+        .filter((m) => m.content && !m.stopped)
+        .map((m) => ({ role: m.role, content: m.content }))
+      const res = await summarizeConversation(
+        conv.model,
+        wire,
+        conv.summary,
+      )
+      conv.summary = res.summary || conv.summary
+      persist(conv)
+      toast('success', t('chat.summary.done'))
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e)
+      toast('error', t('chat.summary.failed'), { body: msg })
+    } finally {
+      setSummarizing(null)
+    }
   }
 
   return (
@@ -98,6 +128,18 @@ export function ConversationSidebar({ onNew }: Props) {
                       </span>
                     </div>
                     <span class="conv-item__tools">
+                      <button
+                        class="icon-btn"
+                        aria-label={t('chat.summary.label')}
+                        title={t('chat.summary.label')}
+                        disabled={summarizing === meta.id}
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          void doSummarize(meta)
+                        }}
+                      >
+                        <NotebookPen size={13} />
+                      </button>
                       <button
                         class="icon-btn"
                         aria-label={t('chat.side.rename')}
