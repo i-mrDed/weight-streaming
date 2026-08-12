@@ -601,6 +601,22 @@ class ModelManager:
         latest_tokens = cls._estimate_tokens(latest_msg.get("content", ""))
         used_tokens = system_tokens + latest_tokens
 
+        # If the latest message alone exceeds the budget (e.g. a giant tool
+        # result fed back by the agent loop), truncate its content instead of
+        # sending an oversized request llama-server rejects outright.
+        # Found 2026-08-12 E2E: a 16 KB README read via read_file blew a
+        # 4096-token context (6163 requested) and the loop retried to the
+        # iteration cap. Truncation is safe here — tool results are data, and
+        # the tail (newest part) is the most relevant to keep.
+        if latest_tokens > budget - system_tokens:
+            cap_chars = max(1, (budget - system_tokens) * 3)  # ≈ tokens × 3
+            latest_msg = {
+                **latest_msg,
+                "content": (latest_msg.get("content") or "")[:cap_chars],
+            }
+            latest_tokens = cls._estimate_tokens(latest_msg["content"])
+            used_tokens = system_tokens + latest_tokens
+
         packed_history: list[dict] = []
         for msg in reversed(history_msgs):
             cost = cls._estimate_tokens(msg.get("content", ""))

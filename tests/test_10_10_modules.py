@@ -228,6 +228,27 @@ class TestTokenBudgetPacking:
         assert result[0]["role"] == "system"
         assert result[-1]["content"] == "Final question"
 
+    def test_fit_messages_truncates_oversized_latest_tool_result(self):
+        """2026-08-12 E2E: the agent loop read a 16 KB README via read_file
+        and fed the whole tool result back — 6163 tokens into a 4096-token
+        context, llama-server rejected it and the loop retried to the cap.
+        The fitter must truncate the oversized trailing tool result instead
+        of sending it whole."""
+        giant = "R" * 18_000  # ≈ 6000 tokens by the chars/3 estimator
+        messages = [
+            {"role": "system", "content": "You are helpful."},
+            {"role": "assistant", "content": None, "tool_calls": [{"id": "c1", "type": "function", "function": {"name": "read_file", "arguments": "{}"}}]},
+            {"role": "tool", "tool_call_id": "c1", "content": giant},
+        ]
+        result = ModelManager._fit_messages_to_context(messages, max_tokens=1024, n_ctx=4096)
+        last = result[-1]
+        assert last["role"] == "tool"
+        assert len(last["content"]) < 18_000
+        assert len(last["content"]) > 0
+        # Should fit the budget (n_ctx - max_tokens - 64 margin, ×3 chars/token)
+        budget_chars = (4096 - 1024 - 64) * 3
+        assert len(last["content"]) <= budget_chars
+
     def test_fit_messages_empty(self):
         result = ModelManager._fit_messages_to_context([], max_tokens=128, n_ctx=2048)
         assert result == []
