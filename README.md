@@ -126,15 +126,27 @@ token. The platform:
 
 ## Quick start
 
+> **เครื่องใหม่? ไม่ต้องติดตั้ง Jan** — ระบบหา `llama-server` (llama.cpp) เอง ตามลำดับ:
+> `WS_LLAMA_SERVER` → Jan backends → PATH — ใช้สคริปต์ด้านล่างจัดการให้อัตโนมัติ
+
 ```bash
-# install (server extras: fastapi/uvicorn; test: pytest/httpx/requests)
+# 1) dependencies (server extras: fastapi/uvicorn; test: pytest/httpx/requests)
 pip install -e ".[server,test]"
 
-# API server + web console (default port 8765)
+# 2) ensure a llama-server binary (find existing, or download matching GPU)
+python scripts/setup_llama_server.py --check     # มีอยู่แล้วไหม?
+python scripts/setup_llama_server.py --write-env # ไม่มี → ดาวน์โหลด + เขียน .env (WS_LLAMA_SERVER=...)
+#    --backend cuda|vulkan|metal|cpu  ระบุเองได้ (default: auto-detect GPU)
+
+# 3) API server + web console (default port 8765)
 weight-streaming server            # or: python -m weight_stream.server --port 8765
 
-# open http://localhost:8765/console/
+# 4) open http://localhost:8765/console/
 ```
+
+> **หมายเหตุ GPU:** ควรใช้ build ที่ตรงกับ GPU ของเครื่อง (CUDA สำหรับ NVIDIA /
+> Vulkan สำหรับ AMD/Intel / Metal สำหรับ Mac) — CPU-only build ทำงานได้แต่ช้ามาก
+> (2–4 tok/s เทียบกับ CUDA 35–40 tok/s) · Linux/macOS ใช้ PATH หรือ `WS_LLAMA_SERVER` เช่นกัน
 
 Other front doors:
 
@@ -163,6 +175,7 @@ applies to the SPA, CLI and API:
 | `WS_LOWER_PRIORITY` | `1` | Run inference children below-normal priority |
 | `WS_MAX_MODELS` / `WS_MAX_REQUESTS` / `WS_QUEUE_DEPTH` | — | Concurrency limits |
 | `WS_LOG_LEVEL` | `info` | Log verbosity |
+| `WS_LLAMA_SERVER` | auto (Jan → PATH) | Explicit path to a `llama-server` binary (llama.cpp) — ใช้เมื่อไม่มี Jan หรือต้องการ build เฉพาะ |
 
 Extra llama-server flags can be passed through with `WS_LLAMA_EXTRA_ARGS`
 (e.g. `--cpu-moe`, `--n-cpu-moe`, `-fa`).
