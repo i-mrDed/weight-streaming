@@ -25,6 +25,7 @@ class SimulationResult:
     buffer_stats: Dict
     predictor_stats: Dict
     timing_stats: Dict
+    per_token: List[Dict] = None  # filled when run_simulation(collect_per_token=True)
     
     def print_summary(self):
         print("=" * 60)
@@ -65,8 +66,14 @@ class SimulationResult:
         print("=" * 60)
 
 
-def run_simulation(config: SimConfig, verbose: bool = False) -> SimulationResult:
-    """Run a complete simulation"""
+def run_simulation(config: SimConfig, verbose: bool = False,
+                   collect_per_token: bool = False) -> SimulationResult:
+    """Run a complete simulation
+
+    ``collect_per_token=True`` records per-token buffer hits/misses (used
+    by the Phase 4 K3 benchmark to build the honest latency distribution
+    from per-token physics, not a flat average).
+    """
     
     # 1. Generate workload
     gen = AccessPatternGenerator(config)
@@ -96,6 +103,7 @@ def run_simulation(config: SimConfig, verbose: bool = False) -> SimulationResult
     # 4. Run token-by-token
     all_timings = []
     predictor_hit_rates = []
+    per_token = []
     
     for token_idx, token_layers in enumerate(sequence):
         # a) Predict weights
@@ -143,6 +151,12 @@ def run_simulation(config: SimConfig, verbose: bool = False) -> SimulationResult
             predictor_confidence=pred_result.hit_rate if pred_result.hit_rate > 0 else 0.0
         )
         all_timings.append(timing_result)
+        if collect_per_token:
+            per_token.append({
+                "token": token_idx,
+                "hits": pre_fetched,
+                "misses": missed,
+            })
         
         if verbose and token_idx % 200 == 0:
                 print(f"  Token {token_idx}: buf_hit={buffer.get_stats().hit_rate*100:.1f}% "
@@ -202,7 +216,8 @@ def run_simulation(config: SimConfig, verbose: bool = False) -> SimulationResult
             "avg_stall_ms": avg_stall / 1000,
             "avg_overlap_ms": avg_overlap / 1000,
             "tokens_per_sec": 1_000_000 / max(1, avg_total),
-        }
+        },
+        per_token=per_token if collect_per_token else None,
     )
     
     return result
