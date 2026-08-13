@@ -211,6 +211,43 @@ def test_mcp_validator_allowlist(tmp_path):
     assert host  # (host construction is fine; call-tool path is tested elsewhere)
 
 
+def test_mcp_args_code_exec_refused():
+    """W3 closure: args must not turn the allowlisted runner into RCE."""
+    from weight_stream.server.mcp_host import validate_mcp_args, validate_mcp_server
+
+    # benign args pass
+    validate_mcp_args("npx", ["-y", "@modelcontextprotocol/server-filesystem", "/tmp"])
+    validate_mcp_args("python", ["-m", "some_mcp_server"])
+    validate_mcp_args("node", ["server.js"])
+
+    # code-exec flags refused
+    for args in (
+        ["-c", "import os; os.system('calc')"],
+        ["-e", "require('child_process').execSync('calc')"],
+        ["--eval", "process.exit()"],
+        ["-c=import os"],
+        ["--eval=1"],
+        ["-p", "1"],
+        ["exec", "npm-package"],
+    ):
+        with pytest.raises(ValueError):
+            validate_mcp_args("python", args)
+
+    # non-string arg refused
+    with pytest.raises(ValueError):
+        validate_mcp_args("npx", [123])
+
+    # empty / missing args pass (no-op)
+    validate_mcp_args("npx", [])
+    validate_mcp_args("npx", None)
+
+    # full server validation includes args
+    with pytest.raises(ValueError):
+        validate_mcp_server(
+            {"id": "x", "transport": "stdio", "command": "python",
+             "args": ["-c", "import os"]})
+
+
 def test_mcp_stdio_connect_builds_parameters_object(monkeypatch, tmp_path):
     """P7.4 E2E fix (2026-08-12): the installed mcp SDK's stdio_client
     requires a StdioServerParameters object — the old command=/args= kwargs

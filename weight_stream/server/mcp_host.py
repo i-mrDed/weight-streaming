@@ -67,10 +67,50 @@ def validate_mcp_command(command: Optional[str]) -> None:
         )
 
 
+# Flag tokens that turn an interpreter/runner into arbitrary code execution:
+#   python -c "..." · node -e "..." · deno eval "..." · bun -e "..."
+#   npm exec <pkg> ... (still risky — handled by command allowlist instead)
+# NOTE: `-m`/`--module` is NOT blocked — it is the normal way to run an
+# MCP server (`python -m some_mcp_server`); the module name is a bare
+# identifier and the server code is what the operator configured.
+_CODE_EXEC_FLAGS = {
+    "-c", "--command", "-e", "--eval", "eval", "-p", "--print",
+    "-i", "--interactive", "exec", "run-script",
+}
+
+
+def validate_mcp_args(command: Optional[str], args: Optional[list]) -> None:
+    """Reject MCP stdio args that would execute arbitrary code.
+
+    Allowlisted commands include interpreters/runners (npx, node, python,
+    uvx...). Without this guard, ``args=["-c", "import os; os.system(...)"]``
+    turns the allowlist into an RCE primitive (W3 partial — now closed).
+    Raises ValueError with a user-readable message.
+    """
+    if not args:
+        return
+    for a in args:
+        if not isinstance(a, str):
+            raise ValueError(
+                f"MCP args must be strings, got {a!r}")
+        if a in _CODE_EXEC_FLAGS:
+            raise ValueError(
+                f"MCP arg {a!r} is a code-execution flag and is not "
+                f"allowed (command={command!r}); use a dedicated MCP "
+                f"server binary instead"
+            )
+        # reject embedded code-exec patterns like `-c=...`, `--eval=...`
+        for flag in ("-c=", "--eval=", "-e=", "--print="):
+            if a.startswith(flag):
+                raise ValueError(
+                    f"MCP arg {a!r} looks like code execution; not allowed")
+
+
 def validate_mcp_server(server: Dict[str, Any]) -> None:
     """Security validation for an MCP server config (W3 / SSRF-lite).
 
-    - stdio: ``command`` must be a bare allowlisted executable name.
+    - stdio: ``command`` must be a bare allowlisted executable name, and
+      ``args`` must not contain code-execution flags (validate_mcp_args).
     - sse:   ``url`` must be http/https (no file:// or arbitrary schemes).
 
     Raises ValueError with a user-readable message.
@@ -82,6 +122,7 @@ def validate_mcp_server(server: Dict[str, Any]) -> None:
             raise ValueError(f"sse url must be http(s), got {url!r}")
         return
     validate_mcp_command(server.get("command"))
+    validate_mcp_args(server.get("command"), server.get("args"))
 
 
 def _servers_file() -> str:
