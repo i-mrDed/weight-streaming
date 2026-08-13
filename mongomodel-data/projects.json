@@ -1,9 +1,9 @@
 {
-  "rev": 60,
+  "rev": 61,
   "projects": {
     "weight-streaming": {
-      "rev": 60,
-      "updatedAt": "2026-08-13T01:58:02.699576Z",
+      "rev": 61,
+      "updatedAt": "2026-08-13T02:17:21.273932Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -1151,6 +1151,16 @@
             "author": "freebuff-agent",
             "createdAt": "2026-08-13T01:58:02.699576Z",
             "updatedAt": "2026-08-13T01:58:02.699576Z"
+          },
+          {
+            "id": "handoff-track-b-gate1-feasibility-2026-08-13",
+            "kind": "handoff",
+            "title": "Track B Gate 1 feasibility เสร็จ: fork+patch เท่านั้น (LLAMA_LOG_MOE ไม่มีจริง) — FEASIBLE bounded",
+            "content": "ตรวจสอบ Gate 1 (expose per-expert routing จาก llama.cpp): ไม่มี per-token routing callback ใน llama.h; LLAMA_LOG_MOE (ที่ EXP-016 อ้าง) ไม่มีอยู่ใน source จริง; routing เกิดลึกใน llama_moe/ggml — ต้อง fork + patch. Proof of feasibility: moe-viz ของ Martin Alderson (2026-04) แก้ llama.cpp dump profiling data ได้ heatmap routing จริง, และพบ ~25% ของ experts ไม่เคย activate ใน prompt สั้น (คนละ 25% ทุกครั้ง — ไม่มี hot set ถาวร ตรง EXP-014/016). Verdict: FEASIBLE (bounded, ~1-3 วัน รวม build CUDA Windows). ทางเลือก: A fork+patch (แนะนำ), B defuse GGUF+reimplement routing (fallback), C รอ upstream (ไม่อนุมัติ), D ใช้ router logits หลัง decode (ตอบผิดคำถาม). รายงาน: docs/TRACK-B-GATE1-FEASIBILITY.md + TASKS.md Track B section (Gate 2/3 ยัง ⬜). Repo กลายเป็น PUBLIC แล้ว (2026-08-13) + v0.15.0 release ย้าย tag มาที่ main ล่าสุด + Pages building.",
+            "status": "done",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T02:17:21.273932Z",
+            "updatedAt": "2026-08-13T02:17:21.273932Z"
           }
         ]
       }

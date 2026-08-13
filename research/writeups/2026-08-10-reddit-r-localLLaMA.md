@@ -1,5 +1,9 @@
 # Draft — r/LocalLLaMA post (title + body)
 
+> **Status:** updated 2026-08-13 — synced to the fact-checked paper
+> (ทุกตัวเลขตรง `research/paper/paper.md`; 29 → **30 experiments**; repo now
+> **PUBLIC**; 4× offload finding from EXP-030 added).
+
 > **Title (pick one):**
 > - `[D] I ran a 104 GB LLM on 64 GB RAM + 12 GB VRAM — 1.9 tok/s, and I have the page-fault receipts`
 > - `[D] The honest benchmark nobody publishes: 104 GB model on a consumer machine`
@@ -14,6 +18,13 @@ RTX 3060 12 GB + 64 GB DDR4 + NVMe. It works at **1.5–1.9 tok/s**. The
 interesting part is *why*: 36k–77k page faults per token ≈ 150–300 MB of
 disk reads **per token**. The bottleneck is the disk→RAM→CPU pipeline, and
 you can see it in real OS telemetry, not vibes.
+
+After 30 experiments everything reduces to one line:
+**tok/s = bandwidth ÷ bytes per token** — where the disk's *effective*
+bandwidth is **~0.38 GB/s, ~37× below its 14 GB/s sequential spec**,
+because page-fault reads are random access. That two-line identity
+predicts a fits-RAM Qwen1.5-MoE-A2.7B at 22.73 tok/s — we measure
+**22.73 tok/s (+0.02%)** on the real machine.
 
 Full write-up + open-source harness (MIT) — out-of-core inference,
 memory-mapped GGUF from NVMe, llama.cpp + MoE (DeepSeek / Qwen):
@@ -34,7 +45,14 @@ short demo GIF are in the README, plus the full benchmark write-up.
 
 Config tweaks move it ~15%. The wall is disk, not compute.
 
-**Dead ends we actually measured (17 experiments logged):**
+**Why buffering is (and isn't) the answer** — on a model that fits RAM,
+buffering is worthless (compute-bound, hit rate 1.000, no latency tail,
+EXP-027). On a K3-class target (15.6 GB/token active set) the same
+metrics flip the story: 256 MB buffer → 51.2% hit → **0.049 tok/s** vs
+4 GB buffer → 99.9% hit → **1.180 tok/s** — a **24× swing from one
+number** (EXP-029), because the hit/miss bandwidth gap is ~50×.
+
+**Dead ends we actually measured (30 experiments logged):**
 
 - Speculative decoding (llama.cpp draft-mtp) → **slower** on this box
   (−11–18%). The draft step still computes the full MoE forward pass.
@@ -43,8 +61,12 @@ Config tweaks move it ~15%. The wall is disk, not compute.
 - CPU lane (compute hot experts on CPU, like pulsar) → CPU only 39–51%
   busy because **DDR4 bandwidth is saturated**. Adding work to a
   bandwidth-bound CPU doesn't help.
+- Expert offloading hurts when the model **fits** VRAM: all-GPU =
+  126.6 vs offloaded = 31.8 tok/s (**4× slower**, EXP-030) — offload
+  only pays when the model exceeds VRAM.
 - The ONE lever that works: **bytes-per-token** (IQ1_M vs IQ2_M on a
-  10 GB MoE: 77 vs 56 tok/s). Lower bytes → more resident → fewer faults.
+  11 GB Qwen3.6-35B-A3B: 77 vs 56 tok/s). Lower bytes → more resident
+  → fewer faults.
 
 **Lesson:** on a bandwidth-bound pipeline, every optimization is a
 bytes-per-token play. No software trick replaces RAM ≥ model size or
@@ -91,11 +113,6 @@ matches other people's experience.
 - Be ready for "why would you run this" — the honest answer is the
   methodology + the hardware decision data.
 - Post timing: weekday morning US time for max visibility.
-- The repo is currently **private** — flip it public (see
-  `docs/GO_PUBLIC_CHECKLIST.md`) *before* posting, or the link 404s for
-  readers. The checklist is a ~30-min run: release tag, visibility,
-  social-preview image, Pages, then post.
-- The repo is currently **private** — flip it public (see
-  `docs/GO_PUBLIC_CHECKLIST.md`) *before* posting, or the link 404s for
-  readers. The checklist is a ~30-min run: release tag, visibility,
-  social-preview image, Pages, then post.
+- ✅ Repo is **public** (flipped 2026-08-13) — the link works now.
+- Social-preview image still needs the manual Settings → Social preview
+  upload (browser step) if you want a nice share card on X/LinkedIn.

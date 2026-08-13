@@ -51,21 +51,29 @@ Everything is version-bumped and the wheel is fixed (console now ships in
       needs your PyPI credentials (this machine has none configured).
       Verify the wheel contains `weight_stream/server/static/console/index.html`.
 
-## 3. Flip visibility (1 min)
+## 3. Flip visibility (1 min) — ✅ DONE 2026-08-13
 
 ```bash
-gh repo edit i-mrDed/weight-streaming --visibility public
+gh repo edit i-mrDed/weight-streaming --visibility public --accept-visibility-change-consequences
+# (the --accept-* flag is required by gh ≥2.41)
 ```
 
-- [ ] Description + topics are already set (verify with
-      `gh repo view --json description,repositoryTopics`). Current: 15 topics
-      covering `llm`, `local-llm`, `moe`, `gguf`, `llama-cpp`, `out-of-core`,
-      `nvme`, `memory-mapping`, `deepseek`, `qwen`, `benchmarking`… — good
-      GitHub-search coverage.
-- [ ] LICENSE file present (MIT) — added 2026-08-10; GitHub will show it in the
-      header.
+- [x] **Flipped 2026-08-13** — `https://github.com/i-mrDed/weight-streaming`
+      is now PUBLIC (`visibility=PUBLIC`).
+- [x] Description + topics already set — verified: 15 topics
+      (`llm`, `local-llm`, `moe`, `gguf`, `llama-cpp`, `out-of-core`,
+      `nvme`, `memory-mapping`, `deepseek`, `qwen`, `benchmarking`…).
+- [x] LICENSE file present (MIT) — added 2026-08-10.
+- [x] **v0.15.0 release** — tag moved to current `main` (2026-08-13) with
+      updated notes (security + auto-tiering + bench harness + 30 EXP);
+      public at `releases/tag/v0.15.0`.
 
 ## 4. GitHub Settings (manual — no CLI) — 5 min
+
+> **Updated 2026-08-13:** Pages is now ENABLED via API
+> (`https://i-mrded.github.io/weight-streaming/`, building from `main` `/docs`,
+> `docs/index.md` present). Social preview image still needs the manual
+> Settings → Social preview upload (browser step).
 
 These two cannot be set via `gh`; do them in the browser:
 
