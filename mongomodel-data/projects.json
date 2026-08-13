@@ -1,9 +1,9 @@
 {
-  "rev": 51,
+  "rev": 54,
   "projects": {
     "weight-streaming": {
-      "rev": 51,
-      "updatedAt": "2026-08-13T01:04:03.698Z",
+      "rev": 54,
+      "updatedAt": "2026-08-13T01:15:50.313Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -845,6 +845,36 @@
       "brain": {
         "entries": [
           {
+            "id": "decision-phase4-eval-metrics",
+            "kind": "decision",
+            "title": "Phase 4 evaluation: Qwen พอดี RAM = throughput ตรง physics (+0.02%), hit rate 100%, ไม่มี latency tail",
+            "content": "EXP-028 (Qwen1.5-MoE-A2.7B Q2_K CPU pure, server :8765): warm avg 22.73 tok/s vs physics prediction 22.73 (error +0.02%, PASS ±15%) — validation ที่ดีที่สุดของ EXP-025 calibration. Hit rate warm 1.000 (resident ครบ RAM, disk demand 0), latency p50 41.1 / p90 48.6 / p99 84.4 ms (เฉลี่ย 3 runs, p99 ~2.0x p50, ไม่มี long-tail stall). ตรง ADR-003 + EXP-027: โมเดลพอดี RAM = compute-bound 100%, ปรับ buffer ไม่ได้กำไร; จุดขายของโปรเจคคือโจทย์ >RAM (K3: 5% miss = stall 2056ms > compute 774ms). Metrics spec 3 ตัว (hit rate/latency/throughput) เป็น pure functions ใน weight_stream/eval/metrics.py + 16 hermetic tests. ไฟล์: scripts/bench_phase4.py + EXP-028. [แก้ 2026-08-13: p50/p99 เป็นค่าเฉลี่ย 3 runs (เดิมใช้ run1 p99 69.6 ผิด)]",
+            "status": "active",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T00:32:10.909Z",
+            "updatedAt": "2026-08-13T01:15:50.306Z"
+          },
+          {
+            "id": "handoff-introduction-2026-08-13",
+            "kind": "handoff",
+            "title": "Phase 5: Introduction เขียนเสร็จ (01-introduction.md) — พร้อม Related Work ต่อ",
+            "content": "research/paper/01-introduction.md: โจทย์ >RAM + ตัวเลขจริง (EXP-012: 104GB @ 1.5-1.9 tok/s disk-bound) + physics identity (EXP-025: tok/s = BW ÷ bytes/token, 3 tiers) + เมื่อไหร่ buffer คุ้ม (EXP-028/029: Qwen 22.73 = compute-bound, K3 24x upside) + 4 contributions. Related Work notes พร้อมแล้ว (research/paper/related-work-notes.md: LayerScope + EAGLE-3) — เริ่ม Write: Related Work ได้ทันที.",
+            "status": "done",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:10:45.072Z",
+            "updatedAt": "2026-08-13T01:10:45.072Z"
+          },
+          {
+            "id": "note-papers-prescope-eagle3",
+            "kind": "note",
+            "title": "อ่าน PreScope/LayerScope (2509.23638) + EAGLE-3 (2503.01840) — ปิด gap Related Work",
+            "content": "สรุปใน research/paper/related-work-notes.md. LayerScope (ICS'26): prediction-driven expert scheduling สำหรับ PCIe offload (CPU↔GPU), LLaPor >90% Top-4, PreSched cross-layer, AsyncIO — 141% throughput, 74.6% latency vs SOTA; tier ต่างจากเรา (PCIe ~10x BW gap vs disk-mmap ~50x) — กำไร prefetch = f(BW gap hit vs miss) ตรง EXP-029. EAGLE-3: token-level speculation (direct token pred + multi-layer fusion, 6.5x speedup) — ตรงข้ามกับ negative result ของเรา (EXP-015..017: MTP ช้าลง 11-18% บน consumer BW-bound). จุดยืน paper: ไม่มีใคร publish >RAM จริงด้วย OS telemetry + calibrated physics.",
+            "status": "active",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:09:51.697Z",
+            "updatedAt": "2026-08-13T01:09:51.697Z"
+          },
+          {
             "id": "handoff-phase5-outline-2026-08-13",
             "kind": "handoff",
             "title": "Phase 5 draft paper outline เสร็จ (TASKS.md Phase 5 งานแรก)",
@@ -903,16 +933,6 @@
             "author": "freebuff-agent",
             "createdAt": "2026-08-13T00:32:15.038Z",
             "updatedAt": "2026-08-13T00:32:15.038Z"
-          },
-          {
-            "id": "decision-phase4-eval-metrics",
-            "kind": "decision",
-            "title": "Phase 4 evaluation: Qwen พอดี RAM = throughput ตรง physics (+0.02%), hit rate 100%, ไม่มี latency tail",
-            "content": "EXP-028 (Qwen1.5-MoE-A2.7B Q2_K CPU pure, server :8765): warm avg 22.73 tok/s vs physics prediction 22.73 (error +0.02%, PASS ±15%) — validation ที่ดีที่สุดของ EXP-025 calibration. Hit rate warm 1.000 (resident ครบ RAM, disk demand 0), latency p50 41.3 / p90 48.6 / p99 69.6 ms (p99 ~1.7x p50, ไม่มี long-tail stall). ตรง ADR-003 + EXP-027: โมเดลพอดี RAM = compute-bound 100%, ปรับ buffer ไม่ได้กำไร; จุดขายของโปรเจคคือโจทย์ >RAM (K3: 5% miss = stall 2056ms > compute 774ms). Metrics spec 3 ตัว (hit rate/latency/throughput) เป็น pure functions ใน weight_stream/eval/metrics.py + 16 hermetic tests. ไฟล์: scripts/bench_phase4.py + EXP-028",
-            "status": "active",
-            "author": "freebuff-agent",
-            "createdAt": "2026-08-13T00:32:10.909Z",
-            "updatedAt": "2026-08-13T00:32:10.909Z"
           },
           {
             "id": "handoff-phase3b-io-ratio-2026-08-13",

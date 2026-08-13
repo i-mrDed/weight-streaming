@@ -122,8 +122,9 @@ need a system diagram (1 figure) — no new experiment required.
 |--------|---------------------|----------------------|-------------|
 | tok/s | **22.73** | **0.049** | **1.18** |
 | hit rate | 1.000 | 0.512 | 0.999 |
-| p50 (ms) | 41.3 | 21,300 | ~816 |
-| p99 (ms) | 69.6 | 31,258 | ~816 |
+| p50 (ms) | 41.1 | 21,300 | ~816 |
+| p90 (ms) | 48.6 | 27,051 | ~816 |
+| p99 (ms) | 84.4 | 31,258 | ~816 |
 
 Sub-sections:
 
@@ -139,7 +140,7 @@ Sub-sections:
 4. **K3 prediction:** buffer sweep table (64 MB → 16 GB) showing the
    non-linear hit-rate → throughput curve; 24× upside.
    [EXP-029]
-5. **Latency distribution:** Qwen no tail (p99 ≈ 1.7×p50); K3 tail is
+5. **Latency distribution:** Qwen no tail (p99 ≈ 2.0×p50); K3 tail is
    the miss signal. [EXP-028/029]
 
 **Gap before writing:** **Phase 1 open task "Test llama.cpp expert
