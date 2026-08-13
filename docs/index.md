@@ -20,8 +20,10 @@ shows `n/a` — never a fabricated value.
 |---|---|
 | [📖 README](../README.md) | features, quick start, config, API overview |
 | [🖼️ Screenshots](screenshots/) | real captures + demo GIF from the console |
-| [🧪 Experiments](../research/experiments/index.md) | EXP-001…EXP-017 — what was tried, what worked, what's a dead end |
-| [📝 EXP-012 write-up](../research/writeups/2026-08-10-exp012-104gb-on-64gb-ram.md) | the honest 104 GB model on 64 GB RAM story |
+| [📄 Paper draft](../research/paper/paper.md) | full write-up — abstract, architecture, evaluation (auto fact-checked) |
+| [🧪 Experiments](../research/experiments/index.md) | EXP-001…EXP-030 — what was tried, what worked, what's a dead end |
+| [📝 EXP-012 write-up](../research/writeups/2026-08-10-exp012-104gb-on-64gb-ram.md) | the honest 104 GB model on 64 GB RAM story (EN + TH) |
+| [📣 Launch posts](../research/writeups/2026-08-13-exp012-hn-post.md) | HN/blog + r/LocalLLaMA copy from the fact-checked paper |
 | [🗺️ Hardware plan](../research/HARDWARE_100TPS_PLAN.md) | cheapest measured path to 100+ tok/s |
 | [🔩 Architecture](../docs/ARCHITECTURE.md) | engine, backends, telemetry |
 | [🗓️ Changelog](../CHANGELOG.md) | semantic-version release history |

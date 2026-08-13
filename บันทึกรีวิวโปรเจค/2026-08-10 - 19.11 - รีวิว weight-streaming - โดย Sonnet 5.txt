@@ -1,0 +1,54 @@
+รีวิว weight-streaming (i-mrDed/weight-streaming)
+
+อ่านจาก README, PROJECT.md (วิสัยทัศน์ตั้งต้น), docs/ARCHITECTURE.md (888 บรรทัด รวม As-Built Summary / ADR-003) และ ISSUES.md แล้ว — นี่เป็นโปรเจคที่มีความทะเยอทะยานสูงมากตั้งแต่ต้น (รัน Kimi K3 2.8T params บนเครื่อง RAM 32-64GB) และมีวินัยทางวิศวกรรมที่หายากสำหรับ solo/early-stage project คือ กล้าเปลี่ยนแผนตามผลวัดจริง แล้วบันทึกไว้อย่างโปร่งใสว่าทำไมถึงเปลี่ยน — นี่คือจุดแข็งที่สุดของ repo นี้
+
+สรุปภาพรวม
+
+สิ่งที่ตั้งใจทำ (PROJECT.md, 2026-07-27): "Speculative Weight Streaming" — ระบบ 3 ชั้น (draft model → MLP weight predictor → custom NVMe shard format + priority-queue scheduler + streaming buffer) เพื่อรันโมเดลใหญ่ระดับ 100B–3T โดยไม่ต้องโหลด weight ทั้งก้อนเข้า RAM นี่คือ research contribution ที่ยังไม่มีใครตีพิมพ์ตามที่ระบุใน Phase 6 ของแผน
+
+สิ่งที่ shipped จริง (v0.14.0): แพลตฟอร์ม local-inference ที่สมบูรณ์แบบ product — API server (OpenAI + Anthropic compatible), web console, model hub ที่โหลด GGUF จาก HF ได้พร้อม resumable download, assistants, MCP host, CLI/TUI/Gradio — แต่ inference engine หลักคือ llama-server (llama.cpp) ธรรมดา ที่พึ่ง OS page cache + mmap ส่วน MLP predictor / custom shard format / priority scheduler ที่ออกแบบไว้ใน ARCHITECTURE.md §2-8 ถูก "ลดขั้น" เป็น research code ที่ไม่ได้ใช้งานจริง (core/eagle_dual_predictor.py, core/native/)
+
+นี่คือ pivot ที่มีเหตุผลรองรับหนักแน่น (LRU ธรรมดาที่ 64MB ให้ hit rate 93.8% อยู่แล้ว, ระบบ compute-bound ~92% ไม่ใช่ I/O-bound ในเคสที่ทดสอบ) แต่ก็หมายความว่า "เป้าหมาย" ที่ชื่อโปรเจคสัญญาไว้ (speculative streaming) ยังไม่เกิดขึ้นจริง — สิ่งที่ได้แทนคือเครื่องมือวัดผลที่ซื่อสัตย์มากว่า "โมเดลใหญ่กว่า RAM รันได้จริงช้าแค่ไหน"
+
+คะแนนแต่ละมิติ (0-10)
+มิติ	คะแนน	เหตุผล
+วิสัยทัศน์ / ความทะเยอทะยาน	9	แนวคิด speculative weight streaming จับ gap จริงในวงการ (mmap แบบ reactive ช้า), อ้างอิง paper จริง (PreScope, EAGLE-3) ไม่ได้เพ้อฝันลอยๆ
+สถาปัตยกรรม/การออกแบบระบบ	8.5	ARCHITECTURE.md ละเอียดระดับ interface contract, data layout, class hierarchy — งานออกแบบระดับนี้หาไม่ง่ายในโปรเจคเดี่ยว
+ความซื่อสัตย์ทางวิศวกรรม (คุณสมบัติเด่นสุด)	10	หลักการ "real measurement หรือ n/a เท่านั้น ห้าม fabricate" ถูกยึดจริง — ตาราง benchmark โชว์ทั้งเคส OOM ที่ล้มเหลว ไม่ใช่โชว์แต่เคสสวย, ADR-003 บันทึกทุกจุดที่ shipped ต่างจาก design พร้อมเหตุผลเชิงประจักษ์
+ความสมบูรณ์ของ product (feature completeness)	8	API server + SPA + hub + assistants + MCP + multi-frontend ครบเกินคาดสำหรับโปรเจคอายุ ~2 สัปดาห์ (เริ่ม 2026-07-27)
+เอกสารประกอบ	9	PROJECT.md, ARCHITECTURE.md, DECISIONS.md (ADR), CHANGELOG, ISSUES.md, HARDWARE_PLAN — ครบและมี traceability ระหว่างเอกสารสูง
+การทดสอบ/CI	7	~290 Python tests + typecheck + build บน 2 OS ผ่าน GitHub Actions — ดี แต่ไม่เห็น frontend test runner (มีแค่ tsc + build)
+คุณภาพโค้ด/วินัยการ debug	6	ISSUES.md (ISSUE-001 ถึง 019) ส่วนใหญ่เป็นบั๊กพื้นฐานมาก (let ประกาศซ้ำ, null reference จาก element ที่ลบไปแล้ว) — บ่งชี้ frontend ยังขาด lint/type-safety layer ที่จะจับได้ตั้งแต่ก่อน commit แม้ root-cause analysis ในแต่ละ issue จะเขียนดีมาก
+ความคืบหน้าเทียบเป้าหมายเดิม (K3 2.8T)	5	ยังไม่เคยรันโมเดลที่ใกล้ 2.8T params เลย — เคสใหญ่สุดที่ validate คือ 104GB (DeepSeek-V4-Flash) ซึ่งเล็กกว่าเป้า ~14 เท่า และ core prediction/prefetch mechanism ที่เป็นหัวใจของไอเดียยังไม่ active
+ผลวัดจริง (การพิสูจน์ hypothesis)	8.5	ผลลัพธ์ EXP-012 (1.5-1.9 tok/s บน 104GB model, page-fault telemetry ยืนยัน disk-bound) เป็นข้อมูลที่มีค่าจริง แม้จะไม่ใช่ข้อมูลที่ "ดี" ก็ตาม — นี่คือวิทยาศาสตร์ที่ถูกต้อง
+ความพร้อมสู่การใช้งานจริง/ชุมชน	4	0 stars/forks/watchers, ผูกกับ Windows เป็นหลัก (path, Jan Desktop integration), ไม่มี auth บน API ที่เห็นในเอกสาร, ยังไม่มีการเผยแพร่ผลงานสู่สาธารณะ
+
+คะแนนรวมโดยประมาณ: ~7.5/10 — แข็งแรงมากในฐานะ "honest LLM benchmarking/inference platform" แต่ยังห่างจากเป้าหมาย "speculative weight streaming ที่ทำให้ K3 2.8T ใช้งานได้จริง" ที่ตั้งไว้ตอนแรก
+
+จุดเด่นที่ควรรักษาไว้
+หลักการ "no fabricated numbers" — เป็น brand identity ที่ทำให้ผลงานนี้น่าเชื่อถือกว่าโปรเจค inference ทั่วไปที่มักโชว์แต่ตัวเลขสวยๆ
+ADR-003 / As-Built Summary pattern — เขียนเปรียบเทียบ design vs shipped พร้อมเหตุผลเชิงประจักษ์ทุกจุด นี่คือแนวปฏิบัติที่ทีมวิศวกรรมระดับ senior ใช้กัน ควรรักษาวินัยนี้ไว้ทุก phase ถัดไป
+CPU etiquette (below-normal priority) เป็นตัวอย่างของ feature ที่เกิดจากการใช้งานจริง (dogfooding) ไม่ใช่ทำตาม spec — สะท้อนว่าโปรเจคถูกใช้งานจริงไม่ใช่แค่ demo
+ความเสี่ยง/ช่องโหว่ที่ควรแก้
+"Buffer" subsystem เป็น dead code จริงๆ — ตาม ARCHITECTURE.md เอง: StreamingBuffer.total_accesses = 0 ระหว่าง inference จริง เพราะ llama.cpp อ่าน mmap แบบ opaque จาก Python ไม่เห็น event เลย นี่คือ gap ที่ต้องแก้ก่อนถึงจะพูดได้ว่า "streaming" ทำงานจริงตามชื่อโปรเจค
+ช่องว่างระหว่าง README/PROJECT.md กับความจริง — คนอ่าน README เห็นคำว่า "weight-streaming" กับ K3 2.8T ในใจ แต่สิ่งที่รันจริงคือ llama-server ปกติ ควรทำ banner ให้ชัดกว่านี้ (ตอนนี้มีอยู่บ้างใน ARCHITECTURE.md แต่ README ยังไม่พูดตรงๆ ว่า core prediction engine ยังไม่ active)
+Frontend bug pattern — บั๊กประเภท "duplicate let", "null reference จาก element ที่ลบไปแล้ว" ควรจับได้ด้วย ESLint/TypeScript strict mode ตั้งแต่ pre-commit ไม่ใช่มาเจอตอน user report
+ไม่มี auth บน API เท่าที่เอกสารระบุ — ถ้ามีแผนให้ใครใช้นอกเครื่อง local ควรเพิ่มก่อน
+แนวทางพัฒนาต่อ เพื่อบรรลุเป้าหมายโปรเจค
+
+แยกเป็น 2 track เพราะ "เป้าหมาย" ของโปรเจคตอนนี้มีสองเวอร์ชันที่ยังไม่ประสานกัน — ควรตัดสินใจก่อนว่าจะไปทางไหน
+
+Track A — ถ้าเป้าหมายจริงคือ "honest local-inference platform" (สิ่งที่ shipped อยู่แล้ว):
+
+เขียน README ใหม่ให้ตรงกับความเป็นจริง 100% — ลด positioning เรื่อง "speculative streaming" ลง เน้น "honest telemetry + hardware advisor" ซึ่งเป็นจุดขายจริงตอนนี้
+เพิ่ม test coverage ฝั่ง frontend (vitest/jest) เพื่อจับบั๊กประเภทใน ISSUES.md ตั้งแต่ CI
+เผยแพร่ EXP-012 เป็น write-up สาธารณะ (blog/HN/Reddit r/LocalLLaMA) — ข้อมูล disk-bound benchmark แบบนี้มีคนสนใจจริง และจะได้ traction/ผู้ใช้จริงที่ตอนนี้ยังเป็น 0
+
+Track B — ถ้าเป้าหมายจริงคือ speculative weight streaming ตาม PROJECT.md เดิม:
+
+แก้ gap ข้อ 1 ก่อน — patch llama-server หรือ llama.cpp ให้ expose expert-routing event ผ่าน callback/log ที่ Python อ่านได้ (ตอนนี้ opaque) ไม่งั้น predictor จะไม่มีทาง validate ได้เลยว่า predict ถูกจริงหรือไม่
+ทดสอบ MLP predictor (ที่เก็บไว้เป็น research code อยู่แล้ว) กับ routing trace จริงจาก MoE model ขนาดกลาง (Qwen3.6-35B-A3B ที่มีอยู่แล้วในเครื่อง) ก่อนกระโดดไป K3
+พิจารณา integration path ที่ ARCHITECTURE.md §6.4 เองแนะนำไว้สำหรับ "Production": vLLM/SGLang plugin แทนการพึ่ง llama.cpp adapter เพราะ framework พวกนี้เปิด routing internals ให้เข้าถึงง่ายกว่า
+เมื่อ hardware ถึงระดับที่พอ (ตาม HARDWARE_100TPS_PLAN) ค่อยขยับไปทดสอบโมเดลที่ใหญ่ขึ้นจริง (400B+) เพื่อดูว่า prediction เริ่มให้ผลต่างจาก LRU ธรรมดาเมื่อไหร่ — เพราะที่ 104GB วันนี้ LRU ล้วนๆ ก็เพียงพอแล้ว ต้องหาจุดที่ปัญหาจริงเกิดก่อนถึงจะรู้ว่า predictor คุ้มค่าที่จะ build ต่อหรือไม่
+
+ถ้าให้เดา ผมคิดว่า Track A คือสิ่งที่ควรทำก่อนในระยะสั้น เพราะมันคือคุณค่าที่ "พิสูจน์แล้ว" ส่วน Track B ควรทำแบบ research spike เล็กๆ คู่ขนาน ไม่ผูกกับ roadmap หลักของ product จนกว่าจะมีหลักฐานว่า LRU ธรรมดาเริ่มไม่พอจริง

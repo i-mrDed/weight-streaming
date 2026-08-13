@@ -117,7 +117,5 @@ p52-models-lib-before.jpeg
 SESSION_LOG.md
 scripts/.demo_frames/
 
-# ส่วนตัว — รีวิว/บันทึก dev (ไม่ push)
-บันทึกรีวิวโปรเจค/
 # downloaded llama-server binaries (setup_llama_server.py)
 .llama/
