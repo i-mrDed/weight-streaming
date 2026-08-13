@@ -29,7 +29,8 @@ disk-mmap 0.38 GB/s). It predicts a fits-RAM Qwen1.5-MoE-A2.7B at
 22.73 tok/s and we measure 22.73 (+0.02%). On the >RAM target K3
 (15.6 GB/token), the same metrics show the real lever: at a 51% buffer
 hit rate throughput collapses to **0.049 tok/s**; at 99.9% it reaches
-the compute ceiling **1.18 tok/s — a 24× swing from buffer size alone**.
+the compute ceiling (815 ms/token) at **1.18 tok/s — a 24× swing from
+buffer size alone**.
 Buffering is worthless when the model fits RAM and is the entire game
 when it does not.
 
