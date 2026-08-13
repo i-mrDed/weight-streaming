@@ -78,7 +78,7 @@ mitigates this three ways:
 | `WS_N_THREADS` | half of logical CPUs | Default inference threads per model |
 | `WS_LOWER_PRIORITY` | `1` | Run below-normal priority while a model is loaded |
 | `WS_BUFFER_MB` | `64` | Streaming buffer size |
-| `WS_N_CTX` | `2048` | Default context window |
+| `WS_N_CTX` | `32768` | Default context window (was 2048 — too small for 1M-context models; PR #10) |
 | `WS_IDLE_TIMEOUT` | `0` (keep loaded) | Seconds before idle unload; 0 = never |
 | `WS_MODELS_DIR` | — | Extra directory for `/v1/models/scan` |
 
@@ -86,6 +86,16 @@ Scan defaults also include the Jan Desktop model store
 (`%APPDATA%\Jan\data\llamacpp\models`) on Windows.
 
 ---
+
+## Model compatibility (tested 2026-08-13)
+
+| Model | Verdict | Notes |
+|---|---|---|
+| **Qwythos-9B-Claude-Mythos-5-1M-Q6_K** | ✅ Primary | 33–35 tok/s; always emits `<think>` before answering — give `max_tokens` headroom |
+| **DeepSeek-V4-Flash UD-IQ3_XXS (97GB)** | ✅ Works | 1.5–1.9 tok/s disk-bound (EXP-012) |
+| Qwen3-0.6B-Q8_0 | 🟡 untested | Q8 quality — expected fine |
+| **Qwen1.5-MoE-A2.7B_Q2_k** | ❌ Avoid | 2-bit quant → garbled output (answers in Chinese); use Q4_K+ instead |
+| **Gemma4-12B/26B-QAT** | ❌ Not usable yet | Thought loop (`<\|channel>` tags) — llama-server 8196 doesn't know the end-of-thought tag → generates until max_tokens with no answer; needs llama.cpp `<\|channel>` support |
 
 *Raw measurements: `docs/verification/cpu_attribution_2026-07-30.json`,
 `docs/verification/spike_page_faults_2026-07-30.json`.*
