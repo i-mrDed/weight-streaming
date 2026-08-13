@@ -61,6 +61,7 @@ import {
   type ChatMsg,
   type Conversation,
 } from './store'
+import { maybeAutoCompact } from './autoCompact'
 import { assistants, refreshAssistants } from '@/core/assistants'
 import { ConversationSidebar } from './ConversationSidebar'
 import { ParamDrawer } from './ParamDrawer'
@@ -635,6 +636,11 @@ export function ChatPage() {
       persist(c)
       await streamChat(c, botMsg, messages, opts)
     }
+    // Context management (research/12): when the conversation grows past a
+    // threshold and has no running summary yet, summarize automatically so
+    // the user can keep chatting without losing context (and the banner
+    // shows the compacted history). Fire-and-forget; never blocks the UI.
+    void maybeAutoCompact(c)
   }
 
   const onComposerKey = (e: KeyboardEvent) => {

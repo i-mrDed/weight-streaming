@@ -28,6 +28,7 @@
   "banner": "Conversation summary",
   "empty": "No messages to summarize yet",
   "done": "Summary saved",
+  "auto": "Conversation summarized automatically",
   "failed": "Summarize failed"
  },
  "notif": {
