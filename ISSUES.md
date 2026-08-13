@@ -90,8 +90,8 @@
 - Status: 🟢 Fixed
 - Symptom: Browse button selects file but only gets filename (no path). "Model file not found" when trying to load models from D:\models\ or Jan Desktop directories.
 - Root Cause: HTML file input returns only filename (browser security). Can't get full path.
-- Fix: Replace Browse with Scan Directory text input. User types custom directory path, scan endpoint supports `?dir=` parameter. Models from Jan app: scan `C:\Users\dedch\AppData\Roaming\Jan\data\llamacpp\models`.
-- Verification: `/v1/models/scan?dir=C:\Users\dedch\AppData\Roaming\Jan\data\llamacpp\models` returns .gguf files
+- Fix: Replace Browse with Scan Directory text input. User types custom directory path, scan endpoint supports `?dir=` parameter. Models from Jan app: scan `C:\Users\<user>\AppData\Roaming\Jan\data\llamacpp\models`.
+- Verification: `/v1/models/scan?dir=C:\Users\<user>\AppData\Roaming\Jan\data\llamacpp\models` returns .gguf files
 - Files: `static/index.html`, `api_server.py`
 
 ### [ISSUE-007] Chat generates gibberish for Qwen
@@ -160,7 +160,7 @@
 ### [ISSUE-013] No quick way to browse models from common directories
 - Reported: 2026-07-27
 - Status: 🟢 Fixed
-- Symptom: User wants to load models from Jan Desktop (C:\Users\dedch\AppData\Roaming\Jan\data\llamacpp\models) or D:\models but has to type the full path manually
+- Symptom: User wants to load models from Jan Desktop (C:\Users\<user>\AppData\Roaming\Jan\data\llamacpp\models) or D:\models but has to type the full path manually
 - Fix: Added preset quick-scan buttons: Jan Desktop, D:\models, Current Dir, All Drives. One-click scan of common model locations.
 - Files: `static/index.html`
 - Commit: (pending)

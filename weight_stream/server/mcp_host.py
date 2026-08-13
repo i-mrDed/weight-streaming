@@ -180,6 +180,8 @@ class MCPHost:
             # context manager (not an awaitable) — enter it explicitly and
             # keep it alive in self._contexts.
             sid = server.get("id")
+            if not sid:
+                raise ValueError(f"server {server.get('name') or server.get('id')} needs an id")
             cm = sse_client(url)
             read, write = await cm.__aenter__()
             self._contexts[sid] = cm
@@ -195,6 +197,8 @@ class MCPHost:
             # P7.4 was never E2E'd until 2026-08-12 — the command=/args=
             # kwargs form AND the bare-await form both failed on mcp 1.27.
             sid = server.get("id")
+            if not sid:
+                raise ValueError(f"server {server.get('name') or server.get('id')} needs an id")
             cm = stdio_client(StdioServerParameters(command=cmd, args=args))
             read, write = await cm.__aenter__()
             self._contexts[sid] = cm

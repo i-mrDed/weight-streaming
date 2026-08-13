@@ -12,30 +12,31 @@
 
 ## 0. Decision gate (before anything)
 
-- [ ] Re-read the Track A/B decision doc and pick a lane (or the hybrid: A as
-      product + B as research spike).
-- [ ] If the answer is "not ready for public" — stop here; the repo is already
-      kept public-ready, so nothing decays.
+- [x] **Decided 2026-08-13** — Track A as product + Track B as bounded research
+      spike (see [`docs/DECISION-2026-08-10-track-a-vs-b.md`](DECISION-2026-08-10-track-a-vs-b.md)
+      — updated with EXP-025..030 + paper + fact-check evidence).
+- [x] Answer was "ready for public" — proceeding with the switch steps below.
 
 ## 1. Pre-flight verification (5 min)
 
 Run from the repo root:
 
 ```bash
-python -m pytest                 # expect ~300 passed
-python -m mypy                   # expect: Success, 0 errors
+python -m pytest                 # expect ~471 passed (verified 2026-08-13: 471 passed / 7 skipped)
+python -m mypy                   # expect: Success, 0 errors (verified 2026-08-13: 60 files, clean)
 cd frontend && npm test          # expect 7 passed
+# npm test needs a browser/screen on Windows — see the CI job for the headless invocation
 git status --short               # expect clean except the Thai review folder (untracked, your call)
 ```
 
-- [ ] CI is green on `main` (check the Actions tab — private repo minutes still count).
-- [ ] `C:/Users/<user>` path leak scan is still clean:
-      `git grep -n "C:/Users/" -- . ':(exclude)docs/screenshots/*'`
-      (cleanup done 2026-08-10; re-check before the switch).
-- [ ] Secrets scan in git history is still clean (done 2026-08-10 — no
-      `ghp_`/`sk-`/`hf_`/password patterns in any commit).
-- [ ] Decide the fate of `บันทึกรีวิวโปรเจค/` (4 platform reviews + analysis):
-      either commit it (it's good public content) or keep it out.
+- [x] **CI is green on `main`** — verified 2026-08-13 on `ba3c37f`: CI 5/5 jobs
+      success + Secret Scan success (7/7 check-runs).
+- [x] **Path leak scan re-run 2026-08-13** — `C:/Users/dedch` cleaned from
+      TASKS.md + ISSUES.md (3 จุด); scan now clean.
+- [x] **Secrets scan** — no `ghp_`/`sk-`/`hf_`/password patterns (remaining hits
+      are false positives: scan-instruction text + "disk-mmap").
+- [ ] **Decide the fate of `บันทึกรีวิวโปรเจค/`** (4 platform reviews + analysis):
+      either commit it (it's good public content) or keep it out — **เป็น decision ของคุณ**.
 
 ## 2. Release v0.15.0 (before or right after the switch)
 

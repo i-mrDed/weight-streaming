@@ -1,9 +1,9 @@
 {
-  "rev": 59,
+  "rev": 60,
   "projects": {
     "weight-streaming": {
-      "rev": 59,
-      "updatedAt": "2026-08-13T01:42:55.265Z",
+      "rev": 60,
+      "updatedAt": "2026-08-13T01:58:02.699576Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -1141,6 +1141,16 @@
             "status": "active",
             "createdAt": "2026-08-12T05:09:04.477Z",
             "updatedAt": "2026-08-12T05:09:04.477Z"
+          },
+          {
+            "id": "decision-track-a-product-b-spike-2026-08-13",
+            "kind": "decision",
+            "title": "Track A/B ตัดสินใจแล้ว: Track A เป็น product, Track B เป็น bounded research spike (EXP-025..030 + paper + fact-check)",
+            "content": "อัปเดต docs/DECISION-2026-08-10-track-a-vs-b.md จาก 'ยังไม่ตัดสินใจ' เป็น 'ตัดสินใจแล้ว (2026-08-13)'. หลักฐานใหม่: (1) physics calibrated + validated จริง EXP-025/028 (Qwen 22.73 vs ทำนาย 22.73, ±9%) — 'วัดได้ไม่ใช่ vibes' คือตัวตนที่พิสูจน์แล้ว; (2) 30 experiments + paper ฉบับเต็ม + auto fact-check 33/33 PASS; (3) EXP-030: offload ช้าลง 4x บนพอดี VRAM → offload คุ้มเฉพาะ >VRAM; (4) EXP-029: K3 buffer 256MB→0.049 vs 4GB→1.18 tok/s (24x) — prefetch เป็น latency-hiding ไม่ใช่ throughput, payoff = f(BW gap) ใหญ่สุดเมื่อ disk-bound. ผล: Track A เลือกในทางปฏิบัติ (prep ครบถึงสวิตช์สุดท้าย), Track B = spike คู่ขนาน ต้องผ่าน Gate 1 (instrumented build) ก่อน. ไฟล์: docs/DECISION-2026-08-10-track-a-vs-b.md + docs/GO_PUBLIC_CHECKLIST.md (update เป็น decided).",
+            "status": "active",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:58:02.699576Z",
+            "updatedAt": "2026-08-13T01:58:02.699576Z"
           }
         ]
       }

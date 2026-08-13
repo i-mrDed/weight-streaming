@@ -36,7 +36,7 @@ def estimate_tokens(
     factor: float = DEFAULT_EST_TOKENS_PER_CHAR,
 ) -> int:
     """Rough token estimate from message contents (heuristic only)."""
-    total = 0
+    total: float = 0.0
     for m in messages:
         c = (m.get("content") or "")
         if isinstance(c, str):

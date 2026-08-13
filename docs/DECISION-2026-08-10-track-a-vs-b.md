@@ -1,8 +1,9 @@
 # DECISION: Track A vs Track B — โปรเจคนี้คืออะไรกันแน่ (identity crisis)
 
-**วันที่:** 2026-08-10 · **ผู้ตั้งคำถาม:** รีวิวสาธารณะ 4 แพลตฟอร์ม (Sonnet ชี้ตรง,
-OpenCode ตั้งชื่อ "W13 identity crisis") · **สถานะ:** เอกสารประกอบการตัดสินใจ —
-**ยังไม่ตัดสินใจ** (ต้องเป็นมติของคุณ)
+**วันที่:** 2026-08-10 · **อัปเดตครั้งล่าสุด:** 2026-08-13 (หลักฐานใหม่ EXP-025..030 + paper + fact-check) ·
+**ผู้ตั้งคำถาม:** รีวิวสาธารณะ 4 แพลตฟอร์ม (Sonnet ชี้ตรง, OpenCode ตั้งชื่อ "W13 identity crisis") ·
+**สถานะ: ✅ ตัดสินใจแล้ว (2026-08-13) — Track A เป็น product, Track B เป็น research spike แบบมี gate**
+(ดูสรุปท้ายเอกสาร)
 
 ---
 
@@ -79,6 +80,23 @@ OpenCode ตั้งชื่อ "W13 identity crisis") · **สถานะ:**
 | เป้าหมาย = product ที่มีคนใช้ + traction + release | **A** |
 | เป้าหมาย = นวัตกรรม "สร้างสิ่งที่ไม่เคยมี" (K3 ระดับ) ยอมรับความเสี่ยง research | **B** |
 | อยากได้ทั้งสอง (แนะนำ) | **A เป็นแกน + B เป็น bounded spike คู่ขนาน** |
+
+## ✅ มติ (2026-08-13) — Track A เป็น product, Track B เป็น bounded research spike
+
+**หลักฐานใหม่ที่ยืนยัน Track A (ตั้งแต่ 2026-08-11..13):**
+- **Physics calibrated + validated จริง** (EXP-025/028): `tok/s = BW ÷ bytes/token` แม่น ±9% — Qwen 22.73 vs ทำนาย 22.73 (EXP-028) — "วัดได้ ไม่ใช่ vibes" คือตัวตนที่พิสูจน์แล้ว
+- **30 experiments ครบ (EXP-001..030)** + paper ฉบับเต็ม (`research/paper/paper.md`) + **auto fact-check 33/33 PASS** (`scripts/factcheck_paper.py`) — ตัวเลขทุกตัวอ้าง raw data จริง
+- **EXP-030 ปิดคำถาม offload**: โมเดลพอดี VRAM → offload ช้าลง 4× (126.6 → 31.8 tok/s) → offload คุ้มเฉพาะ >VRAM เท่านั้น
+- **EXP-029 ระบุขอบเขต B ให้ชัด**: K3 buffer 256MB → 0.049 tok/s vs 4GB → 1.18 (**24×**) — prefetch เป็น *latency-hiding* ไม่ใช่ throughput (ตรงข้อวิเคราะห์เดิม) แต่ payoff = f(BW gap) — ใหญ่สุดเมื่อ disk-bound (K3)
+- **โพสต์เผยแพร่พร้อม** (HN/blog ไทย+อังกฤษ) — เหลือแค่สวิตช์ public
+
+**ผลต่อการตัดสินใจ:** Track A เลือกแล้วในทางปฏิบัติ (ทุกอย่าง prepped ถึงขั้นสวิตช์สุดท้าย) —
+Track B ไม่ได้ตาย แต่**เพดาน = latency-hiding** และต้องผ่าน Gate 1 (instrumented build) ก่อน —
+บันทึกเป็น spike คู่ขนาน ไม่ใช่ roadmap หลัก
+
+---
+
+## บทวิเคราะห์เดิม (2026-08-10)
 
 **คำแนะนำของผม (จากหลักฐาน):**
 
