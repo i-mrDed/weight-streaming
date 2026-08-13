@@ -62,7 +62,7 @@ class ShardRepacker:
             "shard_size_mb": self.shard_size / (1024 * 1024),
             "bytes_written": bytes_written,
             "duration_sec": round(duration, 2),
-            "repack_speed_mbps": round((bytes_written / (1024 * 1024)) / duration, 2)
+            "repack_speed_mbps": round((bytes_written / (1024 * 1024)) / duration, 2) if duration > 0 else 0.0
         }
 
 if __name__ == "__main__":
