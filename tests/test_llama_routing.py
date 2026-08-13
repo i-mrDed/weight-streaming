@@ -16,10 +16,12 @@ from weight_stream.backends.llama_server import LlamaServerBackend
 
 @pytest.fixture
 def backend():
+    # server_binary provided so the constructor never probes the locator
+    # (CI has no Jan / llama-server) — the spawn tests stub Popen anyway.
     b = LlamaServerBackend(
         model_path="nonexistent-model.gguf",
         n_ctx=16,
-        server_binary=None,
+        server_binary="fake-llama-server",
     )
     yield b
     b.close()
