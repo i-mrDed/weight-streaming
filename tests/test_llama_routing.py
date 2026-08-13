@@ -128,6 +128,8 @@ class TestSpawnWiring:
             return FakeProc()
 
         monkeypatch.setattr(subprocess, "Popen", fake_popen)
+        # CI has no llama-server / Jan: stub the binary locator + helpers
+        monkeypatch.setattr(mod, "_find_llama_server", lambda: "fake-llama-server")
         monkeypatch.setattr(backend, "_sweep_stale_owner", lambda: None)
         monkeypatch.setattr(backend, "_wait_ready", lambda timeout=60: None)
         monkeypatch.setattr(mod, "_assign_process_to_job", lambda *a: None)
@@ -159,6 +161,7 @@ class TestSpawnWiring:
             return FakeProc()
 
         monkeypatch.setattr(subprocess, "Popen", fake_popen)
+        monkeypatch.setattr(mod, "_find_llama_server", lambda: "fake-llama-server")
         monkeypatch.setattr(backend, "_sweep_stale_owner", lambda: None)
         monkeypatch.setattr(backend, "_wait_ready", lambda timeout=60: None)
         monkeypatch.setattr(mod, "_assign_process_to_job", lambda *a: None)
