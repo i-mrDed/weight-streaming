@@ -171,8 +171,7 @@
 |-------|------|---------|
 | ✅ | Draft paper outline | 🟢 | `research/paper/OUTLINE.md` — 4 sections + abstract + method; ทุก claim อ้าง EXP จริง (Qwen 22.73 tok/s, K3 0.049→1.18, 104GB @ 1.5–1.9 tok/s); ระบุ gap: อ่าน PreScope/EAGLE-3 ก่อน Related Work |
 | ✅ | Write: Introduction | 🟢 | `research/paper/01-introduction.md` — โจทย์ >RAM, ตัวเลขจริง (104GB @ 1.5–1.9 tok/s), physics identity (BW÷bytes), เมื่อไหร่ buffer คุ้ม (24× K3) + 4 contributions; ทุกตัวเลขอ้าง EXP |
-| ⬜ | Write: Related Work | 🟢 |
-| ⬜ | Write: Related Work | 🟢 |
+| ✅ | Write: Related Work | 🟢 | `research/paper/02-related-work.md` — 4 subsections (serving / MoE efficiency / prefetch+speculation / honest benchmark); เทียบ LayerScope + EAGLE-3; ทุกตัวเลขอ้าง EXP จริง (IQ1 77 vs IQ2 56, MTP −11–18%) |
 | ⬜ | Write: Architecture | 🟢 |
 | ⬜ | Write: Evaluation | 🟢 |
 

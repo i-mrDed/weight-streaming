@@ -1,9 +1,9 @@
 {
-  "rev": 54,
+  "rev": 55,
   "projects": {
     "weight-streaming": {
-      "rev": 54,
-      "updatedAt": "2026-08-13T01:15:50.313Z",
+      "rev": 55,
+      "updatedAt": "2026-08-13T01:18:33.947Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -844,6 +844,16 @@
       },
       "brain": {
         "entries": [
+          {
+            "id": "handoff-related-work-2026-08-13",
+            "kind": "handoff",
+            "title": "Phase 5: Related Work เขียนเสร็จ (02-related-work.md) — เหลือ Architecture + Evaluation",
+            "content": "research/paper/02-related-work.md: 4 subsections — serving stacks (vLLM/llama.cpp ไม่ครอบ >RAM), MoE efficiency (IQ1 77 vs IQ2 56 tok/s EXP-011, flat expert EXP-014/016), prefetch+speculation (LayerScope PCIe tier vs เรา disk tier ~50x gap; EAGLE-3 token-level vs MTP negative EXP-015; CPU lane EXP-017), honest benchmark (generation.paging + physics ±9%). Position table: LayerScope vs EAGLE-3 vs เรา. เหลือเขียน: Architecture (มี ADR-003 + EXP-025/026 + code พร้อม) + Evaluation (มี data EXP-012/025/028/029 พร้อม).",
+            "status": "done",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:18:33.941Z",
+            "updatedAt": "2026-08-13T01:18:33.941Z"
+          },
           {
             "id": "decision-phase4-eval-metrics",
             "kind": "decision",
