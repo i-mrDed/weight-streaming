@@ -1,9 +1,9 @@
 {
-  "rev": 57,
+  "rev": 59,
   "projects": {
     "weight-streaming": {
-      "rev": 57,
-      "updatedAt": "2026-08-13T01:24:23.291Z",
+      "rev": 59,
+      "updatedAt": "2026-08-13T01:42:55.265Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -844,6 +844,26 @@
       },
       "brain": {
         "entries": [
+          {
+            "id": "handoff-expert-offload-2026-08-13",
+            "kind": "handoff",
+            "title": "Test llama.cpp expert offloading เสร็จ (EXP-030) — TASKS.md งานค้างหมดแล้ว",
+            "content": "ปิดงานสุดท้ายที่ค้าง (Test llama.cpp expert offloading) — TASKS.md ไม่มีงาน ⬜ เหลือแล้ว (Phase 1-5 ครบ). ผล: offload ช้าลง 4x บนพอดี VRAM + ต้องระบุ n-cpu-moe 0. หมายเหตุ: ยังไม่ได้ commit ชุด EXP-030 (script + tests + docs + TASKS.md + brain) และยังไม่ push commit c37215a (ปิดงาน stale PoC). งานถัดไปที่แนะนำ: commit+push ทั้งหมด, auto fact-check paper (ยังค้างจากลำดับก่อน), หรือ EXP-012 เผยแพร่.",
+            "status": "done",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:42:55.259Z",
+            "updatedAt": "2026-08-13T01:42:55.259Z"
+          },
+          {
+            "id": "decision-expert-offload-fits-vram",
+            "kind": "decision",
+            "title": "Expert offloading ช้าลง 4x บนโมเดลที่พอดี VRAM — ต้องระบุ n-cpu-moe 0 (EXP-030)",
+            "content": "EXP-030 (Qwen1.5-MoE-A2.7B Q2_K 5.88GB พอดี VRAM 12GB, ผ่าน server :8765): n-cpu-moe 0 (all GPU) = 126.6 tok/s vs n-cpu-moe 10 = 31.8 (ช้าลง 3.99x) — experts ต้อง stream จาก RAM ข้าม PCIe (gap VRAM:RAM = 61.09:19.18 = 3.2x, EXP-025) + เพิ่ม faults (8878 vs 14/tok). เซอร์ไพรส์: baseline auto ≠ all-GPU (108 vs 127) → ข้อปฏิบัติ: ระบุ --n-cpu-moe 0 เสมอสำหรับโมเดลพอดี VRAM. ต่อ EXP-011 (35B >VRAM: offload ≈47 vs 56-77) — offload ช่วยเฉพาะไม่พอดี VRAM. ปิดงาน Test llama.cpp expert offloading (งานสุดท้าย Phase 1). ไฟล์: scripts/bench_expert_offload.py + EXP-030 + 4 hermetic tests.",
+            "status": "active",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:42:51.093Z",
+            "updatedAt": "2026-08-13T01:42:51.093Z"
+          },
           {
             "id": "handoff-evaluation-2026-08-13",
             "kind": "handoff",

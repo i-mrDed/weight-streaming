@@ -110,7 +110,7 @@
 | ✅ | Setup documentation system | 🔴 | SESSION_LOG, ADR, GLOSSARY, TASKS, WORKFLOW |
 | ✅ | Read PreScope paper (full) | 🟡 | arXiv 2509.23638 — ตอนนี้ชื่อ **LayerScope** (ICS'26): prediction-driven expert scheduling สำหรับ PCIe offload (LLaPor >90% Top-4 + PreSched cross-layer + AsyncIO, 141% TP) — สรุป + เทียบใน `research/paper/related-work-notes.md` |
 | ✅ | Read EAGLE-3 paper (full) | 🟡 | arXiv 2503.01840 — token-level speculation (direct token pred + multi-layer fusion, 6.5× speedup) — ตรงข้าม negative result ของเรา (EXP-015..017 MTP ช้าลง) — สรุปใน `research/paper/related-work-notes.md` |
-| ⬜ | Test llama.cpp expert offloading | 🟡 | ต้องมี hardware |
+| ✅ | Test llama.cpp expert offloading | 🟡 | EXP-030: Qwen จริง (พอดี VRAM 12GB) — n-cpu-moe 0 = **126.6 tok/s** vs n-cpu-moe 10 = **31.8** (**ช้าลง 4×**); baseline auto ≠ all-GPU (108 vs 127) → ต้องระบุ `--n-cpu-moe 0`; ต่อ EXP-005/007/011 (35B >VRAM) — ปิดงานสุดท้าย Phase 1 |
 
 ---
 

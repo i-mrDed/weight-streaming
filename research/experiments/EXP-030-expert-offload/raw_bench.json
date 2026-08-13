@@ -1,0 +1,122 @@
+{
+  "baseline (auto)": {
+    "extra_args": "",
+    "cmdline": "",
+    "avg_tok_s": 108.27610348481967,
+    "runs": [
+      {
+        "tok_s": 128.1761404909151,
+        "elapsed_s": 0.7801764011383057,
+        "token_count": 100,
+        "faults_per_token": 13.3,
+        "fault_mb_per_token": 0.054,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      {
+        "tok_s": 83.92048739983393,
+        "elapsed_s": 0.07149624824523926,
+        "token_count": 6,
+        "faults_per_token": 1139.7,
+        "fault_mb_per_token": 4.668,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      {
+        "tok_s": 112.73168256371002,
+        "elapsed_s": 0.8870620727539062,
+        "token_count": 100,
+        "faults_per_token": 4.6,
+        "fault_mb_per_token": 0.019,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    ]
+  },
+  "n-cpu-moe 10": {
+    "extra_args": "--n-cpu-moe 10",
+    "cmdline": "",
+    "avg_tok_s": 31.750708003509242,
+    "runs": [
+      {
+        "tok_s": 23.58211959439895,
+        "elapsed_s": 0.25443005561828613,
+        "token_count": 6,
+        "faults_per_token": 8878.0,
+        "fault_mb_per_token": 36.364,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      {
+        "tok_s": 38.321620077538554,
+        "elapsed_s": 2.6094930171966553,
+        "token_count": 100,
+        "faults_per_token": 1092.8,
+        "fault_mb_per_token": 4.476,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      {
+        "tok_s": 33.348384338590215,
+        "elapsed_s": 2.9986460208892822,
+        "token_count": 100,
+        "faults_per_token": 384.7,
+        "fault_mb_per_token": 1.576,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    ]
+  },
+  "n-cpu-moe 0 (all GPU)": {
+    "extra_args": "--n-cpu-moe 0",
+    "cmdline": "",
+    "avg_tok_s": 126.64135738806101,
+    "runs": [
+      {
+        "tok_s": 127.62384305535016,
+        "elapsed_s": 0.7835526466369629,
+        "token_count": 100,
+        "faults_per_token": 13.6,
+        "fault_mb_per_token": 0.056,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      {
+        "tok_s": 125.78205316720195,
+        "elapsed_s": 0.4929161071777344,
+        "token_count": 62,
+        "faults_per_token": 109.8,
+        "fault_mb_per_token": 0.45,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      },
+      {
+        "tok_s": 126.5181759416309,
+        "elapsed_s": 0.7904002666473389,
+        "token_count": 100,
+        "faults_per_token": 50.8,
+        "fault_mb_per_token": 0.208,
+        "disk_mb_per_token": null,
+        "n_gpu_layers": null,
+        "used_vram_mb": null,
+        "total_vram_mb": null
+      }
+    ]
+  }
+}
