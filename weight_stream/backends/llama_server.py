@@ -30,6 +30,7 @@ import os
 import shlex
 import shutil
 import subprocess
+import threading
 import time
 import urllib.request
 import urllib.error
@@ -361,6 +362,14 @@ class LlamaServerBackend(WeightStreamBackend):
         self._host = host
         self._port = port if port is not None else _backend_port()
         self._proc: Optional[subprocess.Popen] = None
+        # L1/A4 (router-aware): routing history captured from the patched
+        # llama-server stderr (WS_EXPERT lines, opt-in via WS_EXPERT_LOG=1).
+        # Fields are written by _stderr_reader thread, read via routing().
+        self._routing_lock = threading.Lock()
+        self._routing_history: List[List[int]] = []   # per-token expert ids
+        self._routing_enabled = False
+        self._stderr_thread: Optional[threading.Thread] = None
+        self._reasoning_flag: Optional[bool] = None   # cache: supports --reasoning?
         # Windows orphan guard (EXP-009): handle of the KILL_ON_JOB_CLOSE
         # Job Object the spawned llama-server is assigned to. While this
         # handle stays open the child lives; the moment it closes (we die by
@@ -420,9 +429,17 @@ class LlamaServerBackend(WeightStreamBackend):
             "-c", str(self._n_ctx),
             "--host", self._host,
             "--port", str(self._port),
-            "--reasoning", "auto",
-            "--reasoning-budget", "-1",
         ]
+        # Reasoning flags differ across llama.cpp builds:
+        #   Jan b9967 & older: --reasoning auto (thoughts extracted)
+        #   newer builds:      --reasoning-format deepseek|none
+        # Probe the binary once and use the compatible form so we support
+        # both Jan's bundled server and our own patched build (L1/A4).
+        if self._supports_reasoning_flag():
+            cmd += ["--reasoning", "auto"]
+        else:
+            cmd += ["--reasoning-format", "deepseek"]
+        cmd += ["--reasoning-budget", "-1"]
         if self._n_threads:
             cmd += ["-t", str(self._n_threads)]
         if self._gpu_layers != -1:
@@ -431,8 +448,10 @@ class LlamaServerBackend(WeightStreamBackend):
         # validated in __init__ so the subprocess always gets a real one.
         if self._kv_cache_type:
             cmd += ["-ctk", self._kv_cache_type, "-ctv", self._kv_cache_type]
-        # Quiet: don't spam logs
-        cmd += ["--log-disable"]
+        # Quiet: don't spam logs — EXCEPT when routing capture is on
+        # (L1/A4: WS_EXPERT lines must reach stderr for the reader thread).
+        if not self._routing_enabled:
+            cmd += ["--log-disable"]
         # Optional extra args — lets us experiment with llama-server flags
         # without code changes, e.g. MoE tiering for the GPU proof:
         #   WS_LLAMA_EXTRA_ARGS="--cpu-moe -fa on -ctk q8_0 -ctv q8_0"
@@ -460,13 +479,25 @@ class LlamaServerBackend(WeightStreamBackend):
         # responder that proves via /props to be a different model is ever
         # touched — never our own server or an empty port.
         self._sweep_stale_owner()
+        # L1/A4: forward WS_EXPERT_LOG to the child so the patched
+        # llama-server emits routing lines (only when capture is enabled).
+        popen_env = None
+        if self._routing_enabled:
+            popen_env = dict(os.environ)
+            popen_env.setdefault("WS_EXPERT_LOG", "1")
         self._proc = subprocess.Popen(
             cmd,
             stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stderr=subprocess.PIPE if self._routing_enabled else subprocess.DEVNULL,
+            env=popen_env,
             creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
         self._started = True
+        if self._routing_enabled and self._proc.stderr is not None:
+            self._stderr_thread = threading.Thread(
+                target=self._stderr_reader, daemon=True,
+                name="llama-server-stderr")
+            self._stderr_thread.start()
         # Register the child as OURS before anything else can look at the
         # port: the stale-owner sweep on a sibling backend must refuse to
         # kill it (shared fixed port, max_loaded_models > 1).
@@ -513,6 +544,74 @@ class LlamaServerBackend(WeightStreamBackend):
             # this backend — close() terminates the child first.
             self.close()
             raise
+
+    # ── L1/A4: expert routing capture (patched llama-server) ──────────
+    def _supports_reasoning_flag(self) -> bool:
+        """True when this llama-server build accepts `--reasoning` (Jan
+        b9967 & older). Newer builds renamed it to --reasoning-format.
+        Result is cached; probes `--help` once."""
+        if self._reasoning_flag is None:
+            try:
+                r = subprocess.run(
+                    [self._server_binary, "--help"],
+                    capture_output=True, text=True, timeout=10,
+                    creationflags=subprocess.CREATE_NO_WINDOW
+                    if os.name == "nt" else 0,
+                )
+                # exact flag match: "--reasoning" alone (not -format/-budget)
+                import re
+                self._reasoning_flag = bool(
+                    re.search(r"--reasoning(?!-format|-budget)\b",
+                              r.stdout or ""))
+            except Exception:
+                self._reasoning_flag = True  # assume old form on probe fail
+        return self._reasoning_flag
+
+    def enable_routing(self) -> None:
+        """Enable WS_EXPERT stderr capture. Must be called BEFORE start();
+        spawn sets stderr=PIPE only when enabled (zero overhead otherwise)."""
+        self._routing_enabled = True
+
+    def routing(self) -> List[List[int]]:
+        """Per-token selected expert id lists (most recent first)."""
+        with self._routing_lock:
+            return list(reversed(self._routing_history))
+
+    def routing_stats(self) -> dict:
+        with self._routing_lock:
+            n = len(self._routing_history)
+            flat = [e for token in self._routing_history for e in token]
+            return {
+                "enabled": self._routing_enabled,
+                "tokens": n,
+                "experts_per_token": len(flat) // n if n else 0,
+                "unique_experts": len(set(flat)) if flat else 0,
+                "last_token_experts": self._routing_history[-1] if n else [],
+            }
+
+    def _stderr_reader(self) -> None:
+        """Read llama-server stderr; parse WS_EXPERT lines into history."""
+        assert self._proc is not None and self._proc.stderr is not None
+        try:
+            for raw in self._proc.stderr:
+                line = raw.decode("utf-8", "replace").strip()
+                if not line.startswith("WS_EXPERT"):
+                    continue
+                # WS_EXPERT row=<i> experts=<id1,id2,...>
+                try:
+                    payload = line.split("experts=", 1)[1]
+                    ids = [int(x) for x in payload.split(",") if x.strip()]
+                    if ids:
+                        with self._routing_lock:
+                            self._routing_history.append(ids)
+                            # bounded: keep last 4096 tokens
+                            if len(self._routing_history) > 4096:
+                                del self._routing_history[:-4096]
+                except (ValueError, IndexError):
+                    continue
+        except Exception:
+            # reader dies with the pipe on close(); history stays valid
+            pass
 
     def _wait_ready(self, timeout: float = 60.0):
         """Poll /health until the server is up.
