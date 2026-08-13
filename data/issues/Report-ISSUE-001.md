@@ -15,13 +15,13 @@ Testing the full issue reporting pipeline from CLI
   "llama_cpp_version": "0.3.34",
   "python_version": "3.14.2",
   "os": "Windows-11-10.0.22631-SP0",
-  "cwd": "D:\\.opencode\\.Weight-Streaming",
+  "cwd": "<repo-root>",
   "model_path": null,
   "model_architecture": null,
   "last_error": null,
   "last_endpoint": null,
   "env": {
-    "WS_ISSUES_DIR": "D:\\.opencode\\.Weight-Streaming\\data\\issues"
+    "WS_ISSUES_DIR": "<repo-root>/data/issues"
   }
 }
 ```

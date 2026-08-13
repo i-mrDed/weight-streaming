@@ -1,7 +1,7 @@
 # 📚 Research Notes: WASTE vs Speculative Weight Streaming
 
 > **Research Date:** 2026-08-03
-> **เปรียบเทียบ:** [sqliteai/waste](https://github.com/sqliteai/waste) vs โปรเจค Speculative Weight Streaming (D:\.opencode\.Weight-Streaming)
+> **เปรียบเทียบ:** [sqliteai/waste](https://github.com/sqliteai/waste) vs โปรเจค Speculative Weight Streaming (<repo-root>)
 > **คู่มือฉบับเต็ม:** `index.html` (เปิดดูใน browser)
 
 ---
@@ -89,4 +89,4 @@
 - WASTE repo: https://github.com/sqliteai/waste
 - บทความไทย: https://vibecodingthailand.com/blog/waste-kimi-k3-laptop
 - บทความต้นฉบับ: https://marcobambini.substack.com/p/the-waste-inference-engine
-- โปรเจคคุณ: D:\.opencode\.Weight-Streaming (docs/ARCHITECTURE.md, docs/DECISIONS.md)
+- โปรเจคคุณ: <repo-root> (docs/ARCHITECTURE.md, docs/DECISIONS.md)

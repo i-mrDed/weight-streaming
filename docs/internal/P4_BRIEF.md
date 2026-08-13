@@ -2,7 +2,7 @@
 
 > **สถานะ**: ปล่อยงานโดย PM แล้ว (2026-07-31) · P1+P2+P3 (รวมรอบ polish) เสร็จ + QA PASS + ผู้ใช้ตรวจรับแล้ว · run ต้นทาง `run-1785386652753-35chx9`
 > **Source of truth**: `docs/DASHBOARD_THEME_SPEC.md` — โดยเฉพาะ **§10** (backend endpoints ใหม่), §9.1/9.4/9.6/9.8 (หน้าที่พึ่ง endpoint เหล่านี้ = **สร้างใน P5**), §12 (ความเสี่ยง/branch), §13 (workflow/เกณฑ์จบ) · ไฟล์นี้ = brief ย่อยสำหรับ Dev/QA (ถ้าขัดแย้งกัน spec ชนะ)
-> **Branch / worktree**: `feature/dashboard-theme` ที่ `D:\.opencode\.worktrees\dashboard-theme\.Weight-Streaming` (HEAD `bf512fd`)
+> **Branch / worktree**: `feature/dashboard-theme` ที่ `~/worktrees/dashboard-theme/weight-streaming` (HEAD `bf512fd`)
 
 ---
 

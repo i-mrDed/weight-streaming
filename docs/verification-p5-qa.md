@@ -2,7 +2,7 @@
 
 > **QA โดย:** OpenCode Agent (อิสระ) + ผู้ใช้ตรวจ web UI ร่วม
 > **Server:** trial พอร์ต 8804 (จาก HEAD `6d46278`) — ปิดแล้วหลัง QA
-> **เกณฑ์:** `docs/P5_BRIEF.md` §13 (10 gates) + `docs/DASHBOARD_THEME_SPEC.md`
+> **เกณฑ์:** `docs/internal/P5_BRIEF.md` §13 (10 gates) + `docs/DASHBOARD_THEME_SPEC.md`
 > **Model ทดสอบ:** qwen2.5-0.5b-instruct-q2_k.gguf (415MB, download จาก Hub จริง)
 
 ---
@@ -41,7 +41,7 @@
 - Test results: pytest 177/13/9 (รัน 2026-08-03)
 - Build: reproducible, bundle 131.93 kB gzip
 - i18n: PASS 661 keys
-- Screenshots: `docs/artifacts/phase-5/`, `phase-5-2/`, `polish/`
+- Screenshots: `docs/internal/artifacts/phase-5/`, `phase-5-2/`, `polish/`
 - API evidence: บันทึกในไฟล์นี้
 
 ---

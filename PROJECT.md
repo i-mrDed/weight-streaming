@@ -171,7 +171,7 @@ SSD Controller
 ## 📁 โครงสร้าง
 
 ```
-D:\.opencode\.Weight-Streaming\
+~/weight-streaming/
 │
 ├── PROJECT.md            ← ไฟล์นี้
 ├── CHANGELOG.md          ← บันทึกความคืบหน้า

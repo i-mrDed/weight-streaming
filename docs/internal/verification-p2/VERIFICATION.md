@@ -1,6 +1,6 @@
 # P2 Dev self-verification — Weight Streaming Console
 
-Run: 2026-07-30 · worktree `D:\.opencode\.worktrees\dashboard-theme\.Weight-Streaming`
+Run: 2026-07-30 · worktree `~/worktrees/dashboard-theme/weight-streaming`
 Server under test: `python -m weight_stream.server --port 8799` (worktree code, no models loaded).
 
 ## Gates

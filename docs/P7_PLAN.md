@@ -132,10 +132,10 @@ frontend:
 | Sub-phase | เนื้อหา | ขึ้นกับ | สถานะ |
 |-----------|---------|--------|--------|
 | **P7.1** | Model capabilities API + Reasoning Mode จริง (Auto/On/Off) + GPU server | backend llama.cpp | ✅ **เสร็จ** (LlamaServerBackend, 48 tok/s) |
-| **P7.2** | Assistant management (CRUD + UI) | P7.1 | ✅ **backend เสร็จ** (`docs/P7.2_BRIEF.md`) — UI ยังไม่ทำ |
-| **P7.3** | Tool-calling protocol (tools/tool_calls/tool role) | P7.1 | ✅ **backend เสร็จ** (`docs/P7.3_BRIEF.md`) |
-| **P7.4** | MCP host (จัดการ MCP servers + execute + permission) | P7.3 | ✅ **backend เสร็จ** (`docs/P7.4_BRIEF.md`) — E2E รอ QA |
-| **P7.5** | Offline-first audit + hardening (ทุกหน้า/ฟีเจอร์) | ทั้งหมด | ✅ **เสร็จ** (`docs/P7.5_BRIEF.md`) — offline-first อยู่แล้ว |
+| **P7.2** | Assistant management (CRUD + UI) | P7.1 | ✅ **backend เสร็จ** (`docs/internal/P7.2_BRIEF.md`) — UI ยังไม่ทำ |
+| **P7.3** | Tool-calling protocol (tools/tool_calls/tool role) | P7.1 | ✅ **backend เสร็จ** (`docs/internal/P7.3_BRIEF.md`) |
+| **P7.4** | MCP host (จัดการ MCP servers + execute + permission) | P7.3 | ✅ **backend เสร็จ** (`docs/internal/P7.4_BRIEF.md`) — E2E รอ QA |
+| **P7.5** | Offline-first audit + hardening (ทุกหน้า/ฟีเจอร์) | ทั้งหมด | ✅ **เสร็จ** (`docs/internal/P7.5_BRIEF.md`) — offline-first อยู่แล้ว |
 
 ### 📌 งานที่เหลือ (frontend — ยังไม่ทำ)
 - [ ] **P7.2 UI**: หน้า/panel จัดการ assistants + เลือกใน chat toolbar

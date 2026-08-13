@@ -19,7 +19,7 @@ docs/artifacts/
 
 ## วิธีการ (ต่อจากนี้)
 1. **agent หน้า frontend / QA**: เมื่อจับ screenshot เป็นหลักฐาน → บันทึกที่
-   `D:\.opencode\.worktrees\dashboard-theme\.Weight-Streaming\docs\artifacts\<phase>/`
+   `docs/internal/artifacts/<phase>/`
 2. **การตั้งชื่อ**: ขึ้นต้นด้วย prefix เฟส (`phase-5-2` → `p52-...`), ตามด้วยบริบท เช่น
    `p52-hub-after-results.png`, `p52-models-library.png`.
 3. **อย่า** dump ขึ้น root — ถ้าเห็นไฟล์ `*.png` หลุดขึ้น root ให้ย้ายกลับมาไว้ตรงนี้.

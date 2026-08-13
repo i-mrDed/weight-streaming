@@ -2,7 +2,7 @@
 
 > **สถานะ**: ปล่อยงานโดย PM แล้ว (2026-08-01) · P1–P4 เสร็จ + **P4 QA PASS อิสระ** + ผู้ใช้อนุมัติให้เริ่ม P5 · run ต้นทาง `run-1785386652753-35chx9`
 > **Source of truth**: `docs/DASHBOARD_THEME_SPEC.md` — โดยเฉพาะ **§9.1** (Overview Activity), **§9.4** (Models Library), **§9.6** (Hub), **§9.8** (Settings server), **§13** (เกณฑ์จบ P5) + `docs/CONSOLE_ROADMAP.md` (cross-phase rules) · ไฟล์นี้ = brief ย่อยสำหรับ Dev/QA (ถ้าขัดแย้งกัน spec ชนะ)
-> **Branch / worktree**: `feature/dashboard-theme` ที่ `D:\.opencode\.worktrees\dashboard-theme\.Weight-Streaming` (HEAD `cb1165b`)
+> **Branch / worktree**: `feature/dashboard-theme` ที่ `~/worktrees/dashboard-theme/weight-streaming` (HEAD `cb1165b`)
 > **Frontend source**: `frontend/` (Preact+Vite) → build ออก `weight_stream/server/static/console/`
 
 ---

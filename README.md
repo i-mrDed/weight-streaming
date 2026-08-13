@@ -225,15 +225,25 @@ cd frontend && npm ci && npm run typecheck && npm run build
 - [`docs/`](docs/) — architecture, ADRs/decisions, model guide, model
   inventory (download locations), issue system, IDE integration,
   dashboard-theme spec
-- [`research/experiments/`](research/experiments/) — EXP-001…EXP-017:
+- [`research/experiments/`](research/experiments/) — EXP-001…EXP-030:
   buffer/prefetch simulation, KV-cache scaling, MoE CPU/GPU tiering,
   quant quality (Thai tonal probes), spec-decode dead-end, IQ1_M vs
-  IQ2_M, DS V4 Flash >RAM measurement, CPU-lane dead-end, kimi-k3-in-c
-  deep-research
+  IQ2_M, DS V4 Flash >RAM measurement, CPU-lane dead-end, physics
+  calibration, Phase 4 evaluation metrics, K3 >RAM benchmark
+- [`research/paper/paper.md`](research/paper/paper.md) — full draft paper
+  (every number auto-fact-checked against raw experiment logs)
 - [`research/HARDWARE_100TPS_PLAN.md`](research/HARDWARE_100TPS_PLAN.md) —
   hardware roadmap calibrated with measured results (2026-08-10 market
   prices)
 - [`CHANGELOG.md`](CHANGELOG.md) — semantic-version release history
+
+> **Note on history:** this repo was made public on 2026-08-13. Older
+> commits may reference the original developer machine's local paths
+> (drive letters / usernames) inside docs and issue reports — these are
+> historical artifacts of the development environment, not secrets, and
+> the current tree is clean. New contributions must keep paths relative
+> or `~/`-based (`<user>` placeholder); a CI guard blocks dev-machine
+> path leaks (see [`docs/GO_PUBLIC_CHECKLIST.md`](docs/GO_PUBLIC_CHECKLIST.md)).
 
 ## Repository layout
 

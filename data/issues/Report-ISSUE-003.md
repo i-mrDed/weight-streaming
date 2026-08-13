@@ -21,7 +21,7 @@ load returns 200 loaded; generate on B fails with port-collision ModelError
   "llama_cpp_version": "0.3.34",
   "python_version": "3.14.2",
   "os": "Windows-11-10.0.22631-SP0",
-  "cwd": "D:\\.opencode\\.Weight-Streaming",
+  "cwd": "<repo-root>",
   "model_path": null,
   "model_architecture": null,
   "last_error": null,

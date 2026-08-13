@@ -1,6 +1,6 @@
 # 🎨 SPA Redesign Master Plan: Chat 2.0 & Stats Dashboard
 
-> **โปรเจกต์:** `weight-streaming` (`D:\.opencode\.Weight-Streaming`)  
+> **โปรเจกต์:** `weight-streaming` (`~/weight-streaming`)  
 > **สถานะ:** 🟡 Implemented in part; reliability validation and streaming follow-up remain  
 > **วันที่:** 2026-07-28  
 > **เป้าหมาย:** ปรับปรุงโฉมหน้า UI/UX ทั้งหมดของระบบ SPA (Chat + Stats + Settings) ให้สวยงาม ปราณีต ระดับ ChatGPT / Claude / Jan Desktop พร้อมระบบ Agent Tools, Reasoning Effort, และ Native Chat Template

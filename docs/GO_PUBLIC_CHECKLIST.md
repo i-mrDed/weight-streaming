@@ -31,7 +31,7 @@ git status --short               # expect clean except the Thai review folder (u
 
 - [x] **CI is green on `main`** — verified 2026-08-13 on `ba3c37f`: CI 5/5 jobs
       success + Secret Scan success (7/7 check-runs).
-- [x] **Path leak scan re-run 2026-08-13** — `C:/Users/dedch` cleaned from
+- [x] **Path leak scan re-run 2026-08-13** — `C:/Users/<user>` cleaned from
       TASKS.md + ISSUES.md (3 จุด); scan now clean.
 - [x] **Secrets scan** — no `ghp_`/`sk-`/`hf_`/password patterns (remaining hits
       are false positives: scan-instruction text + "disk-mmap").
@@ -106,6 +106,18 @@ All drafts already exist in [`research/writeups/`](../research/writeups/):
       article, cross-link the repo.
 - [ ] **README self-checks**: banner + GIF + 6 screenshots already embedded;
       verify they render after the switch (they are committed files, they will).
+
+## 5b. ป้องกันการเกิดซ้ำ (added 2026-08-13 — post-public hardening)
+
+- [x] **CI guard `devpath-leak-check`** (ใน `.github/workflows/secret-scan.yml`) —
+      block push/PR ที่มี dev-machine path: `C:/Users/<real-username>`, `.opencode/`,
+      `.worktrees/` (ยกเว้น `runneradmin` = CI runner ของ GitHub เอง).
+- [x] **กติกา path สำหรับทุก contribution ใหม่:** ใช้ relative / `~/` / `<user>`
+      placeholder เสมอ — ห้าม commit drive letter + username จริง.
+- [x] **docs วางแผนภายใน (`docs/internal/`)** — BRIEF/verification/artifacts
+      ย้ายออกจากหน้าหลัก (ยังอยู่ใน repo, git history คงอยู่).
+- [x] **README note เรื่อง history** — บอกว่าพาธเก่าใน commits เก่าเป็น
+      artifact ของ dev machine ไม่ใช่ secret.
 
 ## 6. Post-public verification (10 min)
 

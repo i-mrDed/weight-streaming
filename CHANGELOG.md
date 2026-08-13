@@ -313,7 +313,7 @@
 - **QA round-2 fixes**: activity table layout, sidebar server status, health gauges, classic particles, thinking prose fallback ("Thinking Process:"), per-model effort, thinking visibility toggle
 - **Backup tag**: `feature/dashboard-theme-v1` (HEAD `27c6239`) — ย้อนกลับได้
 - **Tests**: 192 passed / 7 skipped (GGUF fixture errors หายเพราะมี model จริงใน research/models)
-- **P7 วางแผนแล้ว**: `docs/P7_PLAN.md` — Jan-style chat controls + Assistant + MCP + offline-first
+- **P7 วางแผนแล้ว**: `docs/internal/P7_PLAN.md` — Jan-style chat controls + Assistant + MCP + offline-first
 
 ### 🛠️ Local Server Reliability
 - Server CLI configuration now reaches `ModelManager`, so `--n-threads` applies to models loaded later from the SPA.

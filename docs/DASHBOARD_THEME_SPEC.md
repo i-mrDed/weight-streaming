@@ -451,7 +451,7 @@ frontend/                        (ใหม่, project root)
 
 ## 12. แผน Branch & Migration (ตาม R3: worktree)
 
-1. **สร้าง worktree**: `.worktrees/dashboard-theme/` บน branch `feature/dashboard-theme` จาก `main` HEAD — main + งานค้าง 6 ไฟล์ **untouched**
+1. **สร้าง worktree**: `~/worktrees/dashboard-theme/` บน branch `feature/dashboard-theme` จาก `main` HEAD — main + งานค้าง 6 ไฟล์ **untouched**
 2. Dev/QA ทำงานใน worktree ทั้งหมด; commit ย่อยต่อ phase (conventional commits)
 3. ระหว่าง dev: Console ใหม่ที่ `/console` — `/app` เดิมไม่ถูกแตะ (ทดสอบเทียบได้ตลอด)
 4. QA ผ่านทุก phase + user approval → **merge → main** แล้วจึง swap route + เคลียร์ legacy

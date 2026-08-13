@@ -1,6 +1,6 @@
 # P2 Independent QA Report — Weight Streaming Console
 
-QA run: 2026-07-30 · worktree `D:\.opencode\.worktrees\dashboard-theme\.Weight-Streaming`
+QA run: 2026-07-30 · worktree `~/worktrees/dashboard-theme/weight-streaming`
 HEAD verified: `04363d7` (branch `feature/dashboard-theme`, tree clean before/after rebuild)
 Server under test: `python -m weight_stream.server --port 8799` (worktree code) — **killed after QA; user's 8765 untouched (health 200 after my server was stopped).**
 
