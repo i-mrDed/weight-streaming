@@ -177,6 +177,16 @@
 
 ---
 
+## 🔬 Track B (research spike — ตัดสินใจ 2026-08-13: A เป็น product, B เป็น bounded spike)
+
+| สถานะ | Task | Priority | หมายเหตุ |
+|-------|------|---------|---------|
+| ✅ | Gate 1 feasibility: expose per-expert routing จาก llama.cpp | 🟢 | `docs/TRACK-B-GATE1-FEASIBILITY.md` — **ทำได้แต่ต้อง fork + patch เอง** (`LLAMA_LOG_MOE` ไม่มีจริงใน source; ไม่มี per-token routing callback ใน `llama.h`; proof = moe-viz ของ Martin Alderson 2026-04); cost ~1–3 วัน (build CUDA บน Windows เป็นตัวแปรหลัก); verdict: **FEASIBLE (bounded)** — Track B ไม่ปิดถาวร แต่ไม่เริ่มจนกว่า Track A release นิ่ง |
+| ⬜ | Gate 2: วัด predictability จริง (expert co-occurrence, top-N hit rate ข้าม prompt ไทย/อังกฤษ) | 🟢 | ต้องผ่าน Gate 1 ก่อน — เป้า: ถ้า < 90% ที่ N ต่ำ = ปิด (DECISION) |
+| ⬜ | Gate 3: วัด latency gap บน disk-bound config (DS V4 Flash) | 🟢 | idle gap กี่ % ของเวลา ที่ prefetch จะซ่อนได้ — ถ้า gap < 10% = ไม่คุ้ม (DECISION) |
+
+---
+
 ## 🔥 Legend
 
 | สัญลักษณ์ | ความหมาย |
