@@ -252,6 +252,28 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
         allow_headers=["*"],
     )
 
+    # WebSocket origin guard (fix/ws-security): CORS middleware does NOT
+    # apply to websockets, so we check the Origin header ourselves using the
+    # same allowlist (loopback + WS_CORS_ORIGINS). A browser page on any
+    # other site cannot open ws://localhost:8765/v1/stream.
+    def _ws_origin_allowed(origin: str) -> bool:
+        if not origin:
+            # non-browser clients (CLI, curl, tests) send no Origin — allow
+            return True
+        try:
+            from urllib.parse import urlparse
+            o = urlparse(origin)
+            host = (o.hostname or "").lower()
+            port = o.port
+            for allowed in _cors_origins:
+                a = urlparse(allowed)
+                if (a.hostname or "").lower() == host and (
+                    a.port is None or a.port == port):
+                    return True
+        except Exception:
+            return False
+        return False
+
     # API auth (B1): when WS_API_TOKEN is set, every /v1/* request must
     # carry `Authorization: Bearer <token>` (constant-time compare). The
     # console/static/health pages stay open — the console sends the token
@@ -769,7 +791,27 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             Server → Client: {"type": "done", "stats": {...}}
             
         Client disconnects to cancel in-progress generation.
+
+        Security (fix/ws-security):
+        - Origin must be loopback (or in WS_CORS_ORIGINS) — blocks drive-by
+          websocket from any web page (CORS middleware does NOT cover WS).
+        - When WS_API_TOKEN is set, the client must send
+          `Authorization: Bearer <token>` (same rule as HTTP /v1/*).
+        Both checks run BEFORE accept(); failures close with 4408/4401.
         """
+        # 1) Origin check (WS bypasses the HTTP CORS middleware)
+        origin = websocket.headers.get("origin", "")
+        allowed = _ws_origin_allowed(origin)
+        if not allowed:
+            await websocket.close(code=4408, reason="origin not allowed")
+            return
+        # 2) API token check (same WS_API_TOKEN as HTTP /v1/*)
+        if _api_token:
+            auth = websocket.headers.get("authorization", "")
+            if not secrets.compare_digest(auth, f"Bearer {_api_token}"):
+                await websocket.close(code=4401, reason="unauthorized")
+                return
+
         await websocket.accept()
         cancelled = False
         
