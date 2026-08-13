@@ -1,9 +1,9 @@
 {
-  "rev": 55,
+  "rev": 57,
   "projects": {
     "weight-streaming": {
-      "rev": 55,
-      "updatedAt": "2026-08-13T01:18:33.947Z",
+      "rev": 57,
+      "updatedAt": "2026-08-13T01:24:23.291Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -844,6 +844,26 @@
       },
       "brain": {
         "entries": [
+          {
+            "id": "handoff-evaluation-2026-08-13",
+            "kind": "handoff",
+            "title": "Phase 5: Evaluation เขียนเสร็จ (04-evaluation.md) — paper draft ครบ 4 sections",
+            "content": "research/paper/04-evaluation.md: setup/method (clean-room + verify cmdline + cold/warm + paging telemetry), physics validation table (Qwen 0% EXP-004 / -8.7% EXP-025 / +0.02% EXP-028, DSv4 in band), real >RAM 104GB @ 1.5-1.9 tok/s (4 configs + 4 dead ends), K3 buffer lever (Qwen 22.73 vs K3 0.049->1.18 = 24x; buffer sweep 64MB..4GB; latency tail = miss signal), threats to validity (single machine, K3 simulated, warm/cold honesty), summary table. Paper draft ครบแล้ว: OUTLINE + 01-introduction + 02-related-work + 03-architecture + 04-evaluation — เหลืองาน: assemble/abstract/diagram + optional expert offloading test.",
+            "status": "done",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:24:23.285Z",
+            "updatedAt": "2026-08-13T01:24:23.285Z"
+          },
+          {
+            "id": "handoff-architecture-2026-08-13",
+            "kind": "handoff",
+            "title": "Phase 5: Architecture เขียนเสร็จ (03-architecture.md) — เหลือ Evaluation",
+            "content": "research/paper/03-architecture.md: engine (llama.cpp+mmap, OS page cache = de facto streaming; custom buffer เลิกตาม ADR-003), physics identity (bytes/token = active×bpw/8; tok/s = BW÷bytes; 3 calibrated tiers 19.18/61.09/0.38 GB/s — disk-mmap 37x ต่ำกว่า NVMe spec), telemetry (generation.paging — OS signals จริง), BufferBackend protocol (EXP-026: simulator adapter + telemetry observer → BufferStatsView เดียว), metrics (hit rate/latency p50-p99/throughput ±15% — EXP-028). สรุป: architecture เหมือนเดิม แต่ผลขึ้นกับ regime (พอดี RAM = compute-bound, >RAM = buffer คือ 24x lever). เหลือเขียน: Evaluation (data พร้อม EXP-012/025/028/029).",
+            "status": "done",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:23:24.459Z",
+            "updatedAt": "2026-08-13T01:23:24.459Z"
+          },
           {
             "id": "handoff-related-work-2026-08-13",
             "kind": "handoff",
