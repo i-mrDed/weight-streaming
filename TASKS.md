@@ -160,6 +160,8 @@
 | ✅ | Benchmark: hit rate | 🟡 | EXP-028: Qwen จริง warm hit rate **1.000** (resident ครบ RAM, disk demand = 0) — cold ≈ 79% (EXP-026 spike) |
 | ✅ | Benchmark: latency distribution | 🟡 | EXP-028: Qwen จริง p50 41.3 / p90 48.6 / p99 69.6 ms (p99 ≈ 1.7×p50, ไม่มี long-tail stall warm) |
 | ✅ | Benchmark: throughput | 🟡 | EXP-028: warm avg **22.73 tok/s vs physics 22.73 → +0.02%** (PASS ±15%) — validation ที่ดีที่สุดของ EXP-025 calibration |
+| ✅ | K3 (>RAM) benchmark ด้วย Phase 4 metrics ชุดเดียวกับ Qwen | 🟡 | EXP-029: K3 sim 15.6 GB/token — buffer 256MB → 51% hit → **0.049 tok/s** (I/O-bound); buffer 4GB → 99.9% hit → **1.18 tok/s** (compute ceiling) = **24× upside**; ตรง EXP-027 (5% miss = 2.1s stall > 815ms compute); 8 hermetic tests |
+| ✅ | EXP-012 write-up เผยแพร่ (>RAM จริง 104GB on 64GB RAM) | 🟡 | `research/writeups/2026-08-10-exp012-104gb-on-64gb-ram.md` — ENG + ไทย; อัปเดต 2026-08-13: effective disk BW 0.38 GB/s (EXP-025) + ทำนาย K3 (EXP-029) + 29 experiments |
 
 ---
 
@@ -167,7 +169,7 @@
 
 | สถานะ | Task | Priority |
 |-------|------|---------|
-| ⬜ | Draft paper outline | 🟢 |
+| ✅ | Draft paper outline | 🟢 | `research/paper/OUTLINE.md` — 4 sections + abstract + method; ทุก claim อ้าง EXP จริง (Qwen 22.73 tok/s, K3 0.049→1.18, 104GB @ 1.5–1.9 tok/s); ระบุ gap: อ่าน PreScope/EAGLE-3 ก่อน Related Work |
 | ⬜ | Write: Introduction | 🟢 |
 | ⬜ | Write: Related Work | 🟢 |
 | ⬜ | Write: Architecture | 🟢 |

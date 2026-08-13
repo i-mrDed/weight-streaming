@@ -1,9 +1,9 @@
 {
-  "rev": 45,
+  "rev": 51,
   "projects": {
     "weight-streaming": {
-      "rev": 45,
-      "updatedAt": "2026-08-13T00:32:15.043Z",
+      "rev": 51,
+      "updatedAt": "2026-08-13T01:04:03.698Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -734,10 +734,166 @@
               "label": "บันทึกครบ"
             }
           ]
+        },
+        "phase5-paper-outline": {
+          "id": "phase5-paper-outline",
+          "name": "Phase 5: draft paper outline",
+          "description": "ร่างโครง paper (outline) จากหลักฐานที่ครบแล้ว: physics calibration (EXP-025), buffer abstraction (EXP-026), compute vs I/O (EXP-027), evaluation metrics + benchmark (EXP-028/029), >RAM จริง (EXP-012) — 4 sections ตาม TASKS.md (Intro, Related Work, Architecture, Evaluation)",
+          "status": "approved",
+          "trigger": "TASKS.md Phase 5 — Draft paper outline (งานแรกของ Phase 5) — มี evidence table ครบจาก EXP-025..029 + write-up EXP-012",
+          "preconditions": [
+            "EXP-025 physics model: BW ÷ bytes/token + calibrated tiers (cpu-ram 19.18, gpu-vram 61.09, disk-mmap 0.38 GB/s)",
+            "EXP-026 buffer abstraction: protocol + simulator/telemetry backends",
+            "EXP-027: real MoE compute vs I/O ratio (พอดี RAM = compute-bound)",
+            "EXP-028/029: Phase 4 metrics + benchmark (Qwen จริง vs K3 sim)",
+            "EXP-012 + write-up: >RAM จริง (104GB on 64GB RAM)"
+          ],
+          "successOutcome": "มี paper outline (structure + key claims + ตัวเลขหลักฐานต่อ section) ที่พร้อมให้เริ่มเขียน 4 sections ต่อ — ระบุ gap ที่ยังต้องเติมข้อมูล",
+          "acceptanceCriteria": [
+            "outline มี 4 sections ตาม TASKS.md (Introduction, Related Work, Architecture, Evaluation) + abstract/method",
+            "ทุก key claim อ้างอิง experiment (EXP-NNN) หรือ write-up ที่มีอยู่จริง",
+            "Evaluation section ใช้ตัวเลขจริงจาก EXP-028/029 (Qwen 22.73 tok/s, K3 0.049→1.18 tok/s)",
+            "ระบุ gap/งานที่ต้องทำก่อนเขียนแต่ละ section อย่างชัดเจน",
+            "บันทึก outline + brain + TASKS.md Phase 5 (Draft paper outline)"
+          ],
+          "steps": [
+            {
+              "id": "start",
+              "kind": "start",
+              "title": "ตรวจหลักฐาน",
+              "description": "รวบรวม evidence ที่มี: EXP-025..029 + EXP-012 write-up + DECISIONS (ADR-003) + ARCHITECTURE.md — ระบุ claims หลักของโปรเจค",
+              "position": {
+                "x": 0,
+                "y": 0
+              }
+            },
+            {
+              "id": "outline",
+              "kind": "action",
+              "title": "ร่าง outline",
+              "description": "เขียน paper outline ครบ 4 sections + abstract + method — แต่ละ section: key claims + ตัวเลข + EXP reference + สิ่งที่ต้องเขียน",
+              "position": {
+                "x": 280,
+                "y": 0
+              }
+            },
+            {
+              "id": "check",
+              "kind": "decision",
+              "title": "ตรวจอ้างอิงครบ",
+              "description": "ตรวจว่า claim หลักทุกตัวมีหลักฐานอ้างอิงจริง และตัวเลขใน outline ตรงกับผล experiments (ไม่ใช่ตัวเลขสมมติ)",
+              "position": {
+                "x": 560,
+                "y": 0
+              }
+            },
+            {
+              "id": "doc",
+              "kind": "action",
+              "title": "บันทึกผล",
+              "description": "บันทึก outline ลงไฟล์ + อัปเดต brain (decision/handoff) + TASKS.md Phase 5 (Draft paper outline -> done)",
+              "position": {
+                "x": 840,
+                "y": 0
+              }
+            },
+            {
+              "id": "end",
+              "kind": "end",
+              "title": "จบ",
+              "description": "ได้ outline ที่พร้อมเขียน sections ต่อ มี gap ชัดเจน",
+              "position": {
+                "x": 1120,
+                "y": 0
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "id": "t1",
+              "source": "start",
+              "target": "outline",
+              "label": "หลักฐานครบ"
+            },
+            {
+              "id": "t2",
+              "source": "outline",
+              "target": "check",
+              "label": "ร่างเสร็จ"
+            },
+            {
+              "id": "t3",
+              "source": "check",
+              "target": "doc",
+              "label": "อ้างอิงครบ + ตัวเลขตรง"
+            },
+            {
+              "id": "t4",
+              "source": "check",
+              "target": "outline",
+              "label": "มี gap -> แก้ outline"
+            },
+            {
+              "id": "t5",
+              "source": "doc",
+              "target": "end",
+              "label": "บันทึกครบ"
+            }
+          ]
         }
       },
       "brain": {
         "entries": [
+          {
+            "id": "handoff-phase5-outline-2026-08-13",
+            "kind": "handoff",
+            "title": "Phase 5 draft paper outline เสร็จ (TASKS.md Phase 5 งานแรก)",
+            "content": "ปิด Draft paper outline. ลำดับถัดไปแนะนำ: อ่าน PreScope + EAGLE-3 (gap ของ Related Work) แล้วเริ่ม Write: Introduction. หมายเหตุ: ยังไม่ commit ชุด K3 benchmark (EXP-029) + write-up update + outline — รวมกับ Phase 5 outline ได้ใน commit เดียวหรือแยกตามความเหมาะสม.",
+            "status": "done",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:04:03.691Z",
+            "updatedAt": "2026-08-13T01:04:03.691Z"
+          },
+          {
+            "id": "decision-paper-outline-phase5",
+            "kind": "decision",
+            "title": "Paper outline (Phase 5) เสร็จ — ทุก claim อ้าง EXP จริง; งานต่อไปต้องอ่าน PreScope/EAGLE-3",
+            "content": "research/paper/OUTLINE.md: 4 sections + abstract/method + section→evidence map. ตัวเลขหลัก: Qwen จริง 22.73 tok/s (EXP-028), K3 0.049→1.18 tok/s ที่ buffer 256MB→4GB (EXP-029), >RAM จริง 104GB @ 1.5–1.9 tok/s disk-bound (EXP-012/025). Gap ที่ต้องทำก่อนเขียน: อ่าน PreScope (2509.23638) + EAGLE-3 (2503.01840) สำหรับ Related Work; optional: ทดสอบ expert offloading + system diagram + citations สำหรับ community-silence claim.",
+            "status": "active",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:03:59.569Z",
+            "updatedAt": "2026-08-13T01:03:59.569Z"
+          },
+          {
+            "id": "note-exp012-writeup-published",
+            "kind": "note",
+            "title": "EXP-012 write-up อัปเดตพร้อมเผยแพร่ (104GB on 64GB RAM — ENG + ไทย)",
+            "content": "research/writeups/2026-08-10-exp012-104gb-on-64gb-ram.md อัปเดต 2026-08-13: เพิ่มส่วน effective disk bandwidth 0.38 GB/s (จาก 150-300 MB/token @ 1.9 tok/s, calibrate เป็น disk-mmap tier ใน EXP-025) + ทำนาย K3 (EXP-029: 0.049 -> 1.18 tok/s ที่ hit >= 99%) + อัปเดต 17 -> 29 experiments. งานเดียวที่ออกสู่ภายนอกของโปรเจค — พร้อมโพสต์ (HN/blog/ไทย).",
+            "status": "active",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:02:26.823Z",
+            "updatedAt": "2026-08-13T01:02:26.823Z"
+          },
+          {
+            "id": "handoff-k3-vs-qwen-2026-08-13",
+            "kind": "handoff",
+            "title": "K3 vs Qwen benchmark เสร็จ (EXP-029) — Phase 4 metrics ครบทั้ง fits-RAM และ >RAM",
+            "content": "ปิดงาน K3 benchmark ด้วย Phase 4 metrics (ขยายจาก EXP-028). งานถัดไป: EXP-012 write-up (>RAM จริง) + Phase 5 paper outline (มี table เปรียบเทียบ Qwen vs K3 เต็มแล้ว). ข้อควรรู้: bench_k3_sim.py ใช้ run_simulation(collect_per_token=True) — option ใหม่ backward-compatible; per-token stall ใช้ calibrated disk-mmap BW (0.38) ไม่ใช่ NVMe seq (14) ของ timing.py.",
+            "status": "done",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:01:26.290Z",
+            "updatedAt": "2026-08-13T01:01:26.290Z"
+          },
+          {
+            "id": "decision-k3-buffer-size-upside",
+            "kind": "decision",
+            "title": "K3 (>RAM): buffer ขนาดพอดี = 24x throughput — 0.049 -> 1.18 tok/s (EXP-029)",
+            "content": "EXP-029 (K3 sim 15.6 GB/token, Phase 4 metrics ชุดเดียวกับ Qwen จริง): buffer 256MB -> 51% hit -> 0.049 tok/s (I/O-bound, stall 20s/token); buffer 4GB -> 99.9% hit -> 1.18 tok/s = compute ceiling (815ms/token, ตรง EXP-004). ตรง EXP-027 anchor (5% miss = 2.1s stall > compute 815ms) + EXP-026 insight (แม้ 4% miss ก็ครอง throughput). สรุป: ต้อง hit >= 99% ถึงจะถึง compute ceiling; upside จริงของโปรเจค = 24x จาก buffer ขนาดพอดี ไม่ใช่ predictor (ตรง ADR-003/EXP-002). Qwen พอดี RAM 22.7 tok/s vs K3 0.049 = ช้ากว่า 465x — ตัวเลขหลักฐานสำหรับ paper. ไฟล์: scripts/bench_k3_sim.py + EXP-029 + 8 hermetic tests",
+            "status": "active",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T01:01:22.153Z",
+            "updatedAt": "2026-08-13T01:01:22.153Z"
+          },
           {
             "id": "handoff-phase4-eval-2026-08-13",
             "kind": "handoff",
