@@ -56,7 +56,7 @@ class ServerConfig:
         default_factory=lambda: int(os.getenv("WS_BUFFER_MB", "64"))
     )
     default_n_ctx: int = field(
-        default_factory=lambda: int(os.getenv("WS_N_CTX", "2048"))
+        default_factory=lambda: int(os.getenv("WS_N_CTX", "32768"))
     )
     default_n_threads: int = field(
         default_factory=lambda: int(os.getenv("WS_N_THREADS", str(_default_n_threads())))

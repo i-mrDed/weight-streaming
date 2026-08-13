@@ -314,7 +314,7 @@ export async function loadFromDownload() {
   try {
     const c = await fetchConfig().catch(() => null)
     const buf = numVal(c?.config.default_buffer_mb?.value, 64)
-    const ctx = numVal(c?.config.default_n_ctx?.value, 2048)
+    const ctx = numVal(c?.config.default_n_ctx?.value, 32768)
     await loadModel({
       model_id: suggestModelId(task.filename),
       model_path: task.target_path,
