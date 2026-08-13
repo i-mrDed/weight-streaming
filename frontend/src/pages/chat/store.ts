@@ -92,7 +92,7 @@ export function setNotificationsEnabled(on: boolean) {
   }
 }
 
-export const DEFAULT_PARAMS: ChatParams = { temperature: 0.7, top_p: 0.95, max_tokens: 1024 }
+export const DEFAULT_PARAMS: ChatParams = { temperature: 0.7, top_p: 0.95, max_tokens: 4096 }
 
 export function readDefaults(): { params: ChatParams; systemPrompt: string; perConv: boolean } {
   try {

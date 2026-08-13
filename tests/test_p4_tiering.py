@@ -393,7 +393,7 @@ def test_default_pair_carries_exp022_recipe():
     assert tiering.default_config()["quality"]["n_ctx"] == 4096
     # EXP-023: per-tier output budgets — the fast tier is for quick answers
     # and must not burn the full 8192 on a degenerate repetition loop.
-    assert tiering.default_config()["fast"]["max_tokens"] == 2048
+    assert tiering.default_config()["fast"]["max_tokens"] == 4096
     assert tiering.default_config()["quality"]["max_tokens"] == 8192
 
 

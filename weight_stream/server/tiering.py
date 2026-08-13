@@ -79,10 +79,10 @@ DEFAULT_FAST = {
     # fall into a deterministic repetition loop on hard questions at
     # temperature 0 (EXP-023: "let me re-verify…" until the token cap —
     # repeat/presence/DRY penalties all verified-in-cmdline and none
-    # escape it); 2048 bounds the burn to ~30 s while leaving room for
-    # every normal answer. The client (⚡ Auto chat + the gate) clamps to
-    # this.
-    "max_tokens": 2048,
+    # escape it); 4096 bounds the burn to ~1 min while leaving room for
+    # long stories (was 2048 — too small: chat cut mid-story once
+    # prompt+history+answer exceeded it; 2026-08-13).
+    "max_tokens": 4096,
 }
 DEFAULT_QUALITY = {
     "model_id": "gemma-4-26b-qat-mtp",
