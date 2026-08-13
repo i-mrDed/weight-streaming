@@ -5,7 +5,8 @@
 
 ---
 
-## [Unreleased]
+## [0.15.0] - 2026-08-10 (updated 2026-08-13 — tag moved to current `main`; all
+[Unreleased] entries below folded in. This is the release that goes public.)
 
 ### fix: CI — tiering tests no longer depend on the dev machine's model files
 - **Hermetic defaults**: the shipped tier defaults (`~/models/Gemma4-12B-QAT/...`)
@@ -269,28 +270,6 @@
   body, auth on GET/POST, HTTP-error taxonomy with parsed `detail`, network
   wrapping) and `sseRequest()` (SSE auth header + `abort()`). Frontend suite
   now 20 tests (thinks 7 + api 13).
-
----
-
-## [0.15.0] - 2026-08-10
-
-> **Release prep:** wheel now ships the prebuilt console (`static/**` package-data —
-> previously `pip install` produced a server with no web UI). Version bumped 0.14.0 →
-> 0.15.0; 0.14.1 entries below folded in (never tagged). PyPI publish pending credentials.
-
-### 🔐 API auth (B1) + frontend tests (B2) + thinking-marker fix (B3)
-- **B1 `WS_API_TOKEN`** — when set, every `/v1/*` request must carry `Authorization: Bearer <token>` (constant-time compare); `/health` + console/static stay open. Console: Settings → new "API access token" card stores it in `localStorage` and the API client (`api.ts`) attaches the header to JSON + SSE calls automatically. Tests cover required/optional/off-by-default.
-- **B2 vitest** — first frontend unit-test runner (`frontend/src/pages/chat/thinks.test.ts`, 7 tests) wired into CI (`npm test` between typecheck and build).
-- **B3 thinking-marker fix** — ` thinking`/` response` are now recognized ONLY at line boundaries, so mid-sentence "thinking"/"response" in prose is never swallowed into a thinking block; XML `<think>` tags normalize only at line starts (a literal `<think>` inside prose stays text); block content is trimmed; streaming partial-marker tails (` thinki`, ` respons`) are held back (the old regex never matched them despite the docstring).
-- **mypy debt cleared** — the 16 pre-existing non-strict errors (hub.py `NoReturn`/callable arity, llama_server.py variable shadowing, api_server.py missing `Dict` import, mcp_host.py 3rd-party typing) are gone: `python -m mypy` is clean (50 files, 0 errors) for the first time since the baseline note.
-
-### 🔒 Security hardening (4-platform public review — OpenCode W1–W5, verified)
-- **W1 deadlock fix** — `ModelManager.load()` evicted the oldest model while holding `_dict_lock`, but `unload()` re-acquires the same `asyncio.Lock` (not reentrant) → server froze permanently at `max_loaded_models`. Eviction now runs outside the lock.
-- **W2 CORS hardening** — `allow_origins=["*"]` + `allow_credentials=True` let ANY website drive the local API (load/unload, delete model files, invoke MCP tools). Now loopback-only (`localhost`/`127.0.0.1`); extend with `WS_CORS_ORIGINS` (comma-separated).
-- **W3 MCP RCE** — `POST /v1/mcp/servers` accepted arbitrary `command`/`args` (e.g. `cmd.exe /c calc`) and spawned it. `command` must now be a bare allowlisted runner (`npx`, `npm`, `uvx`, `node`, `python`, `deno`, `bun*`, `claude`, `mcp` — extend with `WS_MCP_ALLOWED_COMMANDS`); SSE `url` must be http(s). Enforced at the API **and** the connect path (hand-edited config included).
-- **W4 mmap leak** — a GGUF metadata parse failure leaked the Step-1 mmap + fd (a >100 GB mapping per failed load). The exception path now closes both.
-- **W5 path traversal** — `assistant_id`/`issue_id` were joined straight into file paths; Windows `%5C` encoded backslashes escaped the store dir (read/write/delete `.json` outside). IDs now validate `^[A-Za-z0-9_.-]+$` at the store level.
-- **11 regression tests** (`tests/test_p4_security_hardening.py`) — every one fails against the pre-fix code (test-first).
 
 ---
 
