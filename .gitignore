@@ -119,3 +119,13 @@ scripts/.demo_frames/
 
 # downloaded llama-server binaries (setup_llama_server.py)
 .llama/
+# Internal team docs (archived locally; not for public repo)
+docs/internal/P*_BRIEF.md
+docs/internal/artifacts/
+docs/GO_PUBLIC_CHECKLIST.md
+docs/ARCHITECTURE_REVIEW.md
+docs/HANDOFF_STREAMING_RELIABILITY.md
+docs/PROMO_BACKLOG.md
+docs/CURATION_CHECKLIST.md
+docs/HERMETIC_AUDIT.md
+docs/DECISION-*.md
