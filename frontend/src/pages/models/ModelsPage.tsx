@@ -779,8 +779,15 @@ export function ModelsPage() {
   )
 }
 
-/** Reload uses the default context — the server does not expose the current
-    n_ctx (honest note shown in the confirm dialog). */
+/** Default context window for loading a model. Hardcoded 2048 was too
+ *  small for modern long-context models (Qwythos 1M, DeepSeek 1M) — long
+ *  stories/chat stopped mid-way once prompt+history exceeded it.
+ *  New heuristic (2026-08-13): 32768 when the machine has >= 32GB RAM
+ *  (typical for the models this project targets), else 8192. The user can
+ *  still override per-load; this is only the DEFAULT. */
 function loadCtxDefault(_m: ModelStatus): number {
-  return 2048
+  // navigator.deviceMemory is Chromium-only (GiB, integer); fallback 16
+  const nav = navigator as Navigator & { deviceMemory?: number }
+  const ramGB = nav.deviceMemory ?? 16
+  return ramGB >= 32 ? 32768 : 8192
 }
