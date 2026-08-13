@@ -1,9 +1,9 @@
 {
-  "rev": 42,
+  "rev": 45,
   "projects": {
     "weight-streaming": {
-      "rev": 42,
-      "updatedAt": "2026-08-12T17:40:42.985Z",
+      "rev": 45,
+      "updatedAt": "2026-08-13T00:32:15.043Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -579,10 +579,185 @@
               "label": "บันทึกครบ"
             }
           ]
+        },
+        "phase4-evaluation": {
+          "id": "phase4-evaluation",
+          "name": "Phase 4: define metrics + benchmark จริง (hit rate / latency / throughput)",
+          "description": "กำหนดนิยาม metrics (hit rate, latency distribution, throughput) + เกณฑ์ผ่าน แล้ว benchmark จริงบน Qwen1.5-MoE-A2.7B Q2_K (CPU pure) ผ่าน server :8765 — เทียบกับ physics model (EXP-025) และ buffer abstraction (EXP-026) — ปิด TASKS.md Phase 4 (4 งาน)",
+          "status": "approved",
+          "trigger": "TASKS.md Phase 4 — งานทั้งหมด: Define evaluation metrics + Benchmark: hit rate / latency distribution / throughput (ยังไม่เริ่ม) — โจทย์วัดผลหลักของโปรเจค",
+          "preconditions": [
+            "server :8765 รัน + telemetry generation.paging ship แล้ว (generation.paging ใน /v1/stats)",
+            "Qwen1.5-MoE-A2.7B_Q2_k.gguf (5.88 GB) มีในเครื่อง (research/models/) + โหลดได้ผ่าน /v1/models/load",
+            "EXP-025 calibrated BW: cpu-ram 19.18, disk-mmap 0.38 GB/s (simulator/physics.py)",
+            "EXP-026 buffer abstraction: BufferBackend/TelemetryBufferObserver ใช้แปลง telemetry เป็น buffer-equivalent stats ได้"
+          ],
+          "successOutcome": "มี metrics spec ชัดเจน (นิยาม + หน่วย + เกณฑ์ผ่าน) สำหรับ 3 มิติ และมีตัวเลข benchmark จริงบน Qwen (hit rate warm/cold, latency p50/p90/p99, throughput tok/s) ที่เทียบกับ physics prediction ได้ — พร้อม hermetic test ของ metric computation",
+          "acceptanceCriteria": [
+            "มี metrics spec: hit rate / latency / throughput — นิยาม + หน่วย + เกณฑ์ผ่าน (PASS threshold) ระบุชัดเจน บันทึกเป็นเอกสาร",
+            "benchmark จริงบน Qwen ≥3 runs warm (100 tokens) ได้ tok/s + per-token latency + paging telemetry (fault_mb_per_token)",
+            "hit rate คำนวณจาก telemetry จริง (soft/hard faults ต่อ token, cold vs warm) ไม่ใช่ตัวเลขสมมติ",
+            "latency distribution: มี percentiles p50/p90/p99 จาก per-token timing จริง",
+            "throughput เทียบ physics prediction (EXP-025 calibrated BW): error อยู่ใน tolerance ±15%",
+            "มี hermetic test สำหรับ metric computation (hit rate, percentiles, throughput)",
+            "บันทึก EXP-NNN + brain + TASKS.md Phase 4 (4 งาน)"
+          ],
+          "steps": [
+            {
+              "id": "start",
+              "kind": "start",
+              "title": "ตรวจบริบท",
+              "description": "ตรวจงาน TASKS.md Phase 4 ทั้ง 4 งาน, telemetry shape จริง (/v1/stats generation.paging), เครื่องมือ EXP-025/026/027 พร้อมใช้, และสถานะโมเดลบน server",
+              "position": {
+                "x": 0,
+                "y": 0
+              }
+            },
+            {
+              "id": "define",
+              "kind": "action",
+              "title": "กำหนด metrics spec",
+              "description": "กำหนดนิยาม metrics 3 ตัว: hit rate (fraction ของ tokens ที่ไม่ต้อง disk fault), latency distribution (per-token ms, percentiles p50/p90/p99), throughput (tok/s) — พร้อมหน่วย + เกณฑ์ผ่าน ลงในเอกสาร",
+              "position": {
+                "x": 280,
+                "y": 0
+              }
+            },
+            {
+              "id": "measure",
+              "kind": "action",
+              "title": "benchmark จริงบน Qwen",
+              "description": "โหลด Qwen1.5-MoE-A2.7B Q2_K (CPU pure, threads เริ่มต้น), warmup แล้ววัด ≥3 runs ครั้งละ 100 tokens เก็บ per-token latency + paging จาก /v1/stats",
+              "position": {
+                "x": 560,
+                "y": 0
+              }
+            },
+            {
+              "id": "compute",
+              "kind": "action",
+              "title": "คำนวณ metrics",
+              "description": "จาก telemetry จริง: คำนวณ hit rate (cold vs warm), latency percentiles (p50/p90/p99), throughput เฉลี่ย tok/s — ด้วยโค้ดที่ทดสอบได้",
+              "position": {
+                "x": 840,
+                "y": 0
+              }
+            },
+            {
+              "id": "compare",
+              "kind": "decision",
+              "title": "ตรวจเทียบกับ physics",
+              "description": "ตรวจว่า throughput ตรง physics prediction (EXP-025) ใน tolerance ±15% หรือไม่ และตัวเลข metric ครบทั้ง 3 ตัวจาก data จริงหรือไม่",
+              "position": {
+                "x": 1120,
+                "y": 0
+              }
+            },
+            {
+              "id": "test",
+              "kind": "action",
+              "title": "hermetic test",
+              "description": "เขียน hermetic test สำหรับ metric computation (hit rate จาก faults ที่รู้ค่า, percentiles, throughput จาก BW ที่รู้ค่า) แล้วรันให้ผ่าน",
+              "position": {
+                "x": 1400,
+                "y": 0
+              }
+            },
+            {
+              "id": "doc",
+              "kind": "action",
+              "title": "บันทึกผล",
+              "description": "บันทึก EXP-NNN (setup + results) + อัปเดต brain (decision + handoff) + TASKS.md Phase 4 ทั้ง 4 งาน",
+              "position": {
+                "x": 1680,
+                "y": 0
+              }
+            },
+            {
+              "id": "end",
+              "kind": "end",
+              "title": "จบ",
+              "description": "ได้ metrics spec + benchmark จริงครบ 3 มิติ มีหลักฐานครบถ้วน",
+              "position": {
+                "x": 1960,
+                "y": 0
+              }
+            }
+          ],
+          "transitions": [
+            {
+              "id": "t1",
+              "source": "start",
+              "target": "define",
+              "label": "บริบทครบ"
+            },
+            {
+              "id": "t2",
+              "source": "define",
+              "target": "measure",
+              "label": "spec ชัดเจน"
+            },
+            {
+              "id": "t3",
+              "source": "measure",
+              "target": "compute",
+              "label": "มี data ≥3 runs"
+            },
+            {
+              "id": "t4",
+              "source": "compute",
+              "target": "compare",
+              "label": "metrics คำนวณแล้ว"
+            },
+            {
+              "id": "t5",
+              "source": "compare",
+              "target": "test",
+              "label": "ตรง physics + ครบ 3 ตัว"
+            },
+            {
+              "id": "t6",
+              "source": "compare",
+              "target": "measure",
+              "label": "data ไม่พอ -> วัดเพิ่ม"
+            },
+            {
+              "id": "t7",
+              "source": "test",
+              "target": "doc",
+              "label": "tests ผ่าน"
+            },
+            {
+              "id": "t8",
+              "source": "doc",
+              "target": "end",
+              "label": "บันทึกครบ"
+            }
+          ]
         }
       },
       "brain": {
         "entries": [
+          {
+            "id": "handoff-phase4-eval-2026-08-13",
+            "kind": "handoff",
+            "title": "Phase 4 evaluation เสร็จ: metrics spec + benchmark จริงครบ 3 มิติ (TASKS.md Phase 4)",
+            "content": "ปิด TASKS.md Phase 4 ครบ 4 งาน (define metrics, hit rate, latency, throughput). งานถัดไปที่แนะนำ: Phase 5 paper outline (มี evaluation table เต็มแล้ว) หรือ EXP-012 write-up (>RAM จริง) หรืออ่าน PreScope/EAGLE-3 สำหรับ predictor. ข้อควรรู้: bench_phase4.py วัดกับ server ที่รันอยู่ (no clean-room); run แรกหลัง idle มี max latency สูงกว่า (222.8ms) — ใช้ warm runs เพื่อ headline.",
+            "status": "done",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T00:32:15.038Z",
+            "updatedAt": "2026-08-13T00:32:15.038Z"
+          },
+          {
+            "id": "decision-phase4-eval-metrics",
+            "kind": "decision",
+            "title": "Phase 4 evaluation: Qwen พอดี RAM = throughput ตรง physics (+0.02%), hit rate 100%, ไม่มี latency tail",
+            "content": "EXP-028 (Qwen1.5-MoE-A2.7B Q2_K CPU pure, server :8765): warm avg 22.73 tok/s vs physics prediction 22.73 (error +0.02%, PASS ±15%) — validation ที่ดีที่สุดของ EXP-025 calibration. Hit rate warm 1.000 (resident ครบ RAM, disk demand 0), latency p50 41.3 / p90 48.6 / p99 69.6 ms (p99 ~1.7x p50, ไม่มี long-tail stall). ตรง ADR-003 + EXP-027: โมเดลพอดี RAM = compute-bound 100%, ปรับ buffer ไม่ได้กำไร; จุดขายของโปรเจคคือโจทย์ >RAM (K3: 5% miss = stall 2056ms > compute 774ms). Metrics spec 3 ตัว (hit rate/latency/throughput) เป็น pure functions ใน weight_stream/eval/metrics.py + 16 hermetic tests. ไฟล์: scripts/bench_phase4.py + EXP-028",
+            "status": "active",
+            "author": "freebuff-agent",
+            "createdAt": "2026-08-13T00:32:10.909Z",
+            "updatedAt": "2026-08-13T00:32:10.909Z"
+          },
           {
             "id": "handoff-phase3b-io-ratio-2026-08-13",
             "kind": "handoff",

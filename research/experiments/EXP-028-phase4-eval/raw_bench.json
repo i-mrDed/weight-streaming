@@ -1,0 +1,69 @@
+{
+  "model": "Qwen1.5-MoE-A2.7B_Q2_k",
+  "runs": [
+    {
+      "tok_s": 22.96374673732024,
+      "predicted_tok_s": 22.73,
+      "throughput_error": 0.010283622407401612,
+      "throughput_match": true,
+      "hit_rate": 1.0,
+      "latency": {
+        "p50": 40.63560000213329,
+        "p90": 45.851299990317784,
+        "p99": 69.63559999712743,
+        "mean": 43.43703465356427,
+        "max": 222.77340000437107
+      },
+      "run": 1,
+      "n_tokens": 101,
+      "faults_per_token": 120.0,
+      "fault_mb_per_token": 0.491
+    },
+    {
+      "tok_s": 23.047004128598456,
+      "predicted_tok_s": 22.73,
+      "throughput_error": 0.013946508077362748,
+      "throughput_match": true,
+      "hit_rate": 1.0,
+      "latency": {
+        "p50": 41.589500004192814,
+        "p90": 52.04049999883864,
+        "p99": 60.9342999960063,
+        "mean": 43.029641584172786,
+        "max": 62.23209999734536
+      },
+      "run": 2,
+      "n_tokens": 101,
+      "faults_per_token": 132.7,
+      "fault_mb_per_token": 0.543
+    },
+    {
+      "tok_s": 22.42143189392834,
+      "predicted_tok_s": 22.73,
+      "throughput_error": -0.013575367623038317,
+      "throughput_match": true,
+      "hit_rate": 1.0,
+      "latency": {
+        "p50": 40.9912000031909,
+        "p90": 47.8648999996949,
+        "p99": 122.60439999226946,
+        "mean": 44.1946819444436,
+        "max": 122.60439999226946
+      },
+      "run": 3,
+      "n_tokens": 72,
+      "faults_per_token": 126.6,
+      "fault_mb_per_token": 0.518
+    }
+  ],
+  "summary": {
+    "n_runs": 3,
+    "n_warm": 2,
+    "avg_tok_s_warm": 22.734218011263398,
+    "predicted_tok_s": 22.73,
+    "throughput_error_warm": 0.00018557022716221553,
+    "throughput_match": true,
+    "avg_hit_rate_warm": 1.0,
+    "avg_latency_p50_warm": 41.290350003691856
+  }
+}

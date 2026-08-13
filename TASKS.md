@@ -156,10 +156,10 @@
 
 | สถานะ | Task | Priority |
 |-------|------|---------|
-| ⬜ | Define evaluation metrics | 🟡 |
-| ⬜ | Benchmark: hit rate | 🟡 |
-| ⬜ | Benchmark: latency distribution | 🟡 |
-| ⬜ | Benchmark: throughput | 🟡 |
+| ✅ | Define evaluation metrics | 🟡 | EXP-028: `weight_stream/eval/metrics.py` — hit rate (1 − disk_mb/bytes_per_token), latency p50/p90/p99 (nearest-rank จาก SSE per-token timing), throughput (tok/s vs physics prediction, tol ±15%) — 16 hermetic tests |
+| ✅ | Benchmark: hit rate | 🟡 | EXP-028: Qwen จริง warm hit rate **1.000** (resident ครบ RAM, disk demand = 0) — cold ≈ 79% (EXP-026 spike) |
+| ✅ | Benchmark: latency distribution | 🟡 | EXP-028: Qwen จริง p50 41.3 / p90 48.6 / p99 69.6 ms (p99 ≈ 1.7×p50, ไม่มี long-tail stall warm) |
+| ✅ | Benchmark: throughput | 🟡 | EXP-028: warm avg **22.73 tok/s vs physics 22.73 → +0.02%** (PASS ±15%) — validation ที่ดีที่สุดของ EXP-025 calibration |
 
 ---
 
