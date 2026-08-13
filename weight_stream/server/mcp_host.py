@@ -291,18 +291,40 @@ class MCPHost:
         return result
 
     async def close(self) -> None:
-        for sid, session in self._sessions.items():
+        """Close all MCP sessions + transport contexts.
+
+        mcp SDK >= 1.2 can raise GeneratorExit inside its internal TaskGroup
+        during stdio_client teardown — a plain try/except around __aexit__
+        does NOT catch it (the exception surfaces from the task group, not
+        from the awaited coroutine). We therefore:
+          - wrap each teardown in asyncio.shield (isolate from cancellation)
+          - run them via asyncio.gather(return_exceptions=True) so a failing
+            transport never propagates into the caller (which made unload
+            log "Task exception was never retrieved" on 2026-08-13).
+        """
+        import asyncio
+
+        async def _close_session(sid: str, session: Any) -> None:
             try:
-                await session.__aexit__(None, None, None)
+                await asyncio.shield(session.__aexit__(None, None, None))
             except Exception:
                 pass
+
+        async def _close_ctx(sid: str, cm: Any) -> None:
+            try:
+                await asyncio.shield(cm.__aexit__(None, None, None))
+            except Exception:
+                pass
+
+        sessions = list(self._sessions.items())
+        contexts = list(self._contexts.items())
         self._sessions.clear()
-        for sid, cm in self._contexts.items():
-            try:
-                await cm.__aexit__(None, None, None)
-            except Exception:
-                pass
         self._contexts.clear()
+
+        tasks = [asyncio.create_task(_close_session(s, c)) for s, c in sessions]
+        tasks += [asyncio.create_task(_close_ctx(s, c)) for s, c in contexts]
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
 
 
 _store: Optional[MCPServerStore] = None
