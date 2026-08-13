@@ -119,3 +119,5 @@ scripts/.demo_frames/
 
 # ส่วนตัว — รีวิว/บันทึก dev (ไม่ push)
 บันทึกรีวิวโปรเจค/
+# downloaded llama-server binaries (setup_llama_server.py)
+.llama/
