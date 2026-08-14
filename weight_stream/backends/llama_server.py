@@ -342,8 +342,8 @@ class LlamaServerBackend(WeightStreamBackend):
         port: Optional[int] = None,  # explicit port wins; else env/WS_LLAMA_BACKEND_PORT/8805
         kv_cache_type: Optional[str] = None,
         extra_args: Optional[str] = None,
-        **kwargs,
-    ):
+        **kwargs: Any,
+    ) -> None:
         self._model_path = model_path
         self._n_ctx = n_ctx
         self._n_threads = n_threads
@@ -361,7 +361,7 @@ class LlamaServerBackend(WeightStreamBackend):
         self._server_binary = server_binary or _find_llama_server()
         self._host = host
         self._port = port if port is not None else _backend_port()
-        self._proc: Optional[subprocess.Popen] = None
+        self._proc: Optional[subprocess.Popen[Any]] = None
         # L1/A4 (router-aware): routing history captured from the patched
         # llama-server stderr (WS_EXPERT lines, opt-in via WS_EXPERT_LOG=1).
         # Fields are written by _stderr_reader thread, read via routing().
@@ -414,7 +414,7 @@ class LlamaServerBackend(WeightStreamBackend):
         return self._ready and self._proc is not None and self._proc.poll() is None
 
     # ── Lifecycle ───────────────────────────────────────────────────
-    def start(self):
+    def start(self) -> None:
         """Spawn llama-server subprocess (idempotent)."""
         if self._started:
             return
@@ -501,7 +501,8 @@ class LlamaServerBackend(WeightStreamBackend):
         # Register the child as OURS before anything else can look at the
         # port: the stale-owner sweep on a sibling backend must refuse to
         # kill it (shared fixed port, max_loaded_models > 1).
-        _OWNED_PIDS.add(getattr(self._proc, "pid", None))
+        assert self._proc is not None  # spawned above
+        _OWNED_PIDS.add(self._proc.pid)
         # Subprocess restarted → any cached /props (VRAM, layers) may belong
         # to a previous process/model. Drop it; the next get_stats() re-reads.
         self._gpu_cache = None
@@ -551,6 +552,10 @@ class LlamaServerBackend(WeightStreamBackend):
         b9967 & older). Newer builds renamed it to --reasoning-format.
         Result is cached; probes `--help` once."""
         if self._reasoning_flag is None:
+            if not self._server_binary:
+                # no binary → nothing to probe; default to the old form
+                self._reasoning_flag = True
+                return True
             try:
                 r = subprocess.run(
                     [self._server_binary, "--help"],
@@ -577,7 +582,7 @@ class LlamaServerBackend(WeightStreamBackend):
         with self._routing_lock:
             return list(reversed(self._routing_history))
 
-    def routing_stats(self) -> dict:
+    def routing_stats(self) -> Dict[str, Any]:
         with self._routing_lock:
             n = len(self._routing_history)
             flat = [e for token in self._routing_history for e in token]
@@ -613,7 +618,7 @@ class LlamaServerBackend(WeightStreamBackend):
             # reader dies with the pipe on close(); history stays valid
             pass
 
-    def _wait_ready(self, timeout: float = 60.0):
+    def _wait_ready(self, timeout: float = 60.0) -> None:
         """Poll /health until the server is up.
 
         Port-collision guard (EXP-007): llama-server binds a FIXED default
@@ -701,7 +706,8 @@ class LlamaServerBackend(WeightStreamBackend):
         """GET /props → dict; None on any failure (never raises)."""
         try:
             with urllib.request.urlopen(f"{self._base_url}/props", timeout=3) as r:
-                return json.loads(r.read().decode("utf-8", errors="replace"))
+                data = json.loads(r.read().decode("utf-8", errors="replace"))
+                return data if isinstance(data, dict) else None
         except Exception:
             return None
 
@@ -787,7 +793,7 @@ class LlamaServerBackend(WeightStreamBackend):
 
     # ── Public API (matches WeightStreamBackend) ────────────────────
     @staticmethod
-    def _inject_current_date(messages: List[dict]) -> List[dict]:
+    def _inject_current_date(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """Inject the current date into the system message.
 
         Models don't know today's date — without it they hallucinate
@@ -812,7 +818,7 @@ class LlamaServerBackend(WeightStreamBackend):
         max_tokens: int = 128,
         temperature: float = 0.7,
         top_p: float = 0.9,
-        **kwargs,
+        **kwargs: Any,
     ) -> str:
         return "".join(self.stream_chat(
             [{"role": "user", "content": prompt}],
@@ -824,15 +830,15 @@ class LlamaServerBackend(WeightStreamBackend):
 
     def stream_chat(
         self,
-        messages: List[dict],
+        messages: List[Dict[str, Any]],
         max_tokens: int = 128,
         temperature: float = 0.7,
         top_p: float = 0.9,
         reasoning_mode: str = "auto",
-        tools: Optional[List[dict]] = None,
+        tools: Optional[List[Dict[str, Any]]] = None,
         tool_choice: Optional[Any] = None,
-        chat_template_kwargs: Optional[dict] = None,
-        **kwargs,
+        chat_template_kwargs: Optional[Dict[str, Any]] = None,
+        **kwargs: Any,
     ) -> Iterator[str]:
         """Stream chat via llama-server's OpenAI-compatible API.
 
@@ -879,7 +885,7 @@ class LlamaServerBackend(WeightStreamBackend):
             payload["chat_template_kwargs"] = chat_template_kwargs
 
         # Reset accumulated tool_calls from any previous generation.
-        self._tool_calls: List[dict] = []
+        self._tool_calls: List[Dict[str, Any]] = []
 
         start_time = time.time()
         token_count = 0
@@ -939,7 +945,7 @@ class LlamaServerBackend(WeightStreamBackend):
         max_tokens: int = 128,
         temperature: float = 0.7,
         top_p: float = 0.9,
-        **kwargs,
+        **kwargs: Any,
     ) -> Iterator[str]:
         return self.stream_chat(
             [{"role": "user", "content": prompt}],
@@ -949,7 +955,7 @@ class LlamaServerBackend(WeightStreamBackend):
             **kwargs,
         )
 
-    def close(self):
+    def close(self) -> None:
         """Stop the llama-server subprocess. Safe to call multiple times."""
         if self._proc is not None:
             # getattr: tests and edge cases may hand close() a proc stub
@@ -1024,7 +1030,7 @@ class LlamaServerBackend(WeightStreamBackend):
         self._gpu_cache_ts = now
         return self._gpu_cache
 
-    def get_capabilities(self) -> dict:
+    def get_capabilities(self) -> Dict[str, Any]:
         from ..server.capabilities import detect_capabilities
         arch = self._get_arch()
         name = str(self._metadata.get("general.name", ""))
@@ -1036,7 +1042,7 @@ class LlamaServerBackend(WeightStreamBackend):
         return str(self._metadata.get("general.architecture", "unknown"))
 
     @staticmethod
-    def _summarize_messages(messages: List[dict]) -> str:
+    def _summarize_messages(messages: List[Dict[str, Any]]) -> str:
         last = ""
         for msg in messages:
             if msg.get("role") == "user" and msg.get("content"):
@@ -1046,7 +1052,7 @@ class LlamaServerBackend(WeightStreamBackend):
         return str(last)[:50] + ("..." if len(str(last)) > 50 else "")
 
     # ── Tool calling (P7.3) ─────────────────────────────────────────
-    def _accumulate_tool_calls(self, tool_calls: List[dict]) -> None:
+    def _accumulate_tool_calls(self, tool_calls: List[Dict[str, Any]]) -> None:
         """Accumulate streaming tool-call deltas into complete calls.
 
         OpenAI streaming sends tool_calls as incremental fragments:
@@ -1071,6 +1077,6 @@ class LlamaServerBackend(WeightStreamBackend):
                 target["function"]["arguments"] += fn["arguments"]
 
     @property
-    def tool_calls(self) -> List[dict]:
+    def tool_calls(self) -> List[Dict[str, Any]]:
         """Completed tool calls from the last generation (P7.3)."""
         return list(getattr(self, "_tool_calls", []))
