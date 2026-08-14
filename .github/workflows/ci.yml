@@ -83,3 +83,17 @@ jobs:
         run: npm test
       - name: Build
         run: npm run build
+      - name: Bundle freshness guard (committed console bundle must match source)
+        # Fail when rebuilding the frontend changes the committed console
+        # bundle (weight_stream/server/static/console). A stale bundle means
+        # the served console is missing features that exist in source — this
+        # happened on 2026-08-13: auto-compact + n_ctx/max_tokens landed in
+        # source but the committed bundle predated them (a049cd0), so anyone
+        # cloning the repo got a console without those features.
+        run: |
+          if ! git diff --exit-code -- ../weight_stream/server/static/console/ >/dev/null; then
+            echo "::error::Committed console bundle is stale — rebuild it and commit: cd frontend && npm run build"
+            git diff --stat -- ../weight_stream/server/static/console/
+            exit 1
+          fi
+          echo "console bundle is in sync with source"
