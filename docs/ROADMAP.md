@@ -17,7 +17,7 @@
 |---|---------|---------|-------|
 | 1 | ~~Expert popularity census → auto `n-cpu-moe` tiering~~ | ❌ ปิดแล้ว (EXP-016): ไม่มี hot layer — traffic flat ข้ามทุก layer, กำไรขึ้นกับ bytes บน GPU ล้วนๆ → `--n-cpu-moe 0` optimal อยู่แล้ว | ❌ No additional win |
 | 2 | ~~CPU lane ตาม host-cache residency~~ | ❌ ปิดแล้ว (EXP-017): CPU bandwidth-bound อยู่แล้ว (39–51% util ตอน experts อยู่ CPU) — ย้ายงานมา CPU เพิ่ม = แย่ลง | ❌ Dead end |
-| 3 | วัด IQ2_XXS (`--variant iq2m`) บน DS V4 Flash | bytes/token ↓ → resident ↑ → tok/s ↑ | 🟢 script พร้อมแล้ว |
+| 3 | วัด IQ2_XXS (`--variant iq2m`) บน DS V4 Flash | bytes/token ↓ → resident ↑ → tok/s ↑ | ⏸ เลื่อนก่อน — กำไร ~8% ไม่คุ้ม (ตัดสินใจแล้ว ดู [MODEL_INVENTORY](MODEL_INVENTORY.md)) |
 | 4 | ~~Speculative decoding บน GPU backend~~ | ❌ ปิดแล้ว: EXP-015 MTP head ช้าลง 11–18% (ไฟล์ MTP ใหญ่เกิน VRAM 12 GB + draft step รัน expert เต็ม) | ❌ Dead end |
 | 5 | วินัย benchmark (census + warm-run + value-aware flags) | ตัวเลขเชื่อถือได้ทุกตัว | 🔄 ทำอยู่แล้ว |
 
