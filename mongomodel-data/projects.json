@@ -1,9 +1,9 @@
 {
-  "rev": 61,
+  "rev": 75,
   "projects": {
     "weight-streaming": {
-      "rev": 61,
-      "updatedAt": "2026-08-13T02:17:21.273932Z",
+      "rev": 75,
+      "updatedAt": "2026-08-13T13:38:35.140Z",
       "tabs": [
         {
           "id": "13c76ddc",
@@ -172,8 +172,8 @@
               "title": "รวบรวมข้อมูลวัดจริง",
               "description": "รวบรวมข้อมูลวัดจริงจาก EXP-004/011/012: Qwen1.5-MoE-A2.7B Q2_K บน CPU วัด 22.73 tok/s, บน GPU 47-77 tok/s, DSv4 Flash 104GB แบบ disk-bound 1.5-1.9 tok/s, และ K3 50B active ที่ 25 GB/token",
               "position": {
-                "x": 0,
-                "y": 0
+                "x": 368,
+                "y": 52
               }
             },
             {
@@ -182,8 +182,8 @@
               "title": "คำนวณ physics model",
               "description": "bytes/token = active_params × bits_per_weight ÷ 8; time_per_token = bytes/token ÷ effective_BW; fit effective_BW จากข้อมูลจริง",
               "position": {
-                "x": 220,
-                "y": 120
+                "x": 410.66666666666663,
+                "y": 284
               }
             },
             {
@@ -192,8 +192,8 @@
               "title": "รัน simulator ปัจจุบัน",
               "description": "python run.py — บันทึก tok/s, stall, overlap จาก TimingConfig เดิม (hardcoded 815ms)",
               "position": {
-                "x": 440,
-                "y": 120
+                "x": 94.66666666666663,
+                "y": 284
               }
             },
             {
@@ -202,8 +202,8 @@
               "title": "เปรียบเทียบ 3 ทาง",
               "description": "physics vs simulator vs measured — หา discrepancy (เช่น scaling เชิงเส้น vs BW-bound)",
               "position": {
-                "x": 660,
-                "y": 120
+                "x": 368,
+                "y": 516
               }
             },
             {
@@ -212,8 +212,8 @@
               "title": "ปรับ calibration",
               "description": "TimingConfig derive จาก physics — effective_BW = bytes/token ÷ measured_time ต่อโมเดล; ใช้ mean/median เป็นค่า default",
               "position": {
-                "x": 880,
-                "y": 120
+                "x": 52,
+                "y": 748
               }
             },
             {
@@ -222,8 +222,8 @@
               "title": "Validate กับข้อมูลจริง",
               "description": "predicted tok/s vs measured ทุกโมเดล — ต้องใน tolerance (Qwen CPU ±15%, DSv4 ±25%); เขียน hermetic test",
               "position": {
-                "x": 1100,
-                "y": 120
+                "x": 52,
+                "y": 516
               }
             },
             {
@@ -232,8 +232,8 @@
               "title": "บันทึกผล",
               "description": "decision/handoff ใน shared brain + อัปเดต TASKS.md #96 + EXP-NNN docs",
               "position": {
-                "x": 1320,
-                "y": 120
+                "x": 368,
+                "y": 748
               }
             }
           ],
@@ -321,8 +321,8 @@
               "title": "ตรวจบริบทที่มีอยู่",
               "description": "ARCHITECTURE.md §0 open gap (total_accesses=0), simulator/buffer.py เดิม, telemetry generation.paging ที่ ship แล้ว, EXP-025 calibrated BW",
               "position": {
-                "x": 0,
-                "y": 0
+                "x": 158.66666666666669,
+                "y": 52
               }
             },
             {
@@ -331,8 +331,8 @@
               "title": "ออกแบบ abstraction interface",
               "description": "protocol กลาง: on_access(shard, bytes) -> hit/miss; stats() -> BufferStats (hit_rate, stall, evictions); predicted_tok_per_sec() ใช้ calibrated BW",
               "position": {
-                "x": 240,
-                "y": 100
+                "x": 158.66666666666669,
+                "y": 284
               }
             },
             {
@@ -341,8 +341,8 @@
               "title": "Implement simulator-backed",
               "description": "adapter รอบ StreamingBuffer เดิม (LRU/LFU/priority) ให้ implement interface เดียวกัน — ไม่แตะพฤติกรรมเดิม",
               "position": {
-                "x": 480,
-                "y": 100
+                "x": 116,
+                "y": 516
               }
             },
             {
@@ -351,8 +351,8 @@
               "title": "Implement telemetry observer",
               "description": "แปลง generation.paging + spike data เป็น buffer-equivalent: miss bytes/token -> disk-mmap stall (0.38 GB/s), hit path -> cpu-ram",
               "position": {
-                "x": 720,
-                "y": 100
+                "x": 368,
+                "y": 980
               }
             },
             {
@@ -361,8 +361,8 @@
               "title": "ทดสอบสองทางเทียบกัน",
               "description": "simulator event -> stats ตรงเดิม? telemetry -> stats สอดคล้อง spike จริง? hermetic tests ผ่าน?",
               "position": {
-                "x": 960,
-                "y": 100
+                "x": 116,
+                "y": 748
               }
             },
             {
@@ -371,8 +371,8 @@
               "title": "บันทึก + ปิด open gap",
               "description": "brain decision/handoff + TASKS.md #145 -> ดำเนินการ + ARCHITECTURE.md §0 note ปิด gap + EXP-NNN docs",
               "position": {
-                "x": 1200,
-                "y": 100
+                "x": 52,
+                "y": 992
               }
             },
             {
@@ -381,8 +381,8 @@
               "title": "จบงาน",
               "description": "prototype พร้อมใช้ + acceptance criteria ครบ",
               "position": {
-                "x": 1440,
-                "y": 100
+                "x": 52,
+                "y": 1236
               }
             }
           ],
@@ -470,8 +470,8 @@
               "title": "ตรวจบริบท",
               "description": "ตรวจงาน TASKS.md #151, เอกสาร EXP-004 (คาดการณ์ว่า K3 จะ I/O-bound), เครื่องมือจาก EXP-025/026 พร้อมใช้แล้ว และไฟล์โมเดล Qwen มีอยู่ในเครื่อง",
               "position": {
-                "x": 0,
-                "y": 0
+                "x": 52,
+                "y": 52
               }
             },
             {
@@ -480,8 +480,8 @@
               "title": "โหลด Qwen CPU pure",
               "description": "โหลดโมเดล Qwen1.5-MoE-A2.7B Q2_K แบบใช้ CPU ล้วน (ngl=0, ใช้จำนวน threads เริ่มต้น) ผ่าน API /v1/models/load แทนโมเดล Qwythos ที่โหลดค้างอยู่",
               "position": {
-                "x": 240,
-                "y": 100
+                "x": 52,
+                "y": 284
               }
             },
             {
@@ -490,8 +490,8 @@
               "title": "วัดจริง warm runs",
               "description": "อุ่นเครื่องก่อนวัด แล้วรันวัดจริงอย่างน้อย 3 รอบ (ครั้งละ 100 tokens) เก็บค่า tok/s และข้อมูล paging จาก /v1/stats เช่น faults ต่อ token และปริมาณข้อมูลที่อ่านจากดิสก์ต่อ token",
               "position": {
-                "x": 480,
-                "y": 100
+                "x": 52,
+                "y": 516
               }
             },
             {
@@ -500,8 +500,8 @@
               "title": "แยก compute vs I/O",
               "description": "แยกเวลาต่อ token ออกเป็นสองส่วน: ส่วนของการคำนวณ (compute) ใช้สูตรจาก EXP-025 (bytes คูณ hit rate หาร bandwidth ของแรม) และส่วนของการรอ I/O (stall) ใช้สูตรจาก EXP-026 (bytes ที่พลาด หาร bandwidth ของดิสก์) แล้วคำนวณอัตราส่วน",
               "position": {
-                "x": 720,
-                "y": 100
+                "x": 94.66666666666666,
+                "y": 748
               }
             },
             {
@@ -510,8 +510,8 @@
               "title": "ตรวจข้อสรุป",
               "description": "ตรวจสอบข้อสรุปว่าโมเดลที่พอดีกับแรมเป็นแบบที่ถูกจำกัดด้วยการคำนวณ (compute-bound) จริงหรือไม่ ตัวเลขสอดคล้องกับ EXP-025 และ EXP-004 หรือไม่ และเทสต์อัตโนมัติผ่านครบไหม",
               "position": {
-                "x": 960,
-                "y": 100
+                "x": 52,
+                "y": 980
               }
             },
             {
@@ -520,8 +520,8 @@
               "title": "บันทึกผล",
               "description": "บันทึกผลลงเอกสารการทดลอง EXP-NNN พร้อมอัปเดตสมองกลาง (brain) และรายการงาน TASKS.md ข้อ 151",
               "position": {
-                "x": 1200,
-                "y": 100
+                "x": 52,
+                "y": 1212
               }
             },
             {
@@ -530,8 +530,8 @@
               "title": "จบ",
               "description": "ได้อัตราส่วนที่ชัดเจนและมีหลักฐานครบถ้วน",
               "position": {
-                "x": 1440,
-                "y": 100
+                "x": 52,
+                "y": 1444
               }
             }
           ],
@@ -844,6 +844,66 @@
       },
       "brain": {
         "entries": [
+          {
+            "id": "decision-l1-closed-all-paths",
+            "kind": "decision",
+            "title": "L1 (prefetch/streaming engine) ปิดทางการ — 3 ทางพิสูจน์แล้วไม่คุ้ม (EXP 016/031/031b)",
+            "content": "สรุป L1 ทั้งหมด (2026-08-13) — ปิดด้วยหลักฐานจริง:\n- ทาง ก (layer-level prefetch): ❌ EXP-016 พิสูจน์ 'NO hot layer — expert traffic flat across layers' (ทุก layer ~23 tok/s เท่ากัน) → ไม่มี layer ที่ควร prefetch\n- ทาง ข (router-aware): ❌ EXP-031/031b — per-token predict 7-13% useful (routing เปลี่ยนทุก token) + router-lookahead impossible (llama.cpp compute graph พร้อมกัน)\n- ทาง ค (CPU-path + buffer tuning): ✅ ทางเดียวที่สมเหตุสมผล — EXP-012 warm 0.55 MB/tok ดีอยู่แล้ว + EXP-029 buffer size คือตัวแปรจริง (K3: buffer 4GB → 1.18 tok/s)\nข้อสรุป: streaming engine แบบ 'เลือกที่จะ prefetch' ไม่คุ้มบนสถาปัตยกรรมนี้ — สิ่งที่ได้จริงคือ routing telemetry API (PR #6) ใช้ต่อยอด debug/paper ได้",
+            "author": "opencode (L1 closure)",
+            "status": "active",
+            "createdAt": "2026-08-13T13:38:35.135Z",
+            "updatedAt": "2026-08-13T13:38:35.135Z"
+          },
+          {
+            "id": "bug-gemma4-qat-channel-thought",
+            "kind": "note",
+            "title": "BUG: Gemma4 QAT thought loop (llama.cpp ไม่รู้จัก <|channel>)",
+            "content": "2026-08-13: โหลด Gemma4-12B-QAT บนระบบ → output เป็น <|channel>thought ... ไม่จบ จนครบ max_tokens (ไม่มีคำตอบจริง) — สาเหตุ: โมเดล QAT variant ถูกเทรนให้คิดก่อนตอบ ใช้ <|channel>/<|turn> tags แต่ llama-server build 8196 รู้จักแค่ <think>/deepseek format → ไม่รู้ end-of-thought → generate ค้างใน thought loop\nผล: Gemma4 QAT ใช้กับระบบไม่ได้จนกว่า llama.cpp รองรับ <|channel> (หรือต้อง patch template)",
+            "author": "opencode (model testing)",
+            "status": "active",
+            "createdAt": "2026-08-13T13:28:48.661Z",
+            "updatedAt": "2026-08-13T13:28:48.661Z"
+          },
+          {
+            "id": "note-model-guide-20260813",
+            "kind": "note",
+            "title": "คู่มือโมเดลที่ใช้ได้จริงบนระบบ (ทดสอบ 2026-08-13)",
+            "content": "ผลทดสอบแชทจริง (server 8777, n_ctx 32768 หลัง PR #10):\n- Qwythos-9B-Claude-Mythos-5-1M-Q6_K: ✅ ใช้ได้หลัก (33-35 tok/s, เล่านิทาน 6 ตอนจบ — แต่คิด (<think>) ก่อนตอบเสมอ ต้องให้ max_tokens เผื่อ)\n- DeepSeek-V4-Flash UD-IQ3_XXS 97GB: ✅ ใช้ได้ (1.5-1.9 tok/s — EXP-012)\n- Qwen3-0.6B-Q8_0: ยังไม่ทดสอบ (คาดใช้ได้ — Q8 คุณภาพดี)\n- ❌ Qwen1.5-MoE-A2.7B_Q2_k: ตอบจีน/มั่ว (2-bit quant เสียหาย — ควรใช้ Q4_K+)\n- ❌ Gemma4-12B/26B-QAT: thought loop ไม่มีคำตอบ — llama-server 8196 ยังไม่รู้จัก <|channel> end-tag",
+            "author": "opencode (model testing)",
+            "status": "active",
+            "createdAt": "2026-08-13T13:28:48.595Z",
+            "updatedAt": "2026-08-13T13:28:48.595Z"
+          },
+          {
+            "id": "exp031b-router-lookahead-impossible",
+            "kind": "decision",
+            "title": "EXP-031b: router-lookahead = impossible ใน llama.cpp (A5b probs)",
+            "content": "ต่อจาก EXP-031 (per-token predict negative):\n- A5b: dump probs จริง (WS_PROBS — softmax sum 1.0 ยืนยันถูกต้อง) — top-4 โดย probs = selection แน่นอน (100% สำหรับ token นั้น) แต่ overlap ติดกัน 0.25/4 → predict T+1 ไม่ได้เหมือนเดิม\n- สัญญาณบวก: probs เข้มข้น (avg top-1 = 0.174 vs uniform 0.0167; ~2.7 experts > 5%)\n- แต่ router-lookahead (WASTE-style: ดู probs ของ T+1 ก่อน decode) = เป็นไปไม่ได้ใน llama.cpp: build_graph สร้าง graph ทั้งหมด → ggml_backend_graph_compute คำนวณพร้อมกันทั้ง graph — ไม่มี window ที่ gating คำนวณก่อน decode\n- สรุป: L1 ทาง A ปิดด้วยหลักฐาน — ทางเหลือ: (ก) layer-level prefetch (fused tensor, EXP-016) หรือ (ค) ยอมรับ CPU-path เดิม (warm 0.55 MB/tok) — fork architecture เพื่อ split compute = ใหญ่เกินตอนนี้",
+            "author": "opencode (L1/A5b)",
+            "status": "active",
+            "createdAt": "2026-08-13T05:43:49.585Z",
+            "updatedAt": "2026-08-13T05:43:49.585Z"
+          },
+          {
+            "id": "note-l1-a-series-status",
+            "kind": "note",
+            "title": "L1 ทาง A (router-aware) สถานะ: A1-A5 เสร็จ, verdict = negative",
+            "content": "2026-08-13: A1-A5 เสร็จครบ (branch feat/setup-l1 → PR #6 merged)\n- ได้: routing capture API (enable_routing/routing/routing_stats) + flag compat (--reasoning vs --reasoning-format)\n- verdict: per-token expert prediction ไม่เวิร์ก (ข้อมูลจริง) → เปิดทางเลือกใหม่:\n  (ก) prefetch ระดับ layer (fused tensor 726MB — ไม่ต้อง predict)\n  (ข) router-aware จริง (ดู logits ก่อน top-k — patch ลึกกว่า)\n  (ค) ยอมรับ CPU-path prefetch เดิม (warm 0.55 MB/tok)\n- งานค้าง: patched llama.cpp อยู่เครื่อง dev (<local>/llama.cpp/build-ws-static) ยังไม่ commit",
+            "author": "opencode (L1/A-series)",
+            "status": "active",
+            "createdAt": "2026-08-13T05:25:31.077Z",
+            "updatedAt": "2026-08-13T05:25:31.077Z"
+          },
+          {
+            "id": "exp031-l1-router-predict-negative",
+            "kind": "decision",
+            "title": "EXP-031: per-token expert prediction = negative (Qwen1.5-MoE)",
+            "content": "A-series (L1 ทาง A) พิสูจน์ด้วยข้อมูลจริง (4096 tokens, Qwen1.5-MoE-A2.7B):\n- A1-A3: patch llama.cpp kernel (ggml_compute_forward_argsort_f32) dump expert ids — เห็น routing จริงต่อ token (ปิด total_accesses=0 gap สำหรับ backend)\n- A4: backend จับ WS_EXPERT stderr → routing history + API (PR #6 merged, CI 5/5)\n- A5: predictor ทุกแบบล้ม: global-top4 9.1%, window-1 6.9%, frequency 8.7%, recent-8 13.1% useful (random = 6.7%, เป้า >= 50%) — routing เปลี่ยนทุก token 97.7% ไม่มี temporal structure\n- บทสรุป: per-expert predict = dead end สำหรับ MoE ทั่วไป (ต่างจาก WASTE ที่เห็น logits จริง); ทางเหลือ: prefetch ระดับ layer (fused tensor, EXP-016) หรือ router-aware จริง (patch ลึก — logits ก่อน top-k)",
+            "author": "opencode (L1/A-series)",
+            "status": "active",
+            "createdAt": "2026-08-13T05:25:31.038Z",
+            "updatedAt": "2026-08-13T05:25:31.038Z"
+          },
           {
             "id": "handoff-expert-offload-2026-08-13",
             "kind": "handoff",
