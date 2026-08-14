@@ -91,7 +91,8 @@ def main():
     set_config(config)
     
     logger = logging.getLogger(__name__)
-    logger.info(f"Weight Streaming API Server v0.11.0")
+    from weight_stream import __version__  # lazy: avoid circular import at module load
+    logger.info(f"Weight Streaming API Server v{__version__}")
     logger.info(f"Listening on http://{args.host}:{args.port}")
     logger.info(f"API docs: http://{args.host}:{args.port}/docs")
     logger.info(f"Web app:  http://{args.host}:{args.port}/console")
