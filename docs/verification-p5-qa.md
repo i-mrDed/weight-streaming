@@ -71,11 +71,11 @@
 |---|---|---|
 | 1 | `/health` version hardcode 0.11.0 | ✅ **ปิด** — `routes/system.py` คืน `{"version": __version__}` (0.15.0) · residual log ใน `__main__.py:94` แก้ให้ใช้ `__version__` แล้ว (2026-08-14) |
 | 2 | 20 Thai strings > 45% ยาวกว่า EN | ⏳ ยังค้าง (non-blocking) — ตอนนี้ **29 strings** (i18n:verify warning) |
-| 3 | Report-ISSUE-002 `.json`/`.md` ซ้ำ | ⏳ ยังค้าง (non-blocking) — ทั้ง 2 ไฟล์ยังอยู่ (`data/issues/Report-ISSUE-002.{json,md}`) |
+| 3 | Report-ISSUE-002 `.json`/`.md` ซ้ำ | ✅ **ปิดแล้ว** (2026-08-14) — ลบ `Report-ISSUE-002.md` (loader อ่าน `.json` เท่านั้น, `test_issues.py` 10/10 ผ่าน) |
 | 4 | Server trial 8805 | ✅ ปิดแล้ว (ประวัติ) |
 | 5 | Download overwrite flow | ⏳ ยังค้าง (future) — ไม่มี confirm/overwrite warning |
 
 ### สิ่งที่ต้องทำก่อนถือว่า B3 ปิด
 1. ⬜ **bundle เกินงบ gate 6** (152.5 kB gzip) — code-split หรืออนุมัติงบใหม่
-2. ⬜ ล้าง `data/issues/Report-ISSUE-002.md` ตัวเก่า (finding 3)
+2. ✅ (ทำแล้ว 2026-08-14) ล้าง `data/issues/Report-ISSUE-002.md` ตัวเก่า (finding 3)
 3. ✅ (ทำแล้ว) `__main__.py` log version → `__version__`
