@@ -6,7 +6,7 @@
 
 ---
 
-## 🔄 Chat Agent Tools — filesystem access สำหรับแชท (2026-08-11) — แผน: docs/AGENT_TOOLS_PLAN.md
+## ✅ Chat Agent Tools — filesystem access สำหรับแชท (2026-08-11) — แผน: docs/AGENT_TOOLS_PLAN.md
 
 | สถานะ | Task | Priority | Notes |
 |-------|------|----------|-------|
@@ -28,7 +28,7 @@
 
 ---
 
-## ⬜ Hermeticity Fixes (2026-08-11) — รายงาน: docs/HERMETIC_AUDIT.md
+## ✅ Hermeticity Fixes (2026-08-11) — รายงาน: docs/HERMETIC_AUDIT.md
 
 | สถานะ | Task | Priority | Notes |
 |-------|------|----------|-------|
@@ -184,6 +184,23 @@
 | ✅ | Gate 1 feasibility: expose per-expert routing จาก llama.cpp | 🟢 | `docs/TRACK-B-GATE1-FEASIBILITY.md` — **ทำได้แต่ต้อง fork + patch เอง** (`LLAMA_LOG_MOE` ไม่มีจริงใน source; ไม่มี per-token routing callback ใน `llama.h`; proof = moe-viz ของ Martin Alderson 2026-04); cost ~1–3 วัน (build CUDA บน Windows เป็นตัวแปรหลัก); verdict: **FEASIBLE (bounded)** — Track B ไม่ปิดถาวร แต่ไม่เริ่มจนกว่า Track A release นิ่ง |
 | ⬜ | Gate 2: วัด predictability จริง (expert co-occurrence, top-N hit rate ข้าม prompt ไทย/อังกฤษ) | 🟢 | ต้องผ่าน Gate 1 ก่อน — เป้า: ถ้า < 90% ที่ N ต่ำ = ปิด (DECISION) |
 | ⬜ | Gate 3: วัด latency gap บน disk-bound config (DS V4 Flash) | 🟢 | idle gap กี่ % ของเวลา ที่ prefetch จะซ่อนได้ — ถ้า gap < 10% = ไม่คุ้ม (DECISION) |
+
+---
+
+## ✅ Security hardening + release hardening (2026-08-13, agents)
+
+| สถานะ | Task | Priority | Notes |
+|-------|------|----------|-------|
+| ✅ | WebSocket /v1/stream — Origin guard + API token | 🔴 | fix/ws-security: CORS ไม่ครอบ WS → เช็ค Origin (loopback/WS_CORS_ORIGINS) ก่อน accept + Bearer token เมื่อตั้ง WS_API_TOKEN; 7 tests |
+| ✅ | MCP stdio args — block code-execution flags | 🔴 | W3 closure: ห้าม `-c/-e/--eval/exec/...` + `-c=` variant ใน args (RCE ผ่าน allowlist) — `-m` ยังใช้ได้; 37 tests ใน test_p4_security_hardening |
+| ✅ | Expert-routing capture (L1/A4) — WS_EXPERT stderr reader | 🟢 | llama-server stderr=PIPE + WS_EXPERT_LOG=1 → routing history 4096 token; reasoning-flag auto-detect (`--reasoning` vs `--reasoning-format`); zero overhead เมื่อปิด; 10 tests |
+| ✅ | Auto-compact long conversations (8 user turns) | 🟡 | fire-and-forget summarize → banner; i18n en/th; 4 vitest |
+| ✅ | n_ctx default 2048→32768 + max_tokens 1024/2048→4096 | 🔴 | long chats ถูกตัดกลางเรื่อง (Qwythos 2026-08-13) — RAM-aware (deviceMemory ≥32GB → 32768, else 8192) |
+| ✅ | MCPHost.close() — swallow GeneratorExit/RuntimeError | 🟡 | mcp SDK ≥1.2 teardown task-group; shield+gather(return_exceptions=True); 3 tests |
+| ✅ | Console bundle rebuild + stale-bundle guards | 🔴 | bundle เก่า (12 ส.ค.) ขาด auto-compact/n_ctx/max_tokens → rebuild; CI guard (`git diff --exit-code` หลัง build) + test_console_bundle_freshness.py |
+| ✅ | tiering.test.ts encoding (BOM + mojibake em-dash) | 🟢 | UTF-8 no-BOM + LF; 4 vitest |
+| ✅ | WS origin guard — exact scheme+host+port matching | 🟡 | tighten: เดิม hostname-only + any-port + ไม่ตรวจ scheme → เทียบ canonical เท่ากับ CORS middleware; 3 tests ใหม่ |
+| ✅ | mypy strict — llama_server 23→0 errors | 🟢 | routing feature แหก non-strict (1 error) + legacy annotations; project strict 368→345, non-strict 0 |
 
 ---
 
