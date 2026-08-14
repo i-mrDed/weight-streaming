@@ -914,7 +914,7 @@ def test_hub_delete_file_endpoint_removes_model(models_dir, monkeypatch, tmp_pat
     """{"delete_file": true} on a completed task removes the model file too."""
     app, _ = _app(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "weight_stream.server.api_server._assistants_referencing", lambda f: []
+        "weight_stream.server.routes.hub._assistants_referencing", lambda f: []
     )
     with TestClient(app) as c:
         hub_mgr = app.state.hub_manager
@@ -1052,7 +1052,7 @@ def test_hub_clear_endpoint_delete_file_skips_loaded_model(models_dir, monkeypat
         AsyncMock(return_value=[SimpleNamespace(path=str(models_dir / "m-q4_0.gguf"))]),
     )
     monkeypatch.setattr(
-        "weight_stream.server.api_server._assistant_refs_batch", lambda files: {}
+        "weight_stream.server.routes.hub._assistant_refs_batch", lambda files: {}
     )
     with TestClient(app) as c:
         hub_mgr = app.state.hub_manager
@@ -1080,7 +1080,7 @@ def test_hub_delete_endpoint_reports_assistant_references(models_dir, monkeypatc
     suggested id — the server-side half of the cross-feature warning."""
     app, _ = _app(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "weight_stream.server.api_server._assistants_referencing",
+        "weight_stream.server.routes.hub._assistants_referencing",
         lambda f: ["Coder", "Translator"],
     )
     with TestClient(app) as c:
@@ -1107,7 +1107,7 @@ def test_hub_clear_endpoint_reports_assistant_references(models_dir, monkeypatch
     by_name = {"a.gguf": ["Coder"], "b.gguf": [], "c.gguf": ["Coder", "Translator"]}
     calls = []
     monkeypatch.setattr(
-        "weight_stream.server.api_server._assistant_refs_batch",
+        "weight_stream.server.routes.hub._assistant_refs_batch",
         lambda files: calls.append(list(files)) or {f: by_name.get(f, []) for f in files},
     )
     with TestClient(app) as c:
@@ -1252,7 +1252,7 @@ def test_hub_reveal_endpoint_opens_folder_and_returns_path(models_dir, monkeypat
     app, _ = _app(monkeypatch, tmp_path)
     calls = []
     monkeypatch.setattr(
-        "weight_stream.server.api_server._reveal_in_explorer",
+        "weight_stream.server.routes.hub._reveal_in_explorer",
         lambda path: calls.append(path) or {"ok": True},
     )
     with TestClient(app) as c:
@@ -1271,7 +1271,7 @@ def test_hub_reveal_endpoint_500_when_launcher_fails(models_dir, monkeypatch, tm
     """The OS launcher failing must surface honestly (500), never a fake ok."""
     app, _ = _app(monkeypatch, tmp_path)
     monkeypatch.setattr(
-        "weight_stream.server.api_server._reveal_in_explorer",
+        "weight_stream.server.routes.hub._reveal_in_explorer",
         lambda path: {"error": "explorer missing"},
     )
     with TestClient(app) as c:
