@@ -182,8 +182,8 @@
 | สถานะ | Task | Priority | หมายเหตุ |
 |-------|------|---------|---------|
 | ✅ | Gate 1 feasibility: expose per-expert routing จาก llama.cpp | 🟢 | `docs/TRACK-B-GATE1-FEASIBILITY.md` — **ทำได้แต่ต้อง fork + patch เอง** (`LLAMA_LOG_MOE` ไม่มีจริงใน source; ไม่มี per-token routing callback ใน `llama.h`; proof = moe-viz ของ Martin Alderson 2026-04); cost ~1–3 วัน (build CUDA บน Windows เป็นตัวแปรหลัก); verdict: **FEASIBLE (bounded)** — Track B ไม่ปิดถาวร แต่ไม่เริ่มจนกว่า Track A release นิ่ง |
-| ⬜ | Gate 2: วัด predictability จริง (expert co-occurrence, top-N hit rate ข้าม prompt ไทย/อังกฤษ) | 🟢 | **evidence วัดแล้วจาก EXP-031/031b (Qwen A2.7B): top-N 7–13% useful vs random 6.7% — ต่ำกว่าเกณฑ์ 90% มาก** · แผน + ทางเลือก: `docs/TRACK-B-GATE2-3-PLAN.md` (รอตัดสินใจ: ปิดด้วย evidence หรือ re-run บน DS V4 Flash) |
-| ⬜ | Gate 3: วัด latency gap บน disk-bound config (DS V4 Flash) | 🟢 | idle gap กี่ % ของเวลา ที่ prefetch จะซ่อนได้ — ถ้า gap < 10% = ไม่คุ้ม (DECISION) · ตอบได้โดยไม่ต้อง fork (telemetry EXP-012/029) — แผน: `docs/TRACK-B-GATE2-3-PLAN.md` |
+| ✅ | Gate 2: วัด predictability จริง (expert co-occurrence, top-N hit rate ข้าม prompt ไทย/อังกฤษ) | 🟢 | **วัดเสร็จ — verdict ❌ (2026-08-14)**: EXP-031/031b (Qwen A2.7B) top-N 7–13% useful vs random 6.7% — ต่ำกว่าเกณฑ์ 90% มาก → ปิดด้วย evidence · re-run บน DS V4 Flash เปิดไว้ได้ (แผน: `docs/TRACK-B-GATE2-3-PLAN.md`) |
+| ✅ | Gate 3: วัด latency gap บน disk-bound config (DS V4 Flash) | 🟢 | **วัดแล้ว (dry-run 2026-08-14) — verdict ❌**: warm gap 0.2–0.3% << 10% = ไม่คุ้ม (script: `scripts/measure_gate3_latency_gap.py`; cold 100% เป็น transient ที่ prefetch ซ่อนไม่ได้) → Track B ปิดด้วยหลักฐานครบ 3 gates |
 
 ---
 

@@ -73,11 +73,25 @@
 
 ---
 
-## Decision point (สำหรับ user)
+## Decision point — ตัดสินใจแล้ว 2026-08-14 (ทางเลือก 1 + 3)
 
-- [ ] **Gate 2:** ยอมรับ evidence EXP-031 (ปิด ❌) หรือ re-run บน DS V4 Flash (ทางเลือก 2)?
-- [ ] **Gate 3:** วัด latency gap ด้วย telemetry ที่มี (ทางเลือก 3) — ใช่/ไม่ใช่?
-- [ ] **Track B โดยรวม:** ปิดถาวร (ตาม L1 closure) หรือ keep เป็น bounded spike?
+- [x] **Gate 2:** ยอมรับ evidence EXP-031 → **ปิด ❌** (ตามเกณฑ์ DECISION `< 90% ที่ N ต่ำ`)
+- [x] **Gate 3:** วัด latency gap ด้วย telemetry ที่มี (ทางเลือก 3) — **ทำแล้ว (dry-run, script พร้อมใช้บนเครื่องจริง)**
+- [x] **Track B โดยรวม:** ปิดด้วยหลักฐานครบทั้ง 3 gates — สอดคล้อง L1 closure (ทางเลือก re-run บน DS V4 Flash ยังเปิดไว้ได้ถ้าต้องการตัวเลข target model จริง)
 
-> ข้อเสนอของผม: **ทางเลือก 1 + 3** — ใช้ evidence ที่วัดจริงปิด Gate 2, วัด Gate 3 ให้จบ (งานเดียวที่ใหม่จริง,
-> ไม่ต้อง fork) แล้วปิด Track B ด้วยหลักฐานครบทั้ง 3 gates — ประหยัด build CUDA 1–3 วันที่ไม่คุ้มกับผลลัพธ์ที่คาด
+## ผล Gate 3 — dry-run (2026-08-14) · script: `scripts/measure_gate3_latency_gap.py`
+
+| config | tok/s | MB/tok | stall ms | total ms | gap % | verdict |
+|---|---|---|---|---|---|---|
+| DS V4 Flash **warm** (EXP-012) | 1.9 | 0.55 | 1.4 | 526 | **0.3%** | not worth (< 10%) |
+| DS V4 Flash **warm** (EXP-012, slow end) | 1.5 | 0.55 | 1.4 | 667 | **0.2%** | not worth |
+| DS V4 Flash **cold** (EXP-012, ~250 MB/tok) | 1.7 | 250 | 658 | 588 | 100% | transient — prefetch ซ่อน first-access ไม่ได้ |
+| Qwen36 history warm (RAM-resident) | 40–45 | 0.2–1.4 | 0.6–3.7 | 22–25 | 1–19% | RAM-resident → disk-BW default over-estimates (จริงต่ำกว่า) |
+
+**Verdict:** steady-state (warm) gap ของ target model = **0.2–0.3% << 10%** → ตาม DECISION = **ไม่คุ้ม** ·
+cold gap 100% เป็น transient ครั้งเดียวตอน first-pass ซึ่ง prefetch ไม่มีทางซ่อน (ต้องรู้ก่อน access ครั้งแรก —
+แต่ EXP-031 พิสูจน์แล้วว่า predict ไม่ได้) → **Gate 3 = ไม่คุ้ม** สอดคล้อง L1 closure
+
+> วิธีรันบนเครื่องจริง: `python scripts/measure_dsv4flash.py` (บันทึก telemetry) แล้ว
+> `python scripts/measure_gate3_latency_gap.py --from-history data/usage_history.jsonl --model dsv4`
+> (หรือรัน script เดียวกับ server ที่กำลัง generate อยู่ก็ได้ — อ่านจาก `usage_history.jsonl`)
