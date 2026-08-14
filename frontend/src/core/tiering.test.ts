@@ -1,9 +1,9 @@
-﻿/* Unit tests for core/tiering.ts setTier() โ€” the Models-page tier pin.
+/* Unit tests for core/tiering.ts setTier() — the Models-page tier pin.
    Covers the EXP-023 per-tier n_ctx/max_tokens survival rule: a re-pin
    must NOT silently reset the tier's context window / output budget
    (the pin UI has no fields for them), while a different-model pin must
    still clear stale MTP draft args (would crash the spawn otherwise).
-   Only the network boundary (apiJSON) is mocked โ€” setTier and the
+   Only the network boundary (apiJSON) is mocked — setTier and the
    fetch/save helpers run their REAL code, so a regression in either is
    caught here. No server, no DOM.
    Run:  cd frontend && npx vitest run src/core/tiering.test.ts
@@ -50,7 +50,7 @@ function makeConfig(over: Partial<TieringConfig> = {}): TieringConfig {
 
 const mockedApi = vi.mocked(apiJSON)
 
-/** The config the test's PUT would persist โ€” echoed back by the fake API. */
+/** The config the test's PUT would persist — echoed back by the fake API. */
 function putBody(): TieringConfig {
   const call = mockedApi.mock.calls.find(([, init]) => init?.method === 'PUT')
   expect(call, 'expected a PUT /v1/tiering/config call').toBeDefined()
@@ -125,4 +125,3 @@ describe('setTier', () => {
     expect(saved.fast.max_tokens).toBeNull()
   })
 })
-
