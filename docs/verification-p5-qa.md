@@ -47,3 +47,35 @@
 ---
 
 *QA โดย OpenCode Agent · 3 สิงหาคม 2026 · งานถัดไป: ผู้ใช้ตรวจรับ web UI → P6 promote*
+
+---
+
+## 🔁 P6 status re-check (2026-08-14 — HEAD `89b267b`)
+
+> ตรวจจากโค้ดจริง (ไม่ได้รัน server) หลังงาน 2026-08-13 (security, auto-compact, refactor `routes/`) — เพื่อยืนยันสถานะ P5→P6 ปัจจุบัน
+
+### สรุป
+- **P6 เสร็จแล้วในโค้ด** (`ef9a2ec` 2026-08-04): `/` → 302 `/console/` (primary UI) · `/app` → `/app-legacy` (rollback 1 release) · `dashboard_server.py` ถูกลบ + call sites (`cli/main.py`, `cli/__init__.py`) เอาออก · bump v0.14.0 · CHANGELOG + backup tag `feature/dashboard-theme-v1`
+- `docs/CONSOLE_ROADMAP.md` เดิมบอก "P6 ⬜ ยังไม่เริ่ม" = **ล้าสมัย** — อัปเดตเป็น ✅ แล้ว 2026-08-14
+
+### 10 gates — สถานะปัจจุบัน
+
+| Gate | สถานะ | หมายเหตุ |
+|---|---|---|
+| 1–5, 7–10 | ✅ ยังถืออยู่ | logic ไม่เปลี่ยน · gate 5 i18n:verify รันใหม่ = **PASS (889 keys, +228 จาก P5**; 29 strings > 45% — warning ไม่ fail) · gate 10 regression ตอนนี้ **497 passed / 7 skipped** |
+| 6 (bundle < 150 kB gzip) | ⚠️ **เกินงบ** | bundle ล่าสุด `index-DMWcaxVN.js` = **152.5 kB gzip** (P5 = 131.93 kB) — auto-compact + routing telemetry + i18n +228 keys ผลักเกิน → ต้อง code-split หรือทบทวนงบ |
+
+### 5 findings — สถานะปัจจุบัน
+
+| # | Finding | สถานะ |
+|---|---|---|
+| 1 | `/health` version hardcode 0.11.0 | ✅ **ปิด** — `routes/system.py` คืน `{"version": __version__}` (0.15.0) · residual log ใน `__main__.py:94` แก้ให้ใช้ `__version__` แล้ว (2026-08-14) |
+| 2 | 20 Thai strings > 45% ยาวกว่า EN | ⏳ ยังค้าง (non-blocking) — ตอนนี้ **29 strings** (i18n:verify warning) |
+| 3 | Report-ISSUE-002 `.json`/`.md` ซ้ำ | ⏳ ยังค้าง (non-blocking) — ทั้ง 2 ไฟล์ยังอยู่ (`data/issues/Report-ISSUE-002.{json,md}`) |
+| 4 | Server trial 8805 | ✅ ปิดแล้ว (ประวัติ) |
+| 5 | Download overwrite flow | ⏳ ยังค้าง (future) — ไม่มี confirm/overwrite warning |
+
+### สิ่งที่ต้องทำก่อนถือว่า B3 ปิด
+1. ⬜ **bundle เกินงบ gate 6** (152.5 kB gzip) — code-split หรืออนุมัติงบใหม่
+2. ⬜ ล้าง `data/issues/Report-ISSUE-002.md` ตัวเก่า (finding 3)
+3. ✅ (ทำแล้ว) `__main__.py` log version → `__version__`
