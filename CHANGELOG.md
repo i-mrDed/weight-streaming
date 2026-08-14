@@ -8,6 +8,31 @@
 ## [0.15.0] - 2026-08-10 (updated 2026-08-13 — tag moved to current `main`; all
 [Unreleased] entries below folded in. This is the release that goes public.)
 
+### 🔒 Security hardening (2026-08-13) — pre-public deep review
+- **WebSocket `/v1/stream` — Origin guard + API token**: the Origin is checked against an allowlist *before* `accept()` (rejects with 4408/4401), closing the drive-by-web-page hijack that CORS middleware cannot cover (a WS handshake is not a fetch). Optional `WS_API_TOKEN` auth. Tightened further to exact scheme+host+port matching (canonical, default-port folded) — consistent with the HTTP CORS policy.
+- **MCP stdio args — code-execution flags blocked**: `-c`/`-e`/`eval`/`exec`/… (incl. `-c=…` variants) are rejected for allowlisted commands, closing an RCE primitive; `-m` stays allowed (the normal way to run an MCP server).
+- Tests: `test_ws_security.py` (7) + `test_p4_security_hardening.py` (+37) — full suite green (497 passed).
+
+### ⚡ Auto-compact + context defaults (PR #9/#10)
+- **Auto-compact long conversations**: after 8 user turns the chat is summarized (side-bar action + collapsible banner), one-shot per conversation, silent failure — never blocks the UI; the manual button stays.
+- **`n_ctx` default 2048 → 32768 (RAM-aware)** — long chats were stopping mid-way (root cause, not a symptom).
+- **`max_tokens` default 1024/2048 → 4096** — answers were being cut mid-story.
+- **Stale committed bundle regression fixed**: the served console bundle was rebuilt so these ship; a CI guard now fails when the committed bundle drifts from a fresh source build (plus a freshness test asserting the served bundle carries current sentinels).
+
+### 🧠 Expert-routing capture (L1/A4 — PR #6)
+- `WS_EXPERT` stderr reader captures per-token expert routing from the llama-server process; new `enable_routing`/`routing`/`routing_stats` API; `--reasoning` vs `--reasoning-format` flag-compat auto-detect.
+- Verdict (EXP-031/031b): per-token expert prediction is a dead end on this architecture (routing changes ~97.7% of tokens) — the capture API stays as debug/paper telemetry.
+
+### 🏗️ Refactor — `api_server.py` (1,756 lines) split into `routes/`
+- New `routes/` package (`system`, `models`, `stream`, `issues`, `hub`, `agents`, `tiering`) + `ServerContext` dataclass; `api_server.py` now only wires middleware/static/lifespan. Route paths & responses unchanged (full suite green).
+- mypy: `api_server` 79 → 1 error, new modules strict-clean; `llama_server.py` strict-clean + a non-strict regression fixed.
+
+### 🧹 Stability, hygiene & docs sync (2026-08-13)
+- `MCPHost.close()` swallows `GeneratorExit`/`RuntimeError` from transport teardown (clean shutdown).
+- `tiering.test.ts` encoding fixed — BOM + mojibake em-dash → UTF-8 no-BOM.
+- `MODEL_GUIDE`: `n_ctx` 32768 default + model compatibility table (tested 2026-08-13).
+- `TASKS.md` board synced with reality; `projects.json` brain rev 75 (L1 closure + EXP-031/031b + model-guide notes, dev-machine path scrubbed); ROADMAP #3 IQ2_XXS status synced to the recorded decision.
+
 ### fix: CI — tiering tests no longer depend on the dev machine's model files
 - **Hermetic defaults**: the shipped tier defaults (`~/models/Gemma4-12B-QAT/...`)
   were expanded at import time, baking the *developer's* home into the
