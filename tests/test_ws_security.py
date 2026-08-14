@@ -61,6 +61,40 @@ class TestWsOriginGuard:
             msg = ws.receive_json()
             assert msg.get("type") == "error"
 
+    def test_scheme_mismatch_refused(self):
+        # allowlist is http-only; https origin must NOT pass (old code
+        # ignored the scheme entirely)
+        client = _make_client()
+        with pytest.raises(Exception):
+            with client.websocket_connect(
+                "/v1/stream",
+                headers={"Origin": "https://127.0.0.1:8765"},
+            ) as ws:
+                ws.receive_json()
+
+    def test_non_allowlisted_port_refused(self):
+        # "http://127.0.0.1" (no port) must NOT match every loopback port
+        # (old code: a.port is None -> any port passed)
+        client = _make_client()
+        with pytest.raises(Exception):
+            with client.websocket_connect(
+                "/v1/stream",
+                headers={"Origin": "http://127.0.0.1:9999"},
+            ) as ws:
+                ws.receive_json()
+
+    def test_default_port_folds_to_no_port(self):
+        # browsers omit the default port in Origin; explicit :80 must be
+        # treated the same as no port (matches "http://127.0.0.1")
+        client = _make_client()
+        with client.websocket_connect(
+            "/v1/stream",
+            headers={"Origin": "http://127.0.0.1:80"},
+        ) as ws:
+            ws.send_json({"type": "wrong"})
+            msg = ws.receive_json()
+            assert msg.get("type") == "error"
+
     def test_custom_origin_via_env_allowed(self):
         client = _make_client(extra_origins="http://localhost:3000")
         with client.websocket_connect(

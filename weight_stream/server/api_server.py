@@ -262,13 +262,25 @@ def create_app(config: Optional[ServerConfig] = None) -> tuple[FastAPI, ModelMan
             return True
         try:
             from urllib.parse import urlparse
-            o = urlparse(origin)
-            host = (o.hostname or "").lower()
-            port = o.port
+
+            def _norm(u: str):
+                # canonical (scheme, host, port): lowercase, default port
+                # folded away so "http://localhost:80" == "http://localhost"
+                o = urlparse(u)
+                scheme = (o.scheme or "").lower()
+                host = (o.hostname or "").lower()
+                port = o.port
+                if port is not None and (
+                    (scheme == "http" and port == 80)
+                    or (scheme == "https" and port == 443)):
+                    port = None
+                return scheme, host, port
+
+            target = _norm(origin)
+            if not target[0] or not target[1]:
+                return False
             for allowed in _cors_origins:
-                a = urlparse(allowed)
-                if (a.hostname or "").lower() == host and (
-                    a.port is None or a.port == port):
+                if _norm(allowed) == target:
                     return True
         except Exception:
             return False
