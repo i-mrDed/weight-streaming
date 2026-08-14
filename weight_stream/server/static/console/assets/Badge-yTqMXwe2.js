@@ -1,0 +1,1 @@
+import{d as a}from"./index-CcYd6AHj.js";function l({tone:r="neutral",icon:e,children:d,class:n}){return a("span",{class:`badge badge--${r}${n?` ${n}`:""}`,children:[e?a("span",{"aria-hidden":"true",children:e}):null,a("span",{children:d})]})}export{l as B};

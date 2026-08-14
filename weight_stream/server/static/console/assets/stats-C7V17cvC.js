@@ -1,0 +1,1 @@
+import{Q as n}from"./index-CcYd6AHj.js";function r(t){return!!t&&t.model?.backend==="llama-server"}function i(t,e=1e4){return n("/v1/stats",void 0,{timeoutMs:e})}function s(t){return!!t&&typeof t.generation?.token_count=="number"}export{i as f,s as h,r as i};

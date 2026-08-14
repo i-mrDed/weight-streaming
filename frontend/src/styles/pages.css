@@ -1248,6 +1248,8 @@ select.md-input { cursor: pointer; }
 /* Hub — Latest GGUF feed (P5.2, spec §9.6): newest-models browse, cursor-paged */
 .hub-latest { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--ws-border-subtle); padding-top: 16px; margin-top: 4px; }
 .hub-latest__title { display: flex; align-items: center; gap: 8px; margin: 0; font-size: var(--ws-text-base); font-weight: 700; color: var(--ws-text-primary); }
+/* Route-level loading fallback (code-split pages load on first visit). */
+.page-loading { display: flex; align-items: center; justify-content: center; min-height: 220px; color: var(--ws-text-base); font-size: 18px; letter-spacing: 2px; }
 .hub-latest__loading { display: flex; align-items: center; gap: 9px; padding: 22px 8px; }
 .hub-latest__loading .btn__spinner { width: 16px; height: 16px; }
 .hub-latest__pager { display: flex; align-items: center; justify-content: center; gap: 12px; margin-top: 2px; }

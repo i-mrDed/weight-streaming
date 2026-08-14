@@ -58,10 +58,16 @@ def test_console_bundle_referenced_file_exists():
 
 
 def test_console_bundle_contains_current_features():
-    bundle = _referenced_bundle()
-    content = bundle.read_text(encoding="utf-8", errors="replace")
-    missing = [s for s in REQUIRED_BUNDLE_SNIPPETS if s not in content]
+    # Pages are code-split, so sentinels may live in ANY emitted chunk
+    # (e.g. the chat page chunk holds auto-compact) — scan all of them.
+    assets = STATIC / "assets"
+    if not assets.is_dir():
+        pytest.fail(f"no assets dir under {STATIC} — build the console first")
+    chunks = sorted(assets.glob("*.js"))
+    assert chunks, f"no JS chunks under {assets} — build the console first"
+    all_content = "\n".join(p.read_text(encoding="utf-8", errors="replace") for p in chunks)
+    missing = [s for s in REQUIRED_BUNDLE_SNIPPETS if s not in all_content]
     assert not missing, (
-        f"committed console bundle ({bundle.name}) is stale — missing "
-        f"{missing}. Rebuild and commit it: cd frontend && npm run build"
+        f"committed console chunks are stale — missing {missing} across "
+        f"{len(chunks)} chunk(s). Rebuild and commit: cd frontend && npm run build"
     )

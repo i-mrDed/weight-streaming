@@ -1,0 +1,1 @@
+import{d as c}from"./index-CcYd6AHj.js";function t({tier:r="base",hoverable:s=!1,children:d,class:a,...e}){return c("div",{class:`card card--${r}${s?" card--hoverable":""}${a?` ${a}`:""}`,...e,children:d})}export{t as C};
