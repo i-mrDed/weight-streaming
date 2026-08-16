@@ -68,6 +68,7 @@ class TestModelDraftFlag:
             fake.pid = 1
             fake.stderr = None
             fake.returncode = 0
+            fake.communicate.return_value = (b"", b"")
 
             def fake_popen(cmd, **kwargs):
                 cmd_holder["cmd"] = cmd
