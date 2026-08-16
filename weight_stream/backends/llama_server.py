@@ -342,9 +342,13 @@ class LlamaServerBackend(WeightStreamBackend):
         port: Optional[int] = None,  # explicit port wins; else env/WS_LLAMA_BACKEND_PORT/8805
         kv_cache_type: Optional[str] = None,
         extra_args: Optional[str] = None,
+        model_draft: Optional[str] = None,
         **kwargs: Any,
     ) -> None:
         self._model_path = model_path
+        self._model_draft = (model_draft
+                             or os.environ.get("WS_MODEL_DRAFT", "")
+                             or "").strip()
         self._n_ctx = n_ctx
         self._n_threads = n_threads
         self._gpu_layers = gpu_layers
@@ -380,6 +384,7 @@ class LlamaServerBackend(WeightStreamBackend):
         self._base_url = f"http://{self._host}:{self._port}"
         self._last_gen_stats: Dict[str, Any] = {}
         self._metadata: Dict[str, Any] = {}
+        self._n_tensors: int = 0
         self._ready = False
         self._started = False
         # Real VRAM / offload telemetry from llama-server's GET /props
@@ -392,8 +397,29 @@ class LlamaServerBackend(WeightStreamBackend):
             from weight_stream.gguf.parser import GGUFParser
             with GGUFParser(model_path) as parser:
                 self._metadata = parser.metadata or {}
+                self._n_tensors = parser.n_tensors
         except Exception:
             self._metadata = {}
+            self._n_tensors = 0
+        # Reject non-standalone files early (2026-08-16): "MTP-ONLY" GGUF
+        # subsets are just the speculative-draft head (Qwen3.8-27B-MTP-ONLY
+        # has 18 tensors); loading them as the main model fails at decode
+        # with a confusing network/stream error. A real chat model has
+        # hundreds+ of tensors. Draft-only files must be passed via
+        # ``--model-draft`` (see draft_model_path) instead.
+        if self._n_tensors and self._n_tensors < 100:
+            fname = model_path.replace("\\", "/").rsplit("/", 1)[-1]
+            raise ModelError(
+                f"'{fname}' looks like a draft-only/MTP GGUF "
+                f"({self._n_tensors} tensors), not a full chat model — it has "
+                f"no transformer/attention weights to generate text with. "
+                f"Use a full model file to chat, or pass this file as the "
+                f"draft model (WS_MODEL_DRAFT / model_draft) with "
+                f"--spec-type draft-mtp.",
+                details={"n_tensors": self._n_tensors,
+                         "hint": "download the full Qwen3.8-27B GGUF (e.g. "
+                                 "Q4_K_M / UD-Q4_K_XL) for chatting"},
+            )
         # Parity with the CPU binding (model_manager.list_models reads
         # ``getattr(model, "n_experts", 0)`` for the MoE badge in the UI).
         arch = self._get_arch()
@@ -444,6 +470,12 @@ class LlamaServerBackend(WeightStreamBackend):
             cmd += ["-t", str(self._n_threads)]
         if self._gpu_layers != -1:
             cmd += ["-ngl", str(self._gpu_layers)]
+        # Speculative decoding via a draft model (2026-08-16): MTP-ONLY GGUFs
+        # are draft heads, not chat models — when the user pairs them with a
+        # full model, enable draft-mtp so the draft accelerates generation.
+        if self._model_draft:
+            cmd += ["--model-draft", self._model_draft,
+                    "--spec-type", "draft-mtp"]
         # KV cache data type (P7.5): -1/auto leaves it unset; a type is
         # validated in __init__ so the subprocess always gets a real one.
         if self._kv_cache_type:

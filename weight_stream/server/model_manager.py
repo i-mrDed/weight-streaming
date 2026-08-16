@@ -128,6 +128,9 @@ class ModelManager:
         # Per-model llama-server extra args (auto-tiering, e.g. MTP draft
         # flags). Same rule: llama-server only, never the CPU binding.
         extra_args = kwargs.pop("extra_args", None)
+        # Draft model for speculative decoding (MTP-ONLY GGUF head); also
+        # llama-server only. Falls back to WS_MODEL_DRAFT env in the backend.
+        model_draft = kwargs.pop("model_draft", None)
         if use_server and LlamaServerBackend.is_available():
             try:
                 logger.info("Using LlamaServerBackend (GPU) for %s", model_path)
@@ -138,6 +141,7 @@ class ModelManager:
                     gpu_layers=gpu_layers if gpu_layers is not None else -1,
                     kv_cache_type=kv_cache_type,
                     extra_args=extra_args,
+                    model_draft=model_draft,
                     **kwargs,
                 )
             except Exception as e:

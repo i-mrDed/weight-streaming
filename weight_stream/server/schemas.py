@@ -13,7 +13,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
-# ── Request Models ──────────────────────────────────────────────────
+# โ”€โ”€ Request Models โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€
 
 
 class GenerateRequest(BaseModel):
@@ -46,15 +46,24 @@ class ModelLoadRequest(BaseModel):
     kv_cache_type: Optional[str] = Field(
         default=None,
         description=(
-            "KV cache data type (f16, q8_0, q4_0, …). GPU-backend only; "
+            "KV cache data type (f16, q8_0, q4_0, โ€ฆ). GPU-backend only; "
             "None = server default (default_kv_cache_type)."
+        ),
+    )
+    model_draft: Optional[str] = Field(
+        default=None,
+        description=(
+            "Path to a draft model for speculative decoding (e.g. an "
+            "MTP-ONLY GGUF head). Passed as llama-server --model-draft "
+            "plus --spec-type draft-mtp; only meaningful together with a "
+            "full chat model in model_path. Falls back to WS_MODEL_DRAFT env."
         ),
     )
     extra_args: Optional[str] = Field(
         default=None,
         description=(
             "Extra llama-server flags for THIS model (e.g. MTP draft flags "
-            "`--spec-type draft-mtp --spec-draft-model …`). GPU-backend "
+            "`--spec-type draft-mtp --spec-draft-model โ€ฆ`). GPU-backend "
             "only; takes precedence over WS_LLAMA_EXTRA_ARGS. Split on "
             "whitespace (shlex)."
         ),
@@ -101,7 +110,7 @@ class HubClearRequest(BaseModel):
     )
 
 
-# ── Response Models ──────────────────────────────────────────────────
+# โ”€โ”€ Response Models โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€
 
 
 class BufferStats(BaseModel):
@@ -214,7 +223,7 @@ class ErrorResponse(BaseModel):
     details: Optional[Dict[str, Any]] = None
 
 
-# ── Streaming Models ─────────────────────────────────────────────────
+# โ”€โ”€ Streaming Models โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€
 
 
 class StreamToken(BaseModel):
@@ -225,7 +234,7 @@ class StreamToken(BaseModel):
     stats: Optional[Dict[str, Any]] = None
 
 
-# ── OpenAI-Compatible Models ─────────────────────────────────────────
+# โ”€โ”€ OpenAI-Compatible Models โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€โ”€
 
 
 class ChatMessage(BaseModel):
@@ -244,7 +253,7 @@ class ChatCompletionRequest(BaseModel):
     top_p: float = Field(default=1.0, ge=0.0, le=1.0)
     stream: bool = Field(default=False)
     reasoning_effort: Optional[str] = Field(default="medium", description="Reasoning effort level: low, medium, high (legacy)")
-    reasoning_mode: Optional[str] = Field(default=None, description="Reasoning mode: auto, on, off (P7 — controls thinking)")
+    reasoning_mode: Optional[str] = Field(default=None, description="Reasoning mode: auto, on, off (P7 โ€” controls thinking)")
     tools: Optional[List[Dict[str, Any]]] = Field(default=None, description="Available agent tools")
     chat_template_kwargs: Optional[Dict[str, Any]] = Field(
         default=None,
