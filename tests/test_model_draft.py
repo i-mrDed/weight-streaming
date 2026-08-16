@@ -67,12 +67,16 @@ class TestModelDraftFlag:
             class FakeProc:
                 stderr = None
                 pid = 1
+                returncode = 0
 
                 def __enter__(self):
                     return self
 
                 def __exit__(self, *args):
                     return False
+
+                def communicate(self, *a, **k):
+                    return (b"", b"")
 
             def fake_popen(cmd, **kwargs):
                 cmd_holder["cmd"] = cmd
