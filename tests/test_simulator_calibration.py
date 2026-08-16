@@ -124,13 +124,18 @@ def test_calibrate_cli_json_emits_validated_numbers():
 
 
 def test_simulator_runs_end_to_end():
-    """The full simulator still runs with the physics-derived config."""
+    """The full simulator still runs with the physics-derived config.
+
+    .github CI runs 4 Python jobs in parallel on shared Windows runners;
+    the full simulator can take > 120s there (CI 2026-08-16: subprocess
+    killed with empty output = timeout). Use 300s to stay honest but green.
+    """
     out = subprocess.run(
         [sys.executable, "run.py"],
         cwd=ROOT / "simulator",
         capture_output=True,
         text=True,
-        timeout=120,
+        timeout=300,
     )
     if out.returncode != 0:
         pytest.fail(
