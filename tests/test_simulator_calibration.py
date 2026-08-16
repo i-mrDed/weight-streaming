@@ -105,8 +105,12 @@ def test_calibrate_cli_json_emits_validated_numbers():
         cwd=ROOT / "simulator",
         capture_output=True,
         text=True,
-        check=True,
     )
+    if out.returncode != 0:
+        pytest.fail(
+            "calibrate.py --json failed:\n"
+            f"stdout={out.stdout[-1000:]}\nstderr={out.stderr[-1000:]}"
+        )
     data = json.loads(out.stdout)
     # K3 prediction matches EXP-004
     assert data["k3_predicted"]["tok_per_sec"] == pytest.approx(1.2263, rel=0.05)
@@ -120,15 +124,24 @@ def test_calibrate_cli_json_emits_validated_numbers():
 
 
 def test_simulator_runs_end_to_end():
-    """The full simulator still runs with the physics-derived config."""
+    """The full simulator still runs with the physics-derived config.
+
+    .github CI runs 4 Python jobs in parallel on shared Windows runners;
+    the full simulator can take > 120s there (CI 2026-08-16: subprocess
+    killed with empty output = timeout). Use 300s to stay honest but green.
+    """
     out = subprocess.run(
         [sys.executable, "run.py"],
         cwd=ROOT / "simulator",
         capture_output=True,
         text=True,
-        check=True,
-        timeout=120,
+        timeout=300,
     )
+    if out.returncode != 0:
+        pytest.fail(
+            "run.py failed:\n"
+            f"stdout={out.stdout[-1000:]}\nstderr={out.stderr[-1000:]}"
+        )
     assert "Tokens/sec:" in out.stdout
     # K3-sim on cpu-ram should be ~1.2 tok/s (compute-bound, 815 ms/token)
     line = next(l for l in out.stdout.splitlines() if "Tokens/sec" in l)
