@@ -61,26 +61,19 @@ class TestModelDraftFlag:
             os.environ["WS_MODEL_DRAFT"] = env
         try:
             b = backend_factory(path, **kw)
-            # extract the spawn cmd via the private builder (monkeypatch Popen)
             cmd_holder = {}
 
-            class FakeProc:
-                stderr = None
-                pid = 1
-                returncode = 0
-
-                def __enter__(self):
-                    return self
-
-                def __exit__(self, *args):
-                    return False
-
-                def communicate(self, *a, **k):
-                    return (b"", b"")
+            from unittest import mock
+            fake = mock.MagicMock()          # context manager + communicate etc.
+            fake.pid = 1
+            fake.stderr = None
+            fake.returncode = 0
 
             def fake_popen(cmd, **kwargs):
                 cmd_holder["cmd"] = cmd
-                return FakeProc()
+                fake.__enter__ = lambda self: fake
+                fake.__exit__ = lambda *a: False
+                return fake
 
             monkeypatch = pytest.MonkeyPatch()
             monkeypatch.setattr(subprocess, "Popen", fake_popen)
